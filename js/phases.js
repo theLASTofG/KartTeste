@@ -1,0 +1,162 @@
+// Máquina de estados/fases, telas e lobby.
+import { G, hooks } from './state.js';
+import { $, clamp, esc, rnd, store } from './utils.js';
+import { fmtPts, GRID_SLOTS, MAXP, PH, TARGET_OPTS } from './config.js';
+import { SFX } from './audio.js';
+import { applyTheme, themeKey, THEMES } from './scene.js';
+import { applyTrack, finishGlobal, INITIAL_TYPES, obstacles, PRESETS, tmpW, track, trackTypes } from './track.js';
+import { applyBots, cars, isHost, isMP, NET, plist, syncCars } from './cars.js';
+import { centerText, showScreen, toast, updateBoard } from './hud.js';
+import { createRoom, hostLobbyChanged, joinRoom, leaveRoom, startSolo, toHost } from './net.js';
+import { setSlotMode } from './camera.js';
+import { applyTray, buildMode, showChampion, showResults } from './build-ui.js';
+import { hostAfterResults, hostEnter, hostStartMatch } from './host.js';
+export function setState(s) {
+  G.state = s;
+  document.body.classList.toggle('racing', s === 'countdown' || s === 'race');
+  document.body.classList.toggle('building', s === 'pick' || s === 'results');
+  document.body.classList.toggle('showhud', ['countdown', 'race', 'results', 'pick', 'paused'].includes(s));
+}
+function hidePhaseUI() {
+  $('tray').classList.remove('show'); $('placebar').classList.remove('show'); $('phaseHdr').classList.remove('show');
+  setSlotMode(false); G.menuOpen = false;
+}
+// executada em TODOS os peers com os dados enviados pelo host
+export function enterPhase(ph, d) {
+  d = d || {};
+  G.phaseT = 0; G.phaseDur = d.dur || 0;
+  hidePhaseUI();
+  if (d.target) G.TARGET = d.target;
+  if (d.theme && d.theme !== themeKey) applyTheme(d.theme);
+  if (d.players) { G.players = d.players; syncCars(); updateBoard(); }
+  $('confetti').style.display = 'none';
+  switch (ph) {
+    case 'lobby':
+      setState('lobby'); showScreen('lobby'); renderLobby();
+      for (const c of cars) c.mesh.root.visible = false;
+      if (trackTypes().join() !== INITIAL_TYPES.join() || obstacles.length) { applyTrack(['start', 'finish'], [], false); applyTrack(INITIAL_TYPES, [], false); }
+      break;
+    case 'countdown':
+      applyTrack(d.types, d.obs, false);
+      G.round = d.round;
+      placeCars(d.grid);
+      G.R = { t: 0, cd: d.dur || 3.2, lastBeep: 4, finishCount: 0, firstFinishT: -1, endT: -1, maxT: 14 + finishGlobal / 9,
+        startPressed: false, startEligible: false, spectateT: 0, netAcc: 0 };
+      $('rnd').textContent = 'RODADA ' + G.round + ' · ' + (track.length - 1) + ' PEÇAS';
+      G.lastHud = {}; hooks.tmap.clear(); hooks.syncTouch();
+      showScreen(null); G.camSnap = true;
+      setState('countdown');
+      centerText('3', '#ff2e55'); SFX.beep(false); G.R.lastBeep = 3;
+      break;
+    case 'results': showResults(d); setState('results'); break;
+    case 'pick':                                     // montagem: pegar carta + posicionar (ou voltar às cartas)
+      for (const c of cars) c.mesh.root.visible = false;
+      G.placed = d.placed || {};
+      setState('pick'); showScreen(null);
+      $('phaseHdr').classList.add('show');
+      applyTray(d.tray);
+      SFX.warn();
+      break;
+    case 'champion': setState('champion'); showChampion(d); break;
+  }
+}
+function placeCars(grid) {
+  for (const c of cars) {
+    const slot = grid[c.pid] !== undefined ? grid[c.pid] : 0;
+    const sl = GRID_SLOTS[slot % GRID_SLOTS.length];
+    track[0].world(sl[0], sl[1], tmpW);
+    Object.assign(c, {
+      x: tmpW.x, z: tmpW.z, y: 0, a: tmpW.a, vx: 0, vz: 0, vy: 0, vf: 0, vl: 0, steer: 0, grip: PH.grip, kick: 0, hop: 0,
+      drifting: false, driftDir: 0, driftT: 0, driftLevel: 0, boostT: 0, boostPow: 0, boostMax: 1, padCool: 0, oilT: 0,
+      pi: 0, s: sl[0], v: sl[1], prog: sl[0], grounded: true, alive: true, finished: false, finishOrder: 0, finishT: 0, fallProg: 0,
+      hitCool: 0, stuckT: 0, airT: 0, tumbleX: 0, tumbleZ: 0, spin: 0, pitch: 0, roll: 0, fxAcc: 0, braking: false, squash: 0, net: null, maxMul: 1,
+      buf: null, netTs: 0, netOff: undefined, jit: undefined, interp: undefined, cpx: tmpW.x, cpz: tmpW.z, kickCool: 0
+    });
+    c.ai.lane = sl[1] * 0.5;
+    // erros sorteados por peça para os bots (caos estilo Make Way)
+    c.ai.err = c.bot && isHost() ? track.map(p => {
+      const k = 1.25 - c.ai.skill;
+      if (p.type === 'bridge' && Math.random() < 1.1 * k) return { lane: (Math.random() < 0.5 ? -1 : 1) * rnd(1.6, 3.2) };
+      if (p.type === 'jump' && Math.random() < 0.6 * k) return { slow: rnd(9, 15) };
+      if (p.turn && Math.random() < 0.55 * k) return { lane: p.turn * rnd(4.4, 6.5) };
+      if (p.type === 'holes' && Math.random() < 0.8 * k) return { lane: rnd(-1.2, 1.2) };
+      if (p.type === 'wind' && Math.random() < 0.7 * k) return { lane: p.windDir * rnd(1.5, 3) };
+      if (p.type === 'bigjump' && Math.random() < 0.5 * k) return { slow: rnd(14, 20) };
+      if (p.type === 'doublejump' && Math.random() < 0.5 * k) return { slow: rnd(11, 15) };
+      return null;
+    }) : null;
+    if (c.ai.err) {                         // no máximo 1–2 erros por bot por rodada (pista longa não vira massacre)
+      const idx = c.ai.err.map((e, i) => e ? i : -1).filter(i => i >= 0).sort(() => Math.random() - 0.5);
+      const keep = Math.random() < 0.3 ? 2 : 1;
+      for (const i of idx.slice(keep)) c.ai.err[i] = null;
+    }
+    c.mesh.root.visible = true;
+    c.Q = {};
+    track[0].query(c.x, c.z, c.Q);
+  }
+}
+export function pauseGame() {
+  if (isMP()) {                       // multiplayer: a sala não pausa, só abre o menu
+    G.menuOpen = true; $('pauseTitle').textContent = 'MENU'; $('pauseNote').textContent = 'A corrida continua para os outros jogadores!';
+    showScreen('pause'); hooks.tmap.clear(); hooks.syncTouch(); return;
+  }
+  G.prevState = G.state; setState('paused'); hooks.tmap.clear(); hooks.syncTouch(); SFX.update(0, 0, false, 0, false, 0);
+  $('pauseTitle').textContent = 'PAUSADO'; $('pauseNote').textContent = ''; showScreen('pause');
+}
+export function resume() {
+  if (G.menuOpen) { G.menuOpen = false; showScreen(null); return; }
+  if (G.state !== 'paused') return; showScreen(null); setState(G.prevState); G.last = performance.now();
+}
+export function act(a) {
+  SFX.init(); SFX.click();
+  switch (a) {
+    case 'solo': startSolo(); break;
+    case 'host': createRoom(); break;
+    case 'join': joinRoom(); break;
+    case 'leave': leaveRoom(); break;
+    case 'botminus': if (isHost()) { G.botCount = Math.max(0, G.players.filter(p => p.bot).length - 1); applyBots(); hostLobbyChanged(); } break;
+    case 'botplus': if (isHost()) { G.botCount = Math.min(MAXP - G.players.filter(p => !p.bot).length, G.players.filter(p => p.bot).length + 1); applyBots(); hostLobbyChanged(); } break;
+    case 'targetminus': case 'targetplus': if (isHost() && G.state === 'lobby') {
+      const i = TARGET_OPTS.indexOf(G.TARGET), j = clamp((i < 0 ? 3 : i) + (a === 'targetplus' ? 1 : -1), 0, TARGET_OPTS.length - 1);
+      G.TARGET = TARGET_OPTS[j]; store.set('target', G.TARGET); hostLobbyChanged();
+    } break;
+    case 'preset': if (isHost() && G.state === 'lobby') {
+      const ks = Object.keys(PRESETS); G.presetKey = ks[(ks.indexOf(G.presetKey) + 1) % ks.length]; store.set('preset', G.presetKey); hostLobbyChanged();
+    } break;
+    case 'theme': if (isHost() && G.state === 'lobby') {
+      const ks = Object.keys(THEMES); applyTheme(ks[(ks.indexOf(themeKey) + 1) % ks.length]); store.set('theme', themeKey); hostLobbyChanged();
+    } break;
+    case 'start': if (isHost() && G.state === 'lobby') { if (G.players.length < 2) { G.botCount = 1; applyBots(); hostLobbyChanged(); } hostStartMatch(); } break;
+    case 'copylink': {
+      const url = location.href.split('?')[0].split('#')[0] + '?sala=' + NET.code;
+      (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(() => toast('LINK COPIADO!', '#a6ff3b', 1.2), () => prompt('Copie o link:', url));
+      break;
+    }
+    case 'continue': if (isHost() && G.state === 'results') hostAfterResults(); break;
+    case 'resume': resume(); break;
+    case 'again': if (isHost() && G.state === 'champion') { if (NET.role === 'solo') hostStartMatch(); else { for (const p of G.players) p.score = 0; hostEnter('lobby', { players: plist() }); } } break;
+    case 'placepiece': if (G.state === 'pick' && buildMode() === 'piece') toHost({ t: 'place' }); break;
+    case 'backcards': if (G.state === 'pick' && (buildMode() === 'piece' || buildMode() === 'obs')) { SFX.click(); toHost({ t: 'unpick' }); } break;
+  }
+}
+export function goTitle() {
+  hidePhaseUI(); $('confetti').style.display = 'none';
+  G.R = null; setState('title'); showScreen('title'); SFX.update(0, 0, false, 0, false, 0);
+  for (const c of cars) c.mesh.root.visible = false;
+  if (trackTypes().join() !== INITIAL_TYPES.join() || obstacles.length) { applyTrack(['start', 'finish'], [], false); applyTrack(INITIAL_TYPES, [], false); }
+}
+export function renderLobby() {
+  $('lobbyCode').textContent = NET.role === 'solo' ? 'SOLO' : (NET.code || '-----');
+  $('shareRow').style.display = NET.role === 'host' ? '' : 'none';
+  $('hostCtl').style.display = isHost() ? '' : 'none';
+  $('lobbyWait').style.display = isHost() ? 'none' : '';
+  $('botN').textContent = G.players.filter(p => p.bot).length;
+  $('targetN').textContent = fmtPts(G.TARGET);
+  $('presetBtn').textContent = 'PISTA INICIAL: ' + PRESETS[G.presetKey].name;
+  $('themeBtn').textContent = 'TEMA: ' + THEMES[themeKey].name;
+  if (!$('lobbyWait').dataset.rejoin) $('lobbyWait').textContent = 'Aguardando o host começar... Meta: ' + fmtPts(G.TARGET) + ' pts · Pista: ' + PRESETS[G.presetKey].name + ' · Tema: ' + THEMES[themeKey].name;
+  $('lobbyList').innerHTML = G.players.map(p => `<div class="pl"><span class="sw" style="background:${p.color}"></span><span>${esc(p.name)}${p.id === G.myId ? ' <span style="opacity:.6">(você)</span>' : ''}</span>
+    ${p.id === 0 && !p.bot ? '<span class="hostb">HOST</span>' : ''}<span class="dv">${p.bot ? '🤖 BOT' : p.device === 'mobile' ? '📱 CELULAR' : '💻 PC'}</span></div>`).join('') +
+    `<div class="note">${G.players.length}/${MAXP} pilotos${NET.role === 'host' ? ' · Mande o código ou o link para seus amigos' : ''}</div>`;
+}
+document.addEventListener('visibilitychange', () => { if (document.hidden && hooks.uiActive() && !isMP()) pauseGame(); });
