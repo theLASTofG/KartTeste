@@ -42,6 +42,9 @@ body.building #spd,body.building #info{display:none}
 #pos{font-size:clamp(34px,7vh,62px);line-height:1}
 #pos small{font-size:.45em}
 #rnd{font-size:14px;color:#bfe9ff;margin-top:2px}
+#net{font-size:12px;font-weight:900;margin-top:3px;font-style:normal}
+body.building #info{display:block}
+body.building #info #pos,body.building #info #rnd{display:none}
 #spd{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(14px + var(--safeB));text-align:center;width:220px}
 body.portrait #spd{bottom:auto;top:calc(170px + var(--safeT));left:calc(12px + var(--safeL));transform:none;text-align:left;width:170px}
 #kmh{font-size:40px;font-weight:900;font-style:italic;text-shadow:0 3px 0 rgba(0,0,0,.5)}
@@ -198,7 +201,7 @@ kbd{background:rgba(255,255,255,.14);border-radius:5px;padding:1px 6px;font-fami
 
 <div id="hud">
   <div id="board"></div>
-  <div id="info"><div id="pos">1<small>º/5</small></div><div id="rnd">RODADA 1</div></div>
+  <div id="info"><div id="pos">1<small>º/5</small></div><div id="rnd">RODADA 1</div><div id="net"></div></div>
   <div id="spd"><b id="kmh">0</b><span>km/h</span>
     <div id="dbar"><i></i><b style="left:27.5%"></b><b style="left:60%"></b></div><div id="dlbl">DRIFT</div></div>
   <div id="center"></div>
@@ -271,6 +274,7 @@ kbd{background:rgba(255,255,255,.14);border-radius:5px;padding:1px 6px;font-fami
     <div id="hostCtl">
       <div class="row"><span class="cnt">BOTS: <button data-act="botminus">−</button><span id="botN">0</span><button data-act="botplus">+</button></span>
         <span class="cnt" style="margin-left:14px">META: <button data-act="targetminus">−</button><span id="targetN">10.000</span> PTS<button data-act="targetplus">+</button></span></div>
+      <div class="row"><button class="opt" data-act="preset" id="presetBtn">PISTA INICIAL: CURTA</button><button class="opt" data-act="theme" id="themeBtn">TEMA: NEON</button></div>
       <div class="row"><button class="big lime" data-act="start">COMEÇAR PARTIDA</button></div>
     </div>
     <div class="note" id="lobbyWait">Aguardando o host começar a partida...</div>
@@ -358,19 +362,26 @@ const DRIFT = {
 };
 const PAD = { pow: 0.42, dur: 1.0, kick: 4, s0: 8, s1: 18, hv: 3.6 };
 const JUMP = { rampEnd: 18, landStart: 29, h: 3 };
+const JUMPS = { jump: JUMP, bigjump: { rampEnd: 24, landStart: 44, h: 5, pad: [2, 12] } };   // Mega Salto tem turbo embutido na rampa
+const HOLES = [{ s0: 10, s1: 16, v0: -5.6, v1: -0.8 }, { s0: 24, s1: 30, v0: 0.8, v1: 5.6 }, { s0: 38, s1: 44, v0: -2.2, v1: 2.2 }];
+const WIND_ACC = 8;                       // empurrão lateral do vento (m/s²)
+const bumpH = s => (s > 2 && s < 24) ? 0.55 * Math.pow(Math.sin(Math.PI * (s - 2) / 5.5), 2) : 0;
+const bumpSlope = s => (s > 2 && s < 24) ? 0.55 * Math.PI / 5.5 * Math.sin(2 * Math.PI * (s - 2) / 5.5) : 0;
 const PTS = [300, 220, 150, 110, 80, 60, 45, 30];
 const PALETTE = ['#00e5ff', '#ff3b5c', '#ffd23f', '#7dff6b', '#c471ff', '#ff8a1f', '#ff6bd6', '#e8ecff'];
 const BOT_NAMES = ['Rex', 'Nova', 'Blaze', 'Viper', 'Turbo', 'Faísca', 'Bolt', 'Zíper'];
 const GRID_SLOTS = [[20, -3.4], [20, 0], [20, 3.4], [15, -3.4], [15, 0], [15, 3.4], [10, -3.4], [10, 0], [10, 3.4]];
 const PT = {
   start: { cells: 1 }, straight: { cells: 1 }, finish: { cells: 1 }, boost: { cells: 1 },
-  curveL: { cells: 1, curve: -1 }, curveR: { cells: 1, curve: 1 }, jump: { cells: 2 }, bridge: { cells: 2 }
+  curveL: { cells: 1, curve: -1 }, curveR: { cells: 1, curve: 1 }, jump: { cells: 2 }, bridge: { cells: 2 },
+  bumps: { cells: 1 }, ice: { cells: 1 }, wind: { cells: 1 }, holes: { cells: 2 }, bigjump: { cells: 3 }
 };
 // espaços delimitados onde obstáculos podem ser posicionados (s ao longo, v lateral)
 const SLOTS = {
   straight: [[8, -2.6], [8, 2.6], [18, 0]], boost: [[22.5, -2.6], [22.5, 2.6]],
   curveL: [[RC * Math.PI / 4, 0]], curveR: [[RC * Math.PI / 4, 0]], jump: [[40, -2.4], [40, 2.4]],
-  start: [], finish: [], bridge: []
+  ice: [[8, -2.6], [8, 2.6], [18, 0]], wind: [[13, 0]], bigjump: [[66, -2.4], [66, 2.4]],
+  start: [], finish: [], bridge: [], bumps: [], holes: []
 };
 const ROAD = '<rect x="18" y="2" width="28" height="60" rx="3" fill="#2b3048" stroke="#00e5ff" stroke-width="2"/>';
 const ITEMS = {
@@ -380,6 +391,13 @@ const ITEMS = {
   curveR: { kind: 'piece', name: 'Curva Dir.', w: 1.1, svg: '<path d="M32 64 L32 44 A14 14 0 0 1 46 30 L64 30" stroke="#2b3048" stroke-width="24" fill="none"/><path d="M32 64 L32 44 A14 14 0 0 1 46 30 L64 30" stroke="#00e5ff" stroke-width="2" stroke-dasharray="5 5" fill="none"/><path d="M19 50 A27 27 0 0 1 46 17" stroke="#ff2e88" stroke-width="4" fill="none"/>' },
   jump: { kind: 'piece', name: 'Rampa + Salto', w: 0.9, svg: '<path d="M2 50 L26 38 L26 54 L2 54Z" fill="#ff9a1f"/><rect x="40" y="46" width="24" height="8" fill="#2b3048" stroke="#00e5ff" stroke-width="1.5"/><path d="M26 36 Q36 14 46 42" stroke="#fff" stroke-width="2.5" stroke-dasharray="4 4" fill="none"/>' },
   bridge: { kind: 'piece', name: 'Ponte Estreita', w: 0.8, svg: '<path d="M18 2 L46 2 L38 14 L38 50 L46 62 L18 62 L26 50 L26 14Z" fill="#3b3f5c" stroke="#ffd23f" stroke-width="2"/>' },
+  bumps: { kind: 'piece', name: 'Lombadas', w: 0.9, svg: ROAD + '<path d="M18 14 Q32 6 46 14 M18 30 Q32 22 46 30 M18 46 Q32 38 46 46" stroke="#ff9a1f" stroke-width="5" fill="none"/>' },
+  ice: { kind: 'piece', name: 'Pista de Gelo', w: 0.9, svg: '<rect x="18" y="2" width="28" height="60" rx="3" fill="#9be8ff" stroke="#fff" stroke-width="2"/><path d="M32 18 V46 M20 32 H44 M23 23 L41 41 M41 23 L23 41" stroke="#fff" stroke-width="3"/>' },
+  wind: { kind: 'piece', name: 'Vento Lateral', w: 0.8, svg: ROAD + '<path d="M4 20 H40 M4 32 H48 M4 44 H40" stroke="#bdf3ff" stroke-width="4" stroke-linecap="round"/><path d="M40 14 L50 20 L40 26 M48 26 L58 32 L48 38" stroke="#bdf3ff" stroke-width="3" fill="none"/>' },
+  holes: { kind: 'piece', name: 'Ponte Quebrada', w: 0.7, svg: '<rect x="18" y="2" width="28" height="60" fill="#3b3f5c" stroke="#ffd23f" stroke-width="2"/><rect x="18" y="12" width="12" height="9" fill="#07031a"/><rect x="34" y="29" width="12" height="9" fill="#07031a"/><rect x="26" y="46" width="12" height="9" fill="#07031a"/>' },
+  bigjump: { kind: 'piece', name: 'Mega Salto', w: 0.6, svg: '<path d="M2 54 L24 32 L24 56 L2 56Z" fill="#ff2e88"/><path d="M6 50 L12 44" stroke="#a6ff3b" stroke-width="4"/><rect x="46" y="48" width="18" height="8" fill="#2b3048" stroke="#00e5ff" stroke-width="1.5"/><path d="M24 30 Q38 0 50 44" stroke="#fff" stroke-width="2.5" stroke-dasharray="4 4" fill="none"/>' },
+  kicker: { kind: 'obs', name: 'Rampinha', w: 0.9, svg: '<path d="M8 50 L56 50 L56 24 Z" fill="#ff9a1f"/><path d="M14 46 L50 46" stroke="#fff" stroke-width="3"/><path d="M50 18 Q56 6 62 14" stroke="#fff" stroke-width="2.5" fill="none"/>' },
+  piston: { kind: 'obs', name: 'Pistão', w: 0.8, svg: '<rect x="20" y="10" width="24" height="30" fill="#ff2020"/><rect x="16" y="44" width="32" height="10" fill="#e8ecff"/><path d="M32 4 V10 M24 2 L32 8 L40 2" stroke="#fff" stroke-width="2.5" fill="none"/>' },
   block: { kind: 'obs', name: 'Bloco', w: 1.1, svg: '<rect x="14" y="14" width="36" height="36" rx="3" fill="#ff2020"/><rect x="14" y="25" width="36" height="6" fill="#fff"/>' },
   bumper: { kind: 'obs', name: 'Bumper Mola', w: 1.0, svg: '<circle cx="32" cy="32" r="20" fill="#ff2e88"/><circle cx="32" cy="32" r="11" fill="none" stroke="#00e5ff" stroke-width="5"/>' },
   spinner: { kind: 'obs', name: 'Hélice', w: 0.9, svg: '<rect x="4" y="28" width="56" height="8" rx="3" fill="#ffd23f" transform="rotate(-25 32 32)"/><circle cx="32" cy="32" r="6" fill="#e8ecff"/><path d="M46 8 A26 26 0 0 1 58 26" stroke="#fff" stroke-width="3" fill="none"/>' },
@@ -506,7 +524,8 @@ scene.background = new THREE.Color(BG);
 scene.fog = new THREE.Fog(BG, 70, 270);
 const camera = new THREE.PerspectiveCamera(68, window.innerWidth / window.innerHeight, 0.1, 800);
 camera.position.set(-20, 20, 0);
-scene.add(new THREE.HemisphereLight(0xc8d8ff, 0x3a1450, 1.25));
+const hemi = new THREE.HemisphereLight(0xc8d8ff, 0x3a1450, 1.25);
+scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xffffff, 1.7);
 sun.castShadow = true;
 sun.shadow.mapSize.set(1024, 1024);
@@ -579,6 +598,17 @@ const texSlot = canvasTex(128, 128, (g, w, h) => {
   g.beginPath(); g.moveTo(64, 40); g.lineTo(64, 88); g.moveTo(40, 64); g.lineTo(88, 64); g.stroke();
 });
 texSlot.wrapS = texSlot.wrapT = THREE.ClampToEdgeWrapping;
+const texIce = canvasTex(256, 256, (g, w, h) => {
+  const gr = g.createLinearGradient(0, 0, w, h); gr.addColorStop(0, '#bff1ff'); gr.addColorStop(1, '#7fd3f5');
+  g.fillStyle = gr; g.fillRect(0, 0, w, h);
+  g.strokeStyle = 'rgba(255,255,255,0.85)'; g.lineWidth = 2;
+  for (let i = 0; i < 14; i++) { g.beginPath(); let x = Math.random() * w, y = Math.random() * h; g.moveTo(x, y); for (let k = 0; k < 4; k++) { x += rnd(-40, 40); y += rnd(-40, 40); g.lineTo(x, y); } g.stroke(); }
+}, 3, 1);
+const texWind = canvasTex(128, 128, (g, w, h) => {
+  g.clearRect(0, 0, w, h);
+  g.strokeStyle = 'rgba(210,248,255,0.95)'; g.lineWidth = 12; g.lineCap = 'round'; g.lineJoin = 'round';
+  g.beginPath(); g.moveTo(34, 26); g.lineTo(80, 64); g.lineTo(34, 102); g.stroke();
+}, 2, 4);
 
 // ----------------------------------------------------------- materiais
 const M = {
@@ -600,15 +630,24 @@ const M = {
   checker: new THREE.MeshBasicMaterial({ map: texChecker }),
   hazard: new THREE.MeshLambertMaterial({ map: texHazard }),
   post: new THREE.MeshLambertMaterial({ color: 0xe8ecff }),
-  slot: new THREE.MeshBasicMaterial({ map: texSlot, color: 0x00e5ff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false })
+  slot: new THREE.MeshBasicMaterial({ map: texSlot, color: 0x00e5ff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }),
+  ice: new THREE.MeshLambertMaterial({ map: texIce, emissive: 0x1a3a4a }),
+  bump: new THREE.MeshLambertMaterial({ color: 0xff9a1f, emissive: 0x3a1800 }),
+  wind: new THREE.MeshBasicMaterial({ map: texWind, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false }),
+  piston: new THREE.MeshLambertMaterial({ color: 0xff3030, emissive: 0x4a0000 })
 };
 const laneMats = {};
 function laneMat(len) { const k = len.toFixed(1); if (!laneMats[k]) laneMats[k] = new THREE.MeshLambertMaterial({ map: laneTex(len) }); return laneMats[k]; }
 
 // --------------------------------------------------- abismo neon (cenário)
+const SCN = {};
 {
   const grid = new THREE.GridHelper(2400, 120, 0xff2e88, 0x3a1a7a);
   grid.position.y = -48; grid.material.transparent = true; grid.material.opacity = 0.55; scene.add(grid);
+  SCN.grid = grid;
+  const lava = new THREE.Mesh(new THREE.PlaneGeometry(2400, 2400), new THREE.MeshBasicMaterial({ color: 0xff3a00, transparent: true, opacity: 0.32, fog: false }));
+  lava.rotation.x = -Math.PI / 2; lava.position.y = -55; lava.visible = false; scene.add(lava);
+  SCN.lava = lava;
   const n = 90, geo = new THREE.BoxGeometry(1, 1, 1);
   const inst = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ color: 0xffffff }), n);
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), col = new THREE.Color();
@@ -620,10 +659,31 @@ function laneMat(len) { const k = len.toFixed(1); if (!laneMats[k]) laneMats[k] 
     inst.setMatrixAt(i, m4); inst.setColorAt(i, col.setHex(pal[i % pal.length]).multiplyScalar(0.55));
   }
   scene.add(inst);
+  SCN.inst = inst;
   const sp = new Float32Array(600 * 3);
   for (let i = 0; i < 600; i++) { sp[i * 3] = rnd(-500, 500); sp[i * 3 + 1] = rnd(-160, 120); sp[i * 3 + 2] = rnd(-500, 500); }
   const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.BufferAttribute(sp, 3));
   scene.add(new THREE.Points(sg, new THREE.PointsMaterial({ color: 0xbfaaff, size: 1.2, map: texDot, transparent: true, depthWrite: false, fog: false })));
+}
+
+// ----------------------------------------------------- temas do abismo
+const THEMES = {
+  neon: { name: 'NEON', bg: 0x07031a, grid: [0xff2e88, 0x3a1a7a], cubes: [0x00e5ff, 0xff2e88, 0x7a3cff, 0xa6ff3b, 0xffd23f], ground: 0x3a1450, lava: false },
+  gelo: { name: 'GELO', bg: 0x06141f, grid: [0x9be8ff, 0x1d4a66], cubes: [0xffffff, 0x9be8ff, 0x5ab8ff, 0xd8f6ff, 0x7fd0ff], ground: 0x1d4a66, lava: false },
+  lava: { name: 'LAVA', bg: 0x170402, grid: [0xff5a1a, 0x5a1408], cubes: [0xff3b1a, 0xff8a1f, 0xffd23f, 0x9a1a08, 0xff5a1a], ground: 0x5a1408, lava: true }
+};
+let themeKey = 'neon';
+function applyTheme(k) {
+  const T = THEMES[k] || THEMES.neon; themeKey = THEMES[k] ? k : 'neon';
+  scene.background.setHex(T.bg); scene.fog.color.setHex(T.bg); hemi.groundColor.setHex(T.ground);
+  scene.remove(SCN.grid); SCN.grid.geometry.dispose();
+  const grid = new THREE.GridHelper(2400, 120, T.grid[0], T.grid[1]);
+  grid.position.y = -48; grid.material.transparent = true; grid.material.opacity = 0.55; scene.add(grid); SCN.grid = grid;
+  const col = new THREE.Color();
+  for (let i = 0; i < SCN.inst.count; i++) SCN.inst.setColorAt(i, col.setHex(T.cubes[i % T.cubes.length]).multiplyScalar(0.55));
+  SCN.inst.instanceColor.needsUpdate = true;
+  SCN.lava.visible = T.lava;
+  document.querySelector('meta[name="theme-color"]').setAttribute('content', '#' + new THREE.Color(T.bg).getHexString());
 }
 
 // ----------------------------------------------------- helpers de malha
@@ -651,14 +711,15 @@ function sector(cz, rIn, rOut, a0, a1, yTop, thick, mat, parent, shadow = true) 
   if (shadow) { m.castShadow = true; m.receiveShadow = true; }
   parent.add(m); return m;
 }
-function straightBase(g, s0, s1, walls = true) {
+function straightBase(g, s0, s1, walls = true, laneM = null) {
   const len = s1 - s0, cx = (s0 + s1) / 2;
   box(len, 1, 2 * HW, M.floor, cx, -0.5, 0, g);
-  const pl = new THREE.Mesh(new THREE.PlaneGeometry(len, 2 * HW), laneMat(len));
+  const pl = new THREE.Mesh(new THREE.PlaneGeometry(len, 2 * HW), laneM || laneMat(len));
   pl.rotation.x = -Math.PI / 2; pl.position.set(cx, 0.012, 0); pl.receiveShadow = true; g.add(pl);
   box(len, 0.06, 0.22, M.edge, cx, 0.03, HW - 0.11, g, false);
   box(len, 0.06, 0.22, M.edge, cx, 0.03, -HW + 0.11, g, false);
-  if (walls) for (const sd of [-1, 1]) {
+  const wf = Array.isArray(walls) ? walls : [walls, walls];       // [esquerda, direita]
+  for (const sd of [-1, 1]) if (wf[sd < 0 ? 0 : 1]) {
     box(len, WALL_H, 0.5, M.wall, cx, WALL_H / 2, sd * (HW + 0.25), g);
     box(len, 0.08, 0.54, M.wallCap, cx, WALL_H + 0.04, sd * (HW + 0.25), g, false);
   }
@@ -694,6 +755,7 @@ class Piece {
     const last = this.cells[this.cells.length - 1], ed = DIRS[this.exitDir];
     this.next = [last[0] + ed[0], last[1] + ed[1]];
     this.slots = (SLOTS[type] || []).map(([s, v]) => ({ s, v }));
+    this.windDir = ((ci + cj) & 1) ? 1 : -1;         // lado do vento: determinístico pela posição (igual para todos)
     this.group = null;
   }
   world(s, v, o) {
@@ -714,15 +776,23 @@ class Piece {
       o.s = dx * this.fx + dz * this.fz; o.v = dx * this.rx + dz * this.rz; o.fx = this.fx; o.fz = this.fz;
     }
     o.rx = -o.fz; o.rz = o.fx;
-    let hw = HW, h = 0, slope = 0, floor = true, wl = true, wr = true;
+    let hw = HW, h = 0, slope = 0, floor = true, wl = true, wr = true, ice = false, wind = 0;
     const s = o.s, t = this.type;
     if (this.turn) { wl = this.turn > 0; wr = this.turn < 0; }
     else if (t === 'bridge') { hw = bridgeHW(s); wl = wr = false; }
-    else if (t === 'jump') {
-      if (s < JUMP.rampEnd) { h = Math.max(0, s) * JUMP.h / JUMP.rampEnd; slope = JUMP.h / JUMP.rampEnd; }
-      else if (s < JUMP.landStart) { floor = false; wl = wr = false; }
+    else if (t === 'jump' || t === 'bigjump') {
+      const J = JUMPS[t];
+      if (s < J.rampEnd) { h = Math.max(0, s) * J.h / J.rampEnd; slope = J.h / J.rampEnd; }
+      else if (s < J.landStart) { floor = false; wl = wr = false; }
     }
-    o.hw = hw; o.h = h; o.slope = slope; o.wallL = wl; o.wallR = wr;
+    else if (t === 'bumps') { h = bumpH(s); slope = bumpSlope(s); }
+    else if (t === 'ice') ice = true;
+    else if (t === 'wind') { wind = this.windDir; if (wind > 0) wr = false; else wl = false; }
+    else if (t === 'holes') {
+      wl = wr = false;
+      for (const hl of HOLES) if (s > hl.s0 && s < hl.s1 && o.v > hl.v0 && o.v < hl.v1) { floor = false; break; }
+    }
+    o.hw = hw; o.h = h; o.slope = slope; o.wallL = wl; o.wallR = wr; o.ice = ice; o.wind = wind;
     o.floor = floor && Math.abs(o.v) <= hw;
     return o;
   }
@@ -744,7 +814,8 @@ class Piece {
         const m = box(2.8, 0.02, 0.32, M.white, Math.cos(ang) * RC, 0.015, cz + Math.sin(ang) * RC, g, false);
         m.rotation.y = -(th * tn);
       }
-    } else if (t === 'jump') {
+    } else if (t === 'jump' || t === 'bigjump') {
+      const JUMP = JUMPS[t];
       const rs = new THREE.Shape();
       rs.moveTo(0, -1); rs.lineTo(0, 0); rs.lineTo(JUMP.rampEnd, JUMP.h); rs.lineTo(JUMP.rampEnd, JUMP.h - 1);
       const rg = new THREE.ExtrudeGeometry(rs, { depth: 2 * HW, bevelEnabled: false }); rg.translate(0, 0, -HW);
@@ -759,11 +830,31 @@ class Piece {
       hz.rotation.z = Math.atan(JUMP.h / JUMP.rampEnd);
       straightBase(g, JUMP.landStart, L, true);
       box(1.2, 0.05, 2 * HW, M.hazard, JUMP.landStart + 0.6, 0.03, 0, g, false);
+      const gapL = JUMP.landStart - JUMP.rampEnd;
       for (let k = 0; k < 3; k++) {
-        const x = JUMP.rampEnd + 2 + k * 3.2;
+        const x = JUMP.rampEnd + gapL * (k + 0.7) / 3.5;
         strip(x - 1, -1.4, x + 0.4, 0, JUMP.h + 2.4, 0.3, 0.3, M.edgeY, g);
         strip(x - 1, 1.4, x + 0.4, 0, JUMP.h + 2.4, 0.3, 0.3, M.edgeY, g);
       }
+      if (JUMP.pad) {                                   // turbo embutido na rampa do Mega Salto
+        const pg = new THREE.Group(), mid = (JUMP.pad[0] + JUMP.pad[1]) / 2;
+        pg.position.set(mid, mid * JUMP.h / JUMP.rampEnd + 0.04, 0); pg.rotation.z = Math.atan(JUMP.h / JUMP.rampEnd);
+        const pd = new THREE.Mesh(new THREE.PlaneGeometry(JUMP.pad[1] - JUMP.pad[0], 2 * PAD.hv), M.pad);
+        pd.rotation.x = -Math.PI / 2; pg.add(pd); g.add(pg);
+      }
+    } else if (t === 'holes') {
+      const sh = new THREE.Shape();
+      sh.moveTo(0, -HW); sh.lineTo(L, -HW); sh.lineTo(L, HW); sh.lineTo(0, HW); sh.lineTo(0, -HW);
+      for (const hl of HOLES) {
+        const v0 = Math.max(-HW + 0.01, hl.v0), v1 = Math.min(HW - 0.01, hl.v1);
+        const hp = new THREE.Path(); hp.moveTo(hl.s0, v0); hp.lineTo(hl.s0, v1); hp.lineTo(hl.s1, v1); hp.lineTo(hl.s1, v0); hp.lineTo(hl.s0, v0);
+        sh.holes.push(hp);
+        for (const [a, b] of [[[hl.s0, v0], [hl.s1, v0]], [[hl.s1, v0], [hl.s1, v1]], [[hl.s1, v1], [hl.s0, v1]], [[hl.s0, v1], [hl.s0, v0]]])
+          strip(a[0], a[1], b[0], b[1], 0.04, 0.2, 0.08, M.edgeY, g);
+      }
+      const hg = new THREE.ExtrudeGeometry(sh, { depth: 1, bevelEnabled: false }); hg.rotateX(Math.PI / 2);
+      const hm = new THREE.Mesh(hg, M.floorBridge); hm.castShadow = hm.receiveShadow = true; g.add(hm);
+      for (const sd of [-1, 1]) { box(L, 0.06, 0.22, M.edgeY, L / 2, 0.03, sd * (HW - 0.11), g, false); box(0.2, 2.4, 0.2, M.post, 0.6, 1.2, sd * (HW + 0.6), g); box(0.15, 0.9, 1.4, M.hazard, 0.6, 2.4, sd * (HW + 0.6), g); }
     } else if (t === 'bridge') {
       const sh = new THREE.Shape(), pts = [];
       for (let s = 0; s <= L + 0.01; s += 2) pts.push([s, bridgeHW(s)]);
@@ -780,7 +871,25 @@ class Piece {
       for (const s of [10, L - 10]) box(1.2, 30, 1.2, M.post, s, -16, 0, g, false);
       for (const sd of [-1, 1]) { box(0.2, 2.4, 0.2, M.post, 0.6, 1.2, sd * (HW + 0.6), g); box(0.15, 0.9, 1.4, M.hazard, 0.6, 2.4, sd * (HW + 0.6), g); }
     } else {
-      straightBase(g, 0, L, true);
+      const wallsLR = t === 'wind' ? (this.windDir > 0 ? [true, false] : [false, true]) : true;
+      straightBase(g, 0, L, wallsLR, t === 'ice' ? M.ice : null);
+      if (t === 'bumps') {
+        const bs = new THREE.Shape();
+        bs.moveTo(2, -0.01);
+        for (let s = 2; s <= 24.001; s += 0.5) bs.lineTo(s, bumpH(s));
+        bs.lineTo(24, -0.01);
+        const bg = new THREE.ExtrudeGeometry(bs, { depth: 2 * HW - 0.1, bevelEnabled: false }); bg.translate(0, 0, -HW + 0.05);
+        const bm = new THREE.Mesh(bg, M.bump); bm.castShadow = bm.receiveShadow = true; g.add(bm);
+      } else if (t === 'wind') {
+        const wg = new THREE.Group(); wg.position.set(L / 2, 0.035, 0); wg.rotation.y = -this.windDir * Math.PI / 2;
+        const wp = new THREE.Mesh(new THREE.PlaneGeometry(2 * HW - 1, L - 4), M.wind); wp.rotation.x = -Math.PI / 2; wg.add(wp); g.add(wg);
+        for (const s of [7, 19]) {                     // ventiladores do lado de onde vem o vento
+          const zf = -this.windDir * (HW + 1.1);
+          box(1.2, 2.6, 1.6, M.post, s, 1.3, zf, g);
+          box(1.25, 1.8, 0.1, M.edge, s, 1.4, zf + this.windDir * 0.82, g, false);
+        }
+        for (let k = 0; k < 6; k++) box(1.4, 0.05, 0.25, M.edgeY, 3 + k * 4, 0.04, this.windDir * (HW - 0.2), g, false);
+      }
       if (t === 'boost') {
         const pd = new THREE.Mesh(new THREE.PlaneGeometry(PAD.s1 - PAD.s0, 2 * PAD.hv), M.pad);
         pd.rotation.x = -Math.PI / 2; pd.position.set((PAD.s0 + PAD.s1) / 2, 0.03, 0); g.add(pd);
@@ -809,6 +918,16 @@ let obstacles = [];                       // {key,type,pi,si,x,z,y,a,s,v,ph,spd,
 const trackRoot = new THREE.Group(); scene.add(trackRoot);
 const slotGroup = new THREE.Group(); scene.add(slotGroup);
 const INITIAL_TYPES = ['start', 'straight', 'straight', 'finish'];
+// pistas iniciais que o host escolhe no lobby
+const PRESETS = {
+  curta: { name: 'CURTA', types: INITIAL_TYPES, obs: [] },
+  media: { name: 'MÉDIA', types: ['start', 'straight', 'curveL', 'boost', 'curveR', 'jump', 'straight', 'finish'],
+    obs: [{ key: '1:2', type: 'mboost', ph: 0, spd: 1.7 }, { key: '6:0', type: 'block', ph: 0, spd: 1.7 }] },
+  caos: { name: 'CAÓTICA', types: ['start', 'bumps', 'curveR', 'bridge', 'curveL', 'ice', 'wind', 'curveL', 'holes', 'straight', 'finish'],
+    obs: [{ key: '2:0', type: 'bumper', ph: 0, spd: 1.7 }, { key: '5:2', type: 'spinner', ph: 0.7, spd: 1.6 }, { key: '9:0', type: 'piston', ph: 1.3, spd: 1.5 }, { key: '9:1', type: 'oil', ph: 0, spd: 1.7 }] }
+};
+let presetKey = store.get('preset', 'curta');
+if (!PRESETS[presetKey]) presetKey = 'curta';
 const key = (i, j) => i + ',' + j;
 let dropAnims = [];
 function layoutTypes(types) {
@@ -893,6 +1012,17 @@ function makeObstacle(type, k, ph, spd) {
   } else if (type === 'mboost') {
     const m = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 3.2), M.pad1); m.rotation.x = -Math.PI / 2; m.position.y = 0.04; g.add(m);
     for (const sd of [-1, 1]) box(3.2, 0.05, 0.16, M.edgeY, 0, 0.04, sd * 1.65, g, false);
+  } else if (type === 'kicker') {
+    const ks = new THREE.Shape(); ks.moveTo(-1.3, 0); ks.lineTo(1.3, 0.9); ks.lineTo(1.3, 0); ks.lineTo(-1.3, 0);
+    const kg = new THREE.ExtrudeGeometry(ks, { depth: 3.0, bevelEnabled: false }); kg.translate(0, 0, -1.5);
+    const km = new THREE.Mesh(kg, M.ramp); km.castShadow = km.receiveShadow = true; g.add(km);
+    box(0.2, 0.06, 3.0, M.edgeY, 1.2, 0.9, 0, g, false);
+  } else if (type === 'piston') {
+    const base = box(2.8, 0.08, 2.8, M.hazard, 0, 0.03, 0, g, false);
+    const arm = new THREE.Group(); g.add(arm);
+    box(2.2, 2.4, 2.2, M.piston, 0, 1.2, 0, arm);
+    box(2.25, 0.12, 2.25, M.white, 0, 2.0, 0, arm, false);
+    o.bar = arm; o.lift = 1; void base;
   }
   o.group = g; trackRoot.add(g);
   return o;
@@ -1036,6 +1166,19 @@ function toHost(msg) {
   else hostHandle(myId, msg);
 }
 const ROOM_PREFIX = 'microrush3d-v1-';
+// STUN (descobre o IP público) + TURN público (retransmite quando a conexão direta é bloqueada: 4G, NAT simétrico, redes de empresa)
+const PEER_OPTS = { debug: 0, config: { iceServers: [
+  { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] },
+  { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
+] } };
+// token por aba: permite voltar pra mesma vaga se a conexão cair no meio da partida
+const myToken = (() => {
+  try { let t = sessionStorage.getItem('microrush.token'); if (!t) { t = Math.random().toString(36).slice(2) + Date.now().toString(36); sessionStorage.setItem('microrush.token', t); } return t; }
+  catch (e) { return Math.random().toString(36).slice(2); }
+})();
+const HTOK = {};                              // host: pid -> token (não é enviado aos outros jogadores)
 function genCode() { const A = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; let s = ''; for (let i = 0; i < 5; i++) s += A[Math.floor(Math.random() * A.length)]; return s; }
 function setStatus(t) { $('status').textContent = t || ''; }
 function readName() { myName = ($('nameInp').value || '').trim().slice(0, 12) || myName; store.set('name', myName); }
@@ -1052,7 +1195,7 @@ function createRoom() {
   if (!window.Peer) { setStatus('Multiplayer indisponível (biblioteca de rede não carregou — sem internet?)'); return; }
   setStatus('Criando sala...');
   const code = genCode();
-  const peer = new Peer(ROOM_PREFIX + code, { debug: 0 });
+  const peer = new Peer(ROOM_PREFIX + code, PEER_OPTS);
   NET.peer = peer;
   peer.on('open', () => {
     NET.role = 'host'; NET.code = code; myId = 0; nextId = 1; botCount = 0;
@@ -1071,13 +1214,19 @@ function onHostConn(conn) {
   if (conn.metadata && conn.metadata.fast) {               // segundo canal (rápido) do mesmo jogador
     const e = NET.conns.get(conn.peer);
     if (e) e.fast = conn; else NET.fastPending.set(conn.peer, conn);
-    conn.on('data', msg => { const en = NET.conns.get(conn.peer); if (en && msg && msg.t === 'st') hostHandle(en.pid, msg); });
+    conn.on('data', msg => {
+      if (!msg) return;
+      if (msg.t === 'ping') { try { conn.send({ t: 'pong', c: msg.c }); } catch (e) { } return; }
+      const en = NET.conns.get(conn.peer); if (en && msg.t === 'st') hostHandle(en.pid, msg);
+    });
     conn.on('error', () => { });
     return;
   }
   conn.on('data', msg => {
     if (!msg || typeof msg !== 'object') return;
     if (msg.t === 'hello') {
+      const back = msg.token && players.find(p => HTOK[p.id] === msg.token && !p.connected);
+      if (back) { hostRejoin(conn, back); return; }
       if (state !== 'lobby') { conn.send({ t: 'full', reason: 'Partida já em andamento. Aguarde terminar.' }); setTimeout(() => conn.close(), 400); return; }
       if (players.filter(p => !p.bot).length >= MAXP) { conn.send({ t: 'full', reason: 'Sala cheia (máx. ' + MAXP + ').' }); setTimeout(() => conn.close(), 400); return; }
       const id = nextId++;
@@ -1085,6 +1234,7 @@ function onHostConn(conn) {
       NET.fastPending.delete(conn.peer);
       const nm = String(msg.name || 'Piloto').slice(0, 12);
       players.splice(players.filter(p => !p.bot).length, 0, { id, name: nm, color: freeColor(), device: msg.device === 'mobile' ? 'mobile' : 'pc', bot: false, score: 0, connected: true });
+      if (msg.token) HTOK[id] = String(msg.token).slice(0, 40);
       if (players.length > MAXP) { const bi = players.map(p => p.bot).lastIndexOf(true); if (bi >= 0) { players.splice(bi, 1); botCount = Math.max(0, botCount - 1); } }
       conn.send({ t: 'welcome', id, code: NET.code });
       hostLobbyChanged();
@@ -1097,6 +1247,23 @@ function onHostConn(conn) {
   conn.on('close', () => { const e = NET.conns.get(conn.peer); NET.conns.delete(conn.peer); if (e) playerLeft(e.pid); });
   conn.on('error', () => { });
 }
+// jogador que caiu e voltou: reassume a vaga (o bot devolve o carro na próxima rodada)
+function hostRejoin(conn, p) {
+  NET.conns.set(conn.peer, { conn, pid: p.id, fast: NET.fastPending.get(conn.peer) || null });
+  NET.fastPending.delete(conn.peer);
+  p.connected = true; p.name = p.name.replace(/ 🤖$/, '');
+  const racing = state === 'countdown' || state === 'race';
+  if (racing) p.rejoin = true; else { p.bot = false; delete HST.botAt[p.id]; }
+  conn.send({ t: 'welcome', id: p.id, code: NET.code, rejoin: true });
+  conn.send({ t: 'lobby', players: plist(), target: TARGET, theme: themeKey, preset: presetKey });
+  const L = HST.last;
+  if (L && !racing) {
+    conn.send({ t: 'phase', ph: L.ph, d: Object.assign({}, L.d, { players: plist(), tray: state === 'pick' || state === 'place' ? tray : L.d.tray }) });
+  }
+  conn.send({ t: 'track', types: trackTypes(), obs: obsData(), placed });
+  hostLobbyChanged();
+  toast(p.name + ' VOLTOU!', '#a6ff3b', 1.4);
+}
 function playerLeft(pid) {
   const p = playerById(pid); if (!p) return;
   if (state === 'lobby') players = players.filter(x => x.id !== pid);
@@ -1107,39 +1274,57 @@ function hostLobbyChanged() {
   syncCars();
   if (state === 'lobby') renderLobby();
   updateBoard();
-  broadcast({ t: 'lobby', players: plist(), target: TARGET });
+  broadcast({ t: 'lobby', players: plist(), target: TARGET, theme: themeKey, preset: presetKey });
 }
-function joinRoom() {
-  readName();
-  const code = ($('codeInp').value || '').trim().toUpperCase();
+// conexão caiu no meio da partida: tenta voltar pra mesma vaga algumas vezes
+function tryReconnect(code) {
+  const n = (NET.retries || 0) + 1; NET.retries = n;
+  if (n > 5) { NET.retries = 0; leaveRoom('Conexão com o host perdida.'); return; }
+  toast('RECONECTANDO... (' + n + '/5)', '#ff9a1f', 1.8);
+  NET.role = 'rejoining';
+  try { if (NET.peer) NET.peer.destroy(); } catch (e) { }
+  NET.peer = null; NET.host = null; NET.hostFast = null;
+  setTimeout(() => { if (NET.role === 'rejoining') joinRoom(code, true); }, 900 * n);
+}
+function joinRoom(codeArg, retry) {
+  if (!retry) readName();
+  const code = (codeArg || $('codeInp').value || '').trim().toUpperCase();
   if (code.length < 4) { setStatus('Digite o código da sala.'); return; }
   if (!window.Peer) { setStatus('Multiplayer indisponível (sem internet?)'); return; }
-  setStatus('Conectando à sala ' + code + '...');
-  const peer = new Peer({ debug: 0 });
+  if (!retry) setStatus('Conectando à sala ' + code + '...');
+  NET.lastCode = code;
+  const peer = new Peer(PEER_OPTS);
   NET.peer = peer;
   clearTimeout(NET.joinTimer);
-  NET.joinTimer = setTimeout(() => { if (NET.role !== 'client') { setStatus('Não foi possível conectar. Confira o código.'); try { peer.destroy(); } catch (e) { } } }, 12000);
+  NET.joinTimer = setTimeout(() => {
+    if (NET.role === 'client') return;
+    if (retry) { tryReconnect(code); return; }
+    setStatus('Não foi possível conectar. Confira o código (ou a rede bloqueou a conexão).'); try { peer.destroy(); } catch (e) { }
+  }, 15000);
   peer.on('open', () => {
     const conn = peer.connect(ROOM_PREFIX + code, { serialization: 'json', reliable: true });
     NET.host = conn;
     conn.on('open', () => {
-      conn.send({ t: 'hello', name: myName, device: myDevice });
+      conn.send({ t: 'hello', name: myName, device: myDevice, token: myToken });
       const fast = peer.connect(ROOM_PREFIX + code, { serialization: 'json', reliable: false, label: 'fast', metadata: { fast: true } });
       NET.hostFast = fast;
       fast.on('data', onClientMsg);
       fast.on('error', () => { });
     });
     conn.on('data', onClientMsg);
-    conn.on('close', () => { if (NET.role === 'client') leaveRoom('O host fechou a sala.'); });
+    conn.on('close', () => { if (NET.role === 'client' && !NET.leaving) tryReconnect(code); });
   });
+  peer.on('disconnected', () => { try { if (!peer.destroyed) peer.reconnect(); } catch (e) { } });
   peer.on('error', err => {
+    if (retry || NET.role === 'client' || NET.role === 'rejoining') { clearTimeout(NET.joinTimer); if (!NET.leaving) tryReconnect(code); return; }
     clearTimeout(NET.joinTimer);
     setStatus(err.type === 'peer-unavailable' ? 'Sala não encontrada. Confira o código.' : 'Erro de rede: ' + err.type);
-    if (NET.role === 'client') leaveRoom('Conexão perdida.');
   });
 }
 function leaveRoom(msg) {
   const role = NET.role;
+  NET.leaving = true; NET.retries = 0;
+  clearTimeout(NET.joinTimer);
   NET.role = 'none';
   try { if (NET.peer) NET.peer.destroy(); } catch (e) { }
   NET.peer = null; NET.host = null; NET.hostFast = null; NET.conns.clear(); NET.fastPending.clear(); NET.code = '';
@@ -1147,17 +1332,26 @@ function leaveRoom(msg) {
   R = null;
   goTitle();
   if (msg && role !== 'none') setStatus(msg);
+  setTimeout(() => { NET.leaving = false; }, 300);
 }
 function onClientMsg(msg) {
   if (!msg || typeof msg !== 'object') return;
   switch (msg.t) {
     case 'welcome':
       clearTimeout(NET.joinTimer);
-      NET.role = 'client'; myId = msg.id; NET.code = msg.code; setStatus('');
-      enterPhase('lobby', {});
+      NET.role = 'client'; myId = msg.id; NET.code = msg.code; NET.retries = 0; setStatus('');
+      if (msg.rejoin) {
+        const lw = $('lobbyWait'); lw.dataset.rejoin = '1'; lw.textContent = 'Reconectado! Você volta a correr na próxima rodada.';
+        toast('RECONECTADO!', '#a6ff3b', 1.4);
+        if (state !== 'results' && state !== 'pick' && state !== 'place' && state !== 'champion') enterPhase('lobby', {});
+      } else enterPhase('lobby', {});
       break;
+    case 'wait': break;
+    case 'pong': NET.rtt = Math.round(performance.now() - msg.c); NET.pongAt = performance.now(); updateNetHud(); break;
     case 'lobby':
       if (msg.target) TARGET = msg.target;
+      if (msg.theme && msg.theme !== themeKey) applyTheme(msg.theme);
+      if (msg.preset && PRESETS[msg.preset]) presetKey = msg.preset;
       players = msg.players; syncCars(); updateBoard();
       if (state === 'lobby') renderLobby();
       break;
@@ -1173,12 +1367,17 @@ function onClientMsg(msg) {
     case 'tray': applyTray(msg.tray); break;
     case 'track': applyTrack(msg.types, msg.obs, true); placed = msg.placed || {}; renderPlace(); break;
     case 'msg': toast(msg.text, msg.color || '#fff', 1.6); if (msg.deny) SFX.deny(); break;
-    case 'full': setStatus(msg.reason); clearTimeout(NET.joinTimer); NET.role = 'none'; try { NET.peer.destroy(); } catch (e) { } break;
+    case 'full':
+      clearTimeout(NET.joinTimer);
+      if (state !== 'title') { leaveRoom(msg.reason); break; }
+      setStatus(msg.reason); NET.role = 'none'; NET.leaving = true; try { NET.peer.destroy(); } catch (e) { } setTimeout(() => { NET.leaving = false; }, 300);
+      break;
   }
 }
 function hostHandle(pid, msg) {
   switch (msg.t) {
     case 'st': { const c = carById.get(pid); if (c && !c.owned) applyNet(c, msg.s, false); break; }
+    case 'ping': sendTo(pid, { t: 'pong', c: msg.c }); break;
     case 'pick': hostPick(pid, msg.id); break;
     case 'place': hostPlace(pid, msg.key); break;
   }
@@ -1199,6 +1398,8 @@ function applyNet(c, a, fromHost) {
   // offset de relógio estimado = menor (chegada - envio) visto; sobe devagar para acompanhar deriva
   const o = now - ts;
   if (c.netOff === undefined || o < c.netOff) c.netOff = o;
+  const ex = o - c.netOff;                                   // atraso extra (jitter) acima do mínimo visto
+  c.jit = c.jit === undefined ? ex : c.jit + (ex - c.jit) * 0.08;
   if (!c.buf) c.buf = [];
   c.buf.push({ t: ts, x: g(1), y: g(2), z: g(3), a: g(4), vx: g(5), vy: g(6), vz: g(7) });
   if (c.buf.length > 24) c.buf.shift();
@@ -1222,7 +1423,10 @@ function updateRemote(c, dt) {
   const b = c.buf;
   if (!b || !b.length) return;
   c.netOff += dt * 1000 * 0.01;                              // deriva lenta do offset
-  const now = performance.now(), rt = now - c.netOff - INTERP_MS;
+  // buffer adaptativo: rede estável = atraso mínimo; rede instável = mais folga (sem trancos)
+  const want = clamp(40 + (c.jit || 0) * 1.8 + NET_DT * 1000, 70, 240);
+  c.interp = c.interp === undefined ? want : c.interp + (want - c.interp) * Math.min(1, dt * 1.5);
+  const now = performance.now(), rt = now - c.netOff - c.interp;
   let s0 = b[0], s1 = b[b.length - 1], x, y, z, a, vx, vy, vz;
   if (rt >= s1.t) {                                           // sem amostra futura: extrapola um pouco
     const e = Math.min(0.2, (rt - s1.t) / 1000);
@@ -1462,6 +1666,17 @@ function updateHud() {
   if (lastHud.fk !== fk || lastHud.col !== col) { const i = $('dbar').firstElementChild; i.style.width = (fill * 100) + '%'; i.style.background = col; lastHud.fk = fk; lastHud.col = col; }
   if (lastHud.lbl !== lbl) { $('dlbl').textContent = lbl; $('dlbl').style.color = col; lastHud.lbl = lbl; }
 }
+// indicador de conexão (ping até o host)
+function updateNetHud() {
+  const el = $('net'); if (!el) return;
+  if (NET.role === 'host') { el.textContent = '📶 HOST · ' + (NET.conns.size + 1) + ' online'; el.style.color = '#a6ff3b'; return; }
+  if (NET.role === 'rejoining') { el.textContent = '📶 RECONECTANDO...'; el.style.color = '#ff9a1f'; return; }
+  if (NET.role !== 'client') { el.textContent = ''; return; }
+  if (!NET.pongAt || performance.now() - NET.pongAt > 6000) { el.textContent = '📶 SEM SINAL'; el.style.color = '#ff2e55'; return; }
+  const r = NET.rtt;
+  el.textContent = '📶 ' + r + ' ms'; el.style.color = r < 90 ? '#a6ff3b' : r < 180 ? '#ffd23f' : '#ff2e55';
+}
+setInterval(() => { if (NET.role === 'client') toHostFast({ t: 'ping', c: Math.round(performance.now()) }); updateNetHud(); }, 1500);
 function placeToast(c) {
   const o = c.finishOrder;
   toast(o + 'º LUGAR! +' + (PTS[o - 1] || 0), o === 1 ? '#ffd23f' : '#fff', 2.2);
@@ -1489,6 +1704,7 @@ function enterPhase(ph, d) {
   phaseT = 0; phaseDur = d.dur || 0;
   hidePhaseUI();
   if (d.target) TARGET = d.target;
+  if (d.theme && d.theme !== themeKey) applyTheme(d.theme);
   if (d.players) { players = d.players; syncCars(); updateBoard(); }
   $('confetti').style.display = 'none';
   switch (ph) {
@@ -1536,7 +1752,7 @@ function placeCars(grid) {
       drifting: false, driftDir: 0, driftT: 0, driftLevel: 0, boostT: 0, boostPow: 0, boostMax: 1, padCool: 0, oilT: 0,
       pi: 0, s: sl[0], v: sl[1], prog: sl[0], grounded: true, alive: true, finished: false, finishOrder: 0, finishT: 0, fallProg: 0,
       hitCool: 0, stuckT: 0, airT: 0, tumbleX: 0, tumbleZ: 0, spin: 0, pitch: 0, roll: 0, fxAcc: 0, braking: false, squash: 0, net: null, maxMul: 1,
-      buf: null, netTs: 0, netOff: undefined, cpx: tmpW.x, cpz: tmpW.z
+      buf: null, netTs: 0, netOff: undefined, jit: undefined, interp: undefined, cpx: tmpW.x, cpz: tmpW.z, kickCool: 0
     });
     c.ai.lane = sl[1] * 0.5;
     // erros sorteados por peça para os bots (caos estilo Make Way)
@@ -1545,8 +1761,16 @@ function placeCars(grid) {
       if (p.type === 'bridge' && Math.random() < 1.1 * k) return { lane: (Math.random() < 0.5 ? -1 : 1) * rnd(1.6, 3.2) };
       if (p.type === 'jump' && Math.random() < 0.6 * k) return { slow: rnd(9, 15) };
       if (p.turn && Math.random() < 0.55 * k) return { lane: p.turn * rnd(4.4, 6.5) };
+      if (p.type === 'holes' && Math.random() < 0.8 * k) return { lane: rnd(-1.2, 1.2) };
+      if (p.type === 'wind' && Math.random() < 0.7 * k) return { lane: p.windDir * rnd(1.5, 3) };
+      if (p.type === 'bigjump' && Math.random() < 0.5 * k) return { slow: rnd(14, 20) };
       return null;
     }) : null;
+    if (c.ai.err) {                         // no máximo 1–2 erros por bot por rodada (pista longa não vira massacre)
+      const idx = c.ai.err.map((e, i) => e ? i : -1).filter(i => i >= 0).sort(() => Math.random() - 0.5);
+      const keep = Math.random() < 0.3 ? 2 : 1;
+      for (const i of idx.slice(keep)) c.ai.err[i] = null;
+    }
     c.mesh.root.visible = true;
     c.Q = {};
     track[0].query(c.x, c.z, c.Q);
@@ -1575,7 +1799,13 @@ function act(a) {
     case 'botplus': if (isHost()) { botCount = Math.min(MAXP - players.filter(p => !p.bot).length, players.filter(p => p.bot).length + 1); applyBots(); hostLobbyChanged(); } break;
     case 'targetminus': case 'targetplus': if (isHost() && state === 'lobby') {
       const i = TARGET_OPTS.indexOf(TARGET), j = clamp((i < 0 ? 3 : i) + (a === 'targetplus' ? 1 : -1), 0, TARGET_OPTS.length - 1);
-      TARGET = TARGET_OPTS[j]; hostLobbyChanged();
+      TARGET = TARGET_OPTS[j]; store.set('target', TARGET); hostLobbyChanged();
+    } break;
+    case 'preset': if (isHost() && state === 'lobby') {
+      const ks = Object.keys(PRESETS); presetKey = ks[(ks.indexOf(presetKey) + 1) % ks.length]; store.set('preset', presetKey); hostLobbyChanged();
+    } break;
+    case 'theme': if (isHost() && state === 'lobby') {
+      const ks = Object.keys(THEMES); applyTheme(ks[(ks.indexOf(themeKey) + 1) % ks.length]); store.set('theme', themeKey); hostLobbyChanged();
     } break;
     case 'start': if (isHost() && state === 'lobby') { if (players.length < 2) { botCount = 1; applyBots(); hostLobbyChanged(); } hostStartMatch(); } break;
     case 'copylink': {
@@ -1606,7 +1836,9 @@ function renderLobby() {
   $('lobbyWait').style.display = isHost() ? 'none' : '';
   $('botN').textContent = players.filter(p => p.bot).length;
   $('targetN').textContent = fmtPts(TARGET);
-  $('lobbyWait').textContent = 'Aguardando o host começar a partida... Meta: ' + fmtPts(TARGET) + ' pts';
+  $('presetBtn').textContent = 'PISTA INICIAL: ' + PRESETS[presetKey].name;
+  $('themeBtn').textContent = 'TEMA: ' + THEMES[themeKey].name;
+  if (!$('lobbyWait').dataset.rejoin) $('lobbyWait').textContent = 'Aguardando o host começar... Meta: ' + fmtPts(TARGET) + ' pts · Pista: ' + PRESETS[presetKey].name + ' · Tema: ' + THEMES[themeKey].name;
   $('lobbyList').innerHTML = players.map(p => `<div class="pl"><span class="sw" style="background:${p.color}"></span><span>${esc(p.name)}${p.id === myId ? ' <span style="opacity:.6">(você)</span>' : ''}</span>
     ${p.id === 0 && !p.bot ? '<span class="hostb">HOST</span>' : ''}<span class="dv">${p.bot ? '🤖 BOT' : p.device === 'mobile' ? '📱 CELULAR' : '💻 PC'}</span></div>`).join('') +
     `<div class="note">${players.length}/${MAXP} pilotos${NET.role === 'host' ? ' · Mande o código ou o link para seus amigos' : ''}</div>`;
@@ -1620,15 +1852,24 @@ function cmpRace(a, b) {
 }
 
 // ---------------------------------------------------- lógica do HOST
-function hostEnter(ph, d) { d = Object.assign({ target: TARGET }, d); enterPhase(ph, d); broadcast({ t: 'phase', ph, d }); }
+function hostEnter(ph, d) {
+  d = Object.assign({ target: TARGET, theme: themeKey }, d);
+  HST.last = { ph, d };                       // guardado para quem reconectar no meio da partida
+  enterPhase(ph, d); broadcast({ t: 'phase', ph, d });
+}
 function hostStartMatch() {
   for (const p of players) p.score = 0;
   HST.round = 0;
-  applyTrack(['start', 'finish'], [], false); applyTrack(INITIAL_TYPES, [], false);
+  const P = PRESETS[presetKey] || PRESETS.curta;
+  applyTrack(['start', 'finish'], [], false); applyTrack(P.types, P.obs, false);
   hostStartRound();
 }
 function hostStartRound() {
   HST.round++;
+  // quem reconectou durante a corrida recebe o carro de volta do bot
+  let back = false;
+  for (const p of players) if (p.rejoin && p.connected) { p.bot = false; p.rejoin = false; back = true; }
+  if (back) syncCars();
   const order = players.slice().sort((a, b) => (a.score - b.score) || (Math.random() - 0.5)); // líder larga atrás
   const grid = {}; order.forEach((p, k) => grid[p.id] = k);
   hostEnter('countdown', { round: HST.round, grid, types: trackTypes(), obs: obsData(), players: plist(), dur: 3.2 });
@@ -1973,7 +2214,8 @@ function stepCar(c, inp, dt) {
       vf = Math.abs(vf) <= dec ? 0 : vf - Math.sign(vf) * dec;
     }
     if (vf > vmax) vf -= (vf - vmax) * PH.overDecay * dt;
-    const gT = c.oilT > 0 ? PH.gripOil : c.drifting ? PH.gripDrift : PH.grip;
+    const onIce = c.Q && c.Q.ice;
+    const gT = c.oilT > 0 ? PH.gripOil : onIce ? (c.drifting ? 1.8 : 2.6) : c.drifting ? PH.gripDrift : PH.grip;
     c.grip += (gT - c.grip) * Math.min(1, dt * 9);
     const vl2 = vl * Math.exp(-c.grip * dt);
     const keep = c.drifting ? 0.55 : 0.85;
@@ -1983,10 +2225,14 @@ function stepCar(c, inp, dt) {
   } else { vf -= vf * 0.04 * dt; vl *= Math.exp(-0.5 * dt); }
   if (c.boostT > 0) { c.boostT -= dt; if (c.boostT <= 0) { c.boostT = 0; c.boostPow = 0; } }
   c.vx = fx * vf - fz * vl; c.vz = fz * vf + fx * vl; c.vf = vf; c.vl = vl;
+  if (c.Q && c.Q.wind) { c.vx += c.Q.rx * c.Q.wind * WIND_ACC * dt; c.vz += c.Q.rz * c.Q.wind * WIND_ACC * dt; }   // vento lateral
+  c.kickCool = (c.kickCool || 0) - dt;
   c.x += c.vx * dt; c.z += c.vz * dt;
   trackContact(c, dt);
 }
 function obsClock() { return R && state === 'race' ? R.t : clockT; }
+// pistão: sobe e desce em ciclo (determinístico pelo relógio da corrida)
+function pistonLift(o, tc) { return clamp((Math.sin(tc * Math.abs(o.spd) * 1.2 + o.ph) + 0.15) * 2.2, 0, 1); }
 function obstacleContact(c, dt) {
   const tc = obsClock();
   for (const o of obstacles) {
@@ -2034,6 +2280,23 @@ function obstacleContact(c, dt) {
         giveBoost(c, PAD.pow * 0.8, 0.8, 3); c.padCool = 0.6;
         if (c.isLocal) { SFX.pad(); toast('BOOST!', '#a6ff3b', 0.6); }
       }
+    } else if (o.type === 'kicker') {
+      const u = dx * ca + dz * sa, w = -dx * sa + dz * ca;
+      const along = c.vx * ca + c.vz * sa;
+      if (c.grounded && Math.abs(w) < 1.6 && u > -1.3 && u < 1.3 && along > 4 && (c.kickCool || 0) <= 0) {
+        c.grounded = false; c.vy = Math.max(c.vy, 5 + along * 0.16); c.kickCool = 0.5; c.airT = 0;
+        if (c.isLocal) { SFX.jump(); toast('HOP!', '#ff9a1f', 0.6); }
+      }
+    } else if (o.type === 'piston') {
+      const lift = pistonLift(o, tc);
+      if (lift < 0.35 || c.y > o.y + 2.4 * lift + 0.2) continue;   // abaixado: dá pra passar por cima
+      const u = dx * ca + dz * sa, w = -dx * sa + dz * ca;
+      const cu = clamp(u, -1.1, 1.1), cw = clamp(w, -1.1, 1.1);
+      let eu = u - cu, ew = w - cw, d = Math.hypot(eu, ew);
+      if (d >= CAR_R) continue;
+      if (d < 1e-4) { if (Math.abs(u) > Math.abs(w)) { eu = Math.sign(u) || 1; ew = 0; } else { eu = 0; ew = Math.sign(w) || 1; } } else { eu /= d; ew /= d; }
+      pushOut(c, eu * ca - ew * sa, eu * sa + ew * ca, CAR_R - d, dt, 0.5);
+      if (c.grounded && lift < 0.9) { c.grounded = false; c.vy = Math.max(c.vy, 6); }    // subindo: arremessa pra cima
     }
   }
 }
@@ -2046,10 +2309,14 @@ function trackContact(c, dt) {
     else break;
   }
   if (c.grounded) {
-    if (Q.floor && Math.abs(c.y - Q.h) < 0.8) { const along = c.vx * Q.fx + c.vz * Q.fz; c.y = Q.h; c.vy = along * Q.slope; }
-    else {
+    if (Q.floor && Math.abs(c.y - Q.h) < 0.8) {
+      const along = c.vx * Q.fx + c.vz * Q.fz, vg = along * Q.slope;
+      if (c.vy > 1 && vg < c.vy - GRAV * dt * 1.5) { c.grounded = false; c.airT = 0; }   // passou da crista rápido: decola (lombadas)
+      else { c.y = Q.h; c.vy = vg; }
+    } else {
       c.grounded = false; c.airT = 0;
-      if (c.isLocal && Pc.type === 'jump' && Q.s >= JUMP.rampEnd - 0.5) { SFX.jump(); toast('VOOOA!', '#ffd23f', 0.8); }
+      const J = JUMPS[Pc.type];
+      if (c.isLocal && J && Q.s >= J.rampEnd - 0.5) { SFX.jump(); toast(Pc.type === 'bigjump' ? 'MEGA VOOOO!' : 'VOOOA!', '#ffd23f', 0.9); }
     }
   }
   if (!c.grounded) {
@@ -2075,6 +2342,11 @@ function trackContact(c, dt) {
   if (Pc.type === 'boost' && c.grounded && c.padCool <= 0 && Q.s > PAD.s0 && Q.s < PAD.s1 && Math.abs(Q.v) < PAD.hv) {
     giveBoost(c, PAD.pow, PAD.dur, PAD.kick); c.padCool = 0.6;
     if (c.isLocal) { SFX.pad(); toast('BOOST!', '#a6ff3b', 0.6); shake = Math.max(shake, 0.15); }
+  }
+  const JP = JUMPS[Pc.type];
+  if (JP && JP.pad && c.grounded && c.padCool <= 0 && Q.s > JP.pad[0] && Q.s < JP.pad[1] && Math.abs(Q.v) < PAD.hv) {
+    giveBoost(c, 0.5, 1.3, 5); c.padCool = 0.8;
+    if (c.isLocal) { SFX.boost(2); toast('MEGA TURBO!', '#ff2e88', 0.8); shake = Math.max(shake, 0.25); }
   }
   if (Pc.type === 'finish' && Q.s >= FINISH_S && !c.finished && c.pi === track.length - 1 && c.alive) {
     c.finished = true; c.finishT = R.t;
@@ -2122,7 +2394,7 @@ function carCollisions() {
 
 // ------------------------------------------------------------------- IA
 const tmpA = {};
-function obsHalf(t) { return t === 'spinner' ? 3.2 : t === 'oil' ? 2.3 : t === 'bumper' ? 1.45 : 1.25; }
+function obsHalf(t) { return t === 'spinner' ? 3.2 : t === 'oil' ? 2.3 : t === 'bumper' ? 1.45 : t === 'kicker' ? 1.6 : 1.25; }
 function laneFor(c, sG) {
   const i = pieceAt(sG), p = track[i], s = sG - pieceStart[i], ai = c.ai;
   const wob = Math.sin(R.t * ai.wf + ai.ph) * ai.wob;
@@ -2142,9 +2414,16 @@ function laneFor(c, sG) {
     }
     return best;
   }
+  if (p.type === 'holes') { if (s < 20) return 3.0; if (s < 34) return -3.0; return ai.side * 3.8; }
+  if (p.type === 'wind') return -p.windDir * 2.6 + wob * 0.3;
+  if (p.type === 'ice') return wob * 0.3;
   if (p.type === 'bridge') return wob * 0.45;
-  if (p.type === 'jump') return wob * 0.3;
-  if (p.turn) return -p.turn * 1.3 + wob * 0.5;
+  if (p.type === 'jump' || p.type === 'bigjump') return wob * 0.3;
+  if (p.turn) {
+    const nx = track[i + 1];
+    if (nx && (nx.type === 'bridge' || nx.type === 'holes')) return -p.turn * 2.2 + wob * 0.2;   // curva antes de peça estreita: abre e alinha
+    return -p.turn * 1.3 + wob * 0.5;
+  }
   if (p.type === 'boost') return wob * 0.4;
   return ai.lane + wob;
 }
@@ -2152,15 +2431,25 @@ function speedLimitAt(c, sG) {
   const i = pieceAt(sG), p = track[i], er = c.ai.err && c.ai.err[i];
   if (er && er.slow) return er.slow;
   let lim = 99;
-  if (p.turn) lim = 19.5 + c.ai.skill * 2.5;
+  const nx = track[i + 1];
+  if (p.turn) lim = (nx && (nx.type === 'bridge' || nx.type === 'holes')) ? 15.5 + c.ai.skill * 1.5 : 19.5 + c.ai.skill * 2.5;
   else if (p.type === 'bridge') lim = 17 + c.ai.skill * 3;
+  else if (p.type === 'ice') lim = 19 + c.ai.skill * 2;
+  else if (p.type === 'holes') lim = 17 + c.ai.skill * 2;
+  else if (p.type === 'wind') lim = 20 + c.ai.skill * 2;
+  else if (p.type === 'bumps') lim = 22;
   for (const o of obstacles) if (o.pi === i && o.type === 'spinner') lim = Math.min(lim, 18);
   return lim;
 }
 function aiDrive(c, dt, inp) {
   if (!c.alive) { inp.throttle = 0; inp.brake = 0; inp.steer = 0; inp.drift = false; return; }
   const v = Math.max(0, c.vf), sG = c.prog;
-  const look = 5 + v * 0.3;
+  let look = 5 + v * 0.3;
+  // sem muro (ponte/buracos): não mira na curva seguinte antes de sair da peça (senão corta pelo abismo)
+  const Pc = track[c.pi];
+  if (Pc && (Pc.type === 'bridge' || Pc.type === 'holes')) look = Math.min(look, Math.max(3, Pc.len - (sG - pieceStart[c.pi]) + 1.5));
+  const Pn = track[c.pi + 1];
+  if (Pc && Pc.turn && Pn && (Pn.type === 'bridge' || Pn.type === 'holes')) look = Math.min(look, 6.5);
   trackPoint(sG + look, laneFor(c, sG + look), tmpA);
   const err = wrapA(Math.atan2(tmpA.z - c.z, tmpA.x - c.x) - c.a);
   inp.steer = clamp(err * 2.4, -1, 1);
@@ -2180,7 +2469,7 @@ const camLook = new THREE.Vector3(), camDesired = new THREE.Vector3(), vLook = n
 function update(dt) {
   clockT += dt;
   phaseT += dt;
-  texChevron.offset.x -= dt * 2.2; texChevron1.offset.x -= dt * 2.2;
+  texChevron.offset.x -= dt * 2.2; texChevron1.offset.x -= dt * 2.2; texWind.offset.x -= dt * 1.6;
   updateDrops(dt);
   animateObstacles(dt);
   if (state === 'countdown' || state === 'race') { updateRace(dt); return; }
@@ -2280,6 +2569,7 @@ function animateObstacles(dt) {
   for (const o of obstacles) {
     if (o.type === 'spinner' && o.bar) o.bar.rotation.y = -(o.ph + tc * o.spd);
     if (o.type === 'bumper' && o.bar) { o.pulse = Math.max(0, o.pulse - dt); const s = 1 + o.pulse * 0.8; o.bar.scale.set(s, 1, s); }
+    if (o.type === 'piston' && o.bar) { o.lift = pistonLift(o, tc); o.bar.position.y = -2.4 * (1 - o.lift); }
   }
 }
 function spawnCarFx(dt) {
@@ -2445,6 +2735,8 @@ document.addEventListener('visibilitychange', () => { if (bgWorker) bgWorker.pos
 
 // ------------------------------------------------------------------ boot
 if (myDevice === 'mobile') { PR = Math.min(PR, 1.5); renderer.setPixelRatio(PR); }
+{ const t = store.get('target', 10000); if (TARGET_OPTS.includes(t)) TARGET = t; }
+applyTheme(store.get('theme', 'neon'));
 $('nameInp').value = myName;
 const qs = new URLSearchParams(location.search);
 if (qs.get('sala')) { $('codeInp').value = qs.get('sala').toUpperCase().slice(0, 5); setStatus('Convite recebido! Escolha seu nome e toque em ENTRAR NA SALA.'); }
