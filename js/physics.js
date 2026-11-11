@@ -1,7 +1,7 @@
 // Física arcade dos carros: passo, contato com pista/mureta, obstáculos e colisões.
 import { G, hooks } from './state.js';
 import { clamp, lerp, rnd, wrapA } from './utils.js';
-import { BARRIERS, CAR_R, DRIFT, FINISH_S, GRAV, PAD, PH, POWER, profileSeg, RAMP_PADS, WALL_H, WIND_ACC } from './config.js';
+import { BARRIERS, CAR_R, DRIFT, MAX_DEATHS, FINISH_S, GRAV, PAD, PH, POWER, profileSeg, RAMP_PADS, WALL_H, WIND_ACC } from './config.js';
 import { SFX } from './audio.js';
 import { burst } from './fx.js';
 import { obstacles, pieceStart, tmpW, track } from './track.js';
@@ -62,15 +62,39 @@ function pushOut(c, nx, nz, over, dt, bounce = 0.35) {
   if (c.drifting) c.driftT = Math.max(0, c.driftT - dt * 1.5);
   return 0;
 }
+// peças onde NÃO se salva checkpoint (o renascimento cairia de novo)
+const NO_CHECKPOINT = new Set(['start', 'finish', 'holes', 'bridge', 'jump', 'bigjump', 'doublejump']);
+// renasce no último checkpoint seguro: centro da peça, alinhado, parado e invulnerável por 2 s
+export function respawnAtCheckpoint(c) {
+  const idx = clamp(c.checkpointIdx || 0, 0, track.length - 1), P0 = track[idx];
+  const s = clamp(c.checkpointS || 2.2, 2, P0.len - 2);
+  P0.world(s, 0, tmpW);
+  c.pi = idx; c.x = tmpW.x; c.z = tmpW.z; c.a = tmpW.a;
+  c.y = P0.query(c.x, c.z, c.Q).h + 0.12;
+  c.vx = c.vz = c.vy = c.vf = c.vl = 0; c.grounded = true; c.voidFall = false; c.airT = 0; c.stuckT = 0;
+  c.steer = 0; c.kick = 0; c.hop = 0; c.drifting = false; c.driftT = 0; c.driftLevel = 0; c.boostT = 0; c.boostPow = 0;
+  c.freezeT = c.slowT = c.stunT = c.spinT = 0; c.tumbleX = c.tumbleZ = 0;
+  c.s = s; c.v = 0; c.prog = pieceStart[idx] + s; c.invuln = 2.0;
+  if (c.isLocal) G.camSnap = true;
+}
+// caiu abaixo de y = -20: gasta uma vida; renasce no checkpoint ou é eliminado na 3ª queda
+function fallDeath(c) {
+  c.deaths = (c.deaths || 0) + 1;
+  if (isHost()) hooks.takedown(c);                          // nocaute: quem empurrou nos últimos 4 s ganha +50
+  if (c.deaths < MAX_DEATHS) {
+    respawnAtCheckpoint(c);
+    if (c.isLocal) { SFX.fall(); toast('Checkpoint! (' + (MAX_DEATHS - c.deaths) + '/' + MAX_DEATHS + ')', '#ffd23f', 1.4); }
+  } else {
+    c.alive = false; c.voidFall = true; c.fallProg = c.prog;
+    if (c.isLocal) { SFX.fall(); toast('Eliminado! (' + MAX_DEATHS + '/' + MAX_DEATHS + ' quedas)', '#ff2e55', 2); G.R.spectateT = 1.6; }
+  }
+}
 // queda livre (voidFall): só gravidade + inércia. Nada reposiciona, empurra ou captura o carro; morre abaixo de y = -20.
 function freeFall(c, dt) {
   c.grounded = false;
   c.vy -= GRAV * dt; c.x += c.vx * dt; c.y += c.vy * dt; c.z += c.vz * dt; c.airT += dt;
   c.tumbleX += dt * 3.1; c.tumbleZ += dt * 2.3;
-  if (c.y < -20 && c.alive) {
-    c.alive = false; c.fallProg = c.prog;
-    if (c.isLocal) { SFX.fall(); toast('CAIU NO ABISMO!', '#ff2e55', 2); G.R.spectateT = 1.6; }
-  }
+  if (c.y < -20 && c.alive) fallDeath(c);
 }
 const NO_INP = { steer: 0, throttle: 0, brake: 0, drift: false, gasRaw: false };
 const SCR = { steer: 0, throttle: 0, brake: 0, drift: false, gasRaw: false };
@@ -156,6 +180,7 @@ export function obsClock() { return G.R && G.state === 'race' ? G.R.t : G.clockT
 // pistão: sobe e desce em ciclo (determinístico pelo relógio da corrida)
 export function pistonLift(o, tc) { return clamp((Math.sin(tc * Math.abs(o.spd) * 1.2 + o.ph) + 0.15) * 2.2, 0, 1); }
 function obstacleContact(c, dt) {
+  if (c.invuln > 0) return;                                 // renascendo: atravessa obstáculos por 2 s (não é lançado de novo)
   const tc = obsClock();
   for (const o of obstacles) {
     const dx = c.x - o.x, dz = c.z - o.z;
@@ -240,6 +265,7 @@ export function trackContact(c, dt) {
     else if (Q.s < 0 && c.pi > 0) { c.pi--; Pc = track[c.pi]; Pc.query(c.x, c.z, Q); }
     else break;
   }
+  if (c.grounded && c.alive && !c.voidFall && c.pi > (c.checkpointIdx || 0) && !NO_CHECKPOINT.has(Pc.type)) { c.checkpointIdx = c.pi; c.checkpointS = 3; }
   if (c.grounded) {
     if (Q.floor && Math.abs(c.y - Q.h) < 0.8) {
       const along = c.vx * Q.fx + c.vz * Q.fz, vg = along * Q.slope;
@@ -301,23 +327,24 @@ export function trackContact(c, dt) {
   }
   c.s = Q.s; c.v = Q.v;
   c.prog = pieceStart[c.pi] + clamp(Q.s, 0, Pc.len);
-  if (c.y < -20 && c.alive) {
-    c.alive = false; c.fallProg = c.prog;
-    if (c.isLocal) { SFX.fall(); toast('CAIU NO ABISMO!', '#ff2e55', 2); G.R.spectateT = 1.6; }
-  }
+  if (c.y < -20 && c.alive) fallDeath(c);
 }
 export function carCollisions() {
   const D = CAR_R * 2, D2 = D * D;
   for (let i = 0; i < cars.length; i++) for (let j = i + 1; j < cars.length; j++) {
     const a = cars[i], b = cars[j];
-    if (!a.owned && !b.owned) continue;
-    if (!a.alive || !b.alive || a.voidFall || b.voidFall || Math.abs(a.y - b.y) > 1.4) continue;
+    if (!a.alive || !b.alive || a.voidFall || b.voidFall || a.invuln > 0 || b.invuln > 0 || Math.abs(a.y - b.y) > 1.4) continue;
     // carro remoto colide pela posição "presente" (extrapolada), não pela desenhada (atrasada)
     const ax = a.owned ? a.x : (a.cpx ?? a.x), az = a.owned ? a.z : (a.cpz ?? a.z);
     const bx = b.owned ? b.x : (b.cpx ?? b.x), bz = b.owned ? b.z : (b.cpz ?? b.z);
     const dx = bx - ax, dz = bz - az, d2 = dx * dx + dz * dz;
     if (d2 >= D2 || d2 < 1e-6) continue;
     const d = Math.sqrt(d2), nx = dx / d, nz = dz / d, ov = D - d;
+    if (isHost()) {                                       // atribuição de nocaute: quem vinha mais rápido contra o outro
+      const pa = a.vx * nx + a.vz * nz, pb = -(b.vx * nx + b.vz * nz);
+      if (pa > 3 && pa > pb) { b.lastHitBy = a.pid; b.lastHitTimer = 4; } else if (pb > 3 && pb > pa) { a.lastHitBy = b.pid; a.lastHitTimer = 4; }
+    }
+    if (!a.owned && !b.owned) continue;
     // cada lado resolve só o próprio carro (no multiplayer o outro jogador resolve o dele)
     if (a.owned) { a.x -= nx * ov * 0.5; a.z -= nz * ov * 0.5; }
     if (b.owned) { b.x += nx * ov * 0.5; b.z += nz * ov * 0.5; }

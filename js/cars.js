@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { G } from './state.js';
 import { clamp, rnd, store } from './utils.js';
 import { BOT_NAMES, MAXP, PALETTE } from './config.js';
-import { box, scene, texGlow } from './scene.js';
+import { box, disposeObject3D, scene, texGlow } from './scene.js';
 
 // --------------------------------------------------------------- carros
 function makeCarMesh(color, isLocal) {
@@ -70,7 +70,7 @@ function createCar(p) {
     ai: { skill: p.bot ? rnd(0.9, 0.99) : 0.92, lane: 0, wob: 0, wf: rnd(0.6, 1.4), ph: rnd(0, 6), side: Math.random() < 0.5 ? 1 : -1, err: null },
     inp: { steer: 0, throttle: 0, brake: 0, drift: false, gasRaw: false }, Q: {}, net: null,
     x: 0, y: 0, z: 0, a: 0, vx: 0, vy: 0, vz: 0, vf: 0, vl: 0, alive: true, finished: false, finishOrder: 0, prog: 0, pi: 0, grounded: true, voidFall: false,
-    item: null, itemReadyAt: 0, itemRollEnd: 0, itemCool: 0, pickCool: 0, freezeT: 0, slowT: 0, stunT: 0, spinT: 0, spinDir: 1, immuneT: 0
+    item: null, itemReadyAt: 0, itemRollEnd: 0, itemCool: 0, pickCool: 0, deaths: 0, checkpointIdx: 0, checkpointS: 2.2, invuln: 0, lastHitBy: null, lastHitTimer: 0, freezeT: 0, slowT: 0, stunT: 0, spinT: 0, spinDir: 1, immuneT: 0
   };
   c.ai.wob = 0.3 + (1 - c.ai.skill) * 5;
   scene.add(c.mesh.root);
@@ -79,13 +79,13 @@ function createCar(p) {
 export function syncCars() {
   for (const p of G.players) {
     let c = carById.get(p.id);
-    if (c && c.isLocal !== (p.id === G.myId)) { scene.remove(c.mesh.root); cars.splice(cars.indexOf(c), 1); carById.delete(p.id); c = null; }
+    if (c && c.isLocal !== (p.id === G.myId)) { disposeObject3D(c.mesh.root); cars.splice(cars.indexOf(c), 1); carById.delete(p.id); c = null; }
     if (!c) { c = createCar(p); cars.push(c); carById.set(p.id, c); }
     c.name = p.name; c.bot = p.bot;
   }
   for (let i = cars.length - 1; i >= 0; i--) {
     const c = cars[i];
-    if (!G.players.some(p => p.id === c.pid)) { scene.remove(c.mesh.root); cars.splice(i, 1); carById.delete(c.pid); }
+    if (!G.players.some(p => p.id === c.pid)) { disposeObject3D(c.mesh.root); cars.splice(i, 1); carById.delete(c.pid); }
   }
   cars.sort((a, b) => G.players.findIndex(p => p.id === a.pid) - G.players.findIndex(p => p.id === b.pid));
   for (const c of cars) c.owned = c.isLocal || (isHost() && c.bot);

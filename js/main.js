@@ -12,15 +12,15 @@ import { centerText, showScreen, toast, updateHud } from './hud.js';
 import { carCollisions, giveBoost, obsClock, pistonLift, stepCar, trackContact } from './physics.js';
 import { aiDrive } from './ai.js';
 import { broadcast, broadcastFast, packCar, setStatus, toHost, toHostFast, updateRemote } from './net.js';
-import { BC, drawFx, followCamera, overviewCamera, panBy, PTRS, zoomBy } from './camera.js';
-import { applyEffect, resetItems, hostPickup, hostUse, itemClientMsg, itemHostMsg, itemSnapshot, IT, updateItems, useItem } from './items.js';
+import { BC, drawFx, isSpectating, specTarget, followCamera, overviewCamera, panBy, PTRS, zoomBy } from './camera.js';
+import { applyEffect, takedown, resetItems, hostPickup, hostUse, itemClientMsg, itemHostMsg, itemSnapshot, IT, updateItems, useItem } from './items.js';
 import { applyTray, buildMode, itemEnabled, pickCard, renderBuild, tryPlaceAt } from './build-ui.js';
 import { hostEndRound, hostPick, hostPlace, hostRegisterFinish, hostUnpick, hostUpdateBuild } from './host.js';
 import { act, enterPhase, goTitle, renderLobby, setState } from './phases.js';
 import { applyDevice, keys, readPlayerInput, refreshButtons, syncTouch, tmap, uiActive } from './input.js';
 
 // funções chamadas "de baixo para cima" (ver state.js)
-Object.assign(hooks, { applyTray, BC, enterPhase, goTitle, hostPick, hostPlace, hostRegisterFinish, hostUnpick, itemClientMsg, itemHostMsg, itemSnapshot, rebuildSlots, renderBuild, renderLobby, syncObstacles, syncTouch, tmap, uiActive });
+Object.assign(hooks, { applyTray, BC, enterPhase, goTitle, hostPick, hostPlace, hostRegisterFinish, hostUnpick, specTarget, takedown, itemClientMsg, itemHostMsg, itemSnapshot, rebuildSlots, renderBuild, renderLobby, syncObstacles, syncTouch, tmap, uiActive });
 function update(dt) {
   G.clockT += dt;
   G.phaseT += dt;
@@ -161,7 +161,7 @@ function updateCars(dt, racing) {
   for (const c of cars) {
     const m = c.mesh;
     if (!racing || c.y < -90) { m.root.visible = false; continue; }
-    m.root.visible = true;
+    m.root.visible = c.invuln > 0 ? Math.floor(tnow * 10) % 2 === 0 : true;          // pisca ao renascer (invulnerável)
     m.root.position.set(c.x, c.y, c.z);
     let pitchT = 0;
     if (c.grounded && c.Q && c.Q.slope && c.owned) pitchT = Math.atan(c.Q.slope * Math.cos(c.a - Math.atan2(c.Q.fz, c.Q.fx)));
@@ -197,6 +197,7 @@ function frame(now) {
   if (G.state === 'race' && fpsEMA < 42 && (sun.castShadow || G.PR > 0.75)) {
     if (++slow > 90) { if (sun.castShadow) sun.castShadow = false; else { G.PR = Math.max(0.75, G.PR - 0.25); renderer.setPixelRatio(G.PR); renderer.setSize(W, H); } slow = 0; }
   } else slow = 0;
+  if (NET.role === 'solo' && G.state === 'race' && isSpectating()) dt *= 2.5;      // solo: já terminou/eliminado -> acelera 2,5x
   if (G.state !== 'paused') { update(dt); updateParticles(dt); }
   drawFx(dt);
   renderer.render(scene, camera);

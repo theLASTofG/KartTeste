@@ -6,11 +6,11 @@ import * as THREE from 'three';
 import { G } from './state.js';
 import { CAR_R, POWER } from './config.js';
 import { SFX } from './audio.js';
-import { scene, texGlow } from './scene.js';
+import { disposeObject3D, keepResource, scene, texGlow } from './scene.js';
 import { burst } from './fx.js';
 import { obstacles, track } from './track.js';
-import { carById, cars, isHost, myCar, NET } from './cars.js';
-import { toast } from './hud.js';
+import { carById, cars, isHost, myCar, NET, playerById } from './cars.js';
+import { toast, updateBoard } from './hud.js';
 import { broadcast, toHost } from './net.js';
 import { aiWantsItem } from './ai.js';
 
@@ -29,29 +29,32 @@ function rollItem() {
 }
 export function resetCarItems(c) {
   c.item = null; c.itemReadyAt = 0; c.itemRollEnd = 0; c.itemCool = 0; c.pickCool = 0;
-  c.freezeT = 0; c.slowT = 0; c.stunT = 0; c.spinT = 0; c.spinDir = 1; c.immuneT = 0;
+  c.freezeT = 0; c.slowT = 0; c.stunT = 0; c.spinT = 0; c.spinDir = 1; c.immuneT = 0; c.lastHitBy = null; c.lastHitTimer = 0;
 }
 // limpa TUDO (fim de rodada, nova rodada, sair da sala, host encerrando, desconexão definitiva)
 export function resetItems() {
-  for (const o of IT.objs.values()) scene.remove(o.mesh);
+  for (const o of IT.objs.values()) disposeObject3D(o.mesh);
   IT.objs.clear(); IT.box = {}; IT.seen.clear(); IT.useLock = 0;
   for (const c of cars) resetCarItems(c);
   for (const o of obstacles) if (o.type === 'itembox') o.group.visible = true;
 }
 
 // ------------------------------------------------------- malhas (neon originais)
-const matFrost = new THREE.MeshBasicMaterial({ color: 0x7df3ff });
-const matPeel = new THREE.MeshLambertMaterial({ color: 0xffd23f, emissive: 0x6a4a00 });
-const matDot = new THREE.MeshBasicMaterial({ color: 0xff2e88 });
+// geometrias/materiais compartilhados entre todos os projéteis/cascas (nada é recriado por spawn)
+const matFrost = keepResource(new THREE.MeshBasicMaterial({ color: 0x7df3ff }));
+const matPeel = keepResource(new THREE.MeshLambertMaterial({ color: 0xffd23f, emissive: 0x6a4a00 }));
+const matDot = keepResource(new THREE.MeshBasicMaterial({ color: 0xff2e88 }));
+const matGlow = keepResource(new THREE.SpriteMaterial({ map: texGlow, color: 0x4df3ff, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+const geoFrost = keepResource(new THREE.OctahedronGeometry(0.85, 0)), geoDisc = keepResource(new THREE.CylinderGeometry(1.1, 1.25, 0.28, 16)), geoDot = keepResource(new THREE.SphereGeometry(0.32, 10, 8));
 function makeMesh(k) {
   const g = new THREE.Group();
   if (k === 'frost') {
-    g.add(new THREE.Mesh(new THREE.OctahedronGeometry(0.85, 0), matFrost));
-    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: texGlow, color: 0x4df3ff, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+    g.add(new THREE.Mesh(geoFrost, matFrost));
+    const sp = new THREE.Sprite(matGlow);
     sp.scale.set(4.2, 4.2, 1); g.add(sp);
   } else {
-    const d = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.25, 0.28, 16), matPeel); d.position.y = 0.14; g.add(d);
-    const dot = new THREE.Mesh(new THREE.SphereGeometry(0.32, 10, 8), matDot); dot.position.y = 0.45; g.add(dot);
+    const d = new THREE.Mesh(geoDisc, matPeel); d.position.y = 0.14; g.add(d);
+    const dot = new THREE.Mesh(geoDot, matDot); dot.position.y = 0.45; g.add(dot);
   }
   scene.add(g); return g;
 }
@@ -63,7 +66,7 @@ function spawnObj(m) {
 function despawnObj(id, hit) {
   const o = IT.objs.get(id); if (!o) return;
   if (hit !== undefined && hit !== null) burst(o.x, o.y + 0.4, o.z, 14, 1, 1, 1, 7, 0.4, 6);
-  scene.remove(o.mesh); IT.objs.delete(id);
+  disposeObject3D(o.mesh); IT.objs.delete(id);
 }
 const objInfo = o => ({ id: o.id, k: o.k, owner: o.owner, x: +o.x.toFixed(2), y: +o.y.toFixed(2), z: +o.z.toFixed(2), a: o.a, sp: o.sp, ttl: +o.ttl.toFixed(2), pi: o.pi });
 
@@ -86,11 +89,12 @@ export function applyEffect(c, m) {
     toast(m.fx === 'freeze' ? 'CONGELADO!' : m.fx === 'spin' ? 'DERRAPOU!' : 'CHOQUE!', m.fx === 'freeze' ? '#4df3ff' : m.fx === 'spin' ? '#ffd23f' : '#c084ff', 1);
   }
 }
-function hostEffect(c, m) {                               // host: aplica local + avisa todos
+function hostEffect(c, m, by) {                           // host: aplica local + avisa todos (by = autor, para o nocaute)
+  if (by !== undefined && by !== c.pid) { c.lastHitBy = by; c.lastHitTimer = 4; }
   m.t = 'item_effect'; m.pid = c.pid;
   broadcast(m); applyEffect(c, m);
 }
-function eligible(c, except) { return canRace(c) && c.pid !== except && !(c.immuneT > 0); }
+function eligible(c, except) { return canRace(c) && c.pid !== except && !(c.immuneT > 0) && !(c.invuln > 0); }
 
 // ------------------------------------------------------------- HOST: coleta e uso
 export function hostPickup(pid, key) {
@@ -120,7 +124,7 @@ function execItem(c, item) {
     spawnObj(m); broadcast({ t: 'item_spawn', kind: 'obj', ...m }); return true;
   }
   if (item === 'pulse') {
-    for (const o of cars) if (eligible(o, c.pid)) hostEffect(o, { fx: 'shock', dur: P.pulse.stun, imm: P.pulse.immune });
+    for (const o of cars) if (eligible(o, c.pid)) hostEffect(o, { fx: 'shock', dur: P.pulse.stun, imm: P.pulse.immune }, c.pid);
     burst(c.x, c.y + 0.8, c.z, 40, 0.8, 0.55, 1, 16, 0.7, 2);
     return true;
   }
@@ -155,7 +159,7 @@ function doState(m) {
   if (m.inv) for (const k in m.inv) { const c = carById.get(+k); if (c) { c.item = m.inv[k] || null; if (!c.item) c.itemRollEnd = 0; } }
   if (m.full) {                                           // snapshot de reconexão
     IT.box = {}; for (const k in m.box) IT.box[k] = isHost() ? m.box[k] : true;
-    for (const o of IT.objs.values()) scene.remove(o.mesh);
+    for (const o of IT.objs.values()) disposeObject3D(o.mesh);
     IT.objs.clear(); for (const o of m.objs) spawnObj(o);
     for (const k in m.fx) { const c = carById.get(+k), f = m.fx[k]; if (c) { c.freezeT = f.f; c.slowT = f.s; c.stunT = f.u; c.spinT = f.p; c.immuneT = f.i; } }
   }
@@ -208,6 +212,8 @@ export function updateItems(dt) {
   for (const c of cars) {
     c.freezeT = Math.max(0, c.freezeT - dt); c.slowT = Math.max(0, c.slowT - dt); c.stunT = Math.max(0, c.stunT - dt);
     c.spinT = Math.max(0, c.spinT - dt); c.immuneT = Math.max(0, c.immuneT - dt); c.itemCool = Math.max(0, c.itemCool - dt);
+    c.lastHitTimer = Math.max(0, (c.lastHitTimer || 0) - dt);
+    if (c.owned) c.invuln = Math.max(0, (c.invuln || 0) - dt);
   }
   for (const o of obstacles) if (o.type === 'itembox') {
     o.group.visible = !IT.box[o.key];
@@ -235,8 +241,8 @@ export function updateItems(dt) {
       if (!eligible(c, o.owner)) continue;
       const p = carPos(c);
       if (Math.hypot(p.x - o.x, p.z - o.z) > R || Math.abs(c.y - o.y) > 2.2) continue;
-      if (o.k === 'frost') hostEffect(c, { fx: 'freeze', dur: POWER.frost.freeze, slow: POWER.frost.slow, imm: POWER.frost.immune });
-      else hostEffect(c, { fx: 'spin', dur: POWER.peel.spin, dir: Math.random() < 0.5 ? -1 : 1, kick: POWER.peel.kick, imm: POWER.peel.immune });
+      if (o.k === 'frost') hostEffect(c, { fx: 'freeze', dur: POWER.frost.freeze, slow: POWER.frost.slow, imm: POWER.frost.immune }, o.owner);
+      else hostEffect(c, { fx: 'spin', dur: POWER.peel.spin, dir: Math.random() < 0.5 ? -1 : 1, kick: POWER.peel.kick, imm: POWER.peel.immune }, o.owner);
       broadcast({ t: 'item_despawn', kind: 'obj', id: o.id, hit: c.pid }); despawnObj(o.id, c.pid);
       break;
     }
@@ -246,4 +252,15 @@ export function updateItems(dt) {
   if (!isHost()) return;
   for (const k in IT.box) if (typeof IT.box[k] === 'number' && (IT.box[k] -= dt) <= 0) { delete IT.box[k]; broadcast({ t: 'item_spawn', kind: 'box', id: k }); }
   for (const c of cars) if (c.owned && c.bot && c.item && c.itemCool <= 0 && G.R.t >= c.itemReadyAt && aiWantsItem(c, dt)) hostUse(c.pid, 'b' + (++IT.uid));
+}
+
+// nocaute: o carro caiu no abismo e alguém o empurrou/acertou nos últimos 4 s -> +50 pts ao autor (só o host decide)
+export function takedown(victim) {
+  if (!isHost()) return;
+  const by = victim.lastHitBy, ok = by !== null && by !== undefined && by !== victim.pid && victim.lastHitTimer > 0;
+  victim.lastHitBy = null; victim.lastHitTimer = 0;
+  const pl = ok && playerById(by); if (!pl) return;
+  pl.score += 50; updateBoard();
+  const text = 'NOCAUTE! +50 pts · ' + pl.name;
+  toast(text, '#ffd23f', 1.8); broadcast({ t: 'msg', text, color: '#ffd23f' });
 }

@@ -20,10 +20,10 @@ function laneFor(c, sG) {
   if (near) {
     if (near.type === 'mboost' || (near.type === 'itembox' && !c.item)) return near.v;
     let best = 0, bm = -1e9;
-    for (const cand of [-4.1, -2.7, 0, 2.7, 4.1]) {
+    for (const cand of [-3.7, -2.7, 0, 2.7, 3.7]) {
       let m = 1e9;
       for (const o of obstacles) if (o.pi === i && Math.abs(o.s - s) < 7.5 && o.type !== 'mboost' && o.type !== 'itembox') m = Math.min(m, Math.abs(cand - o.v) - obsHalf(o.type) - CAR_R);
-      m += cand * ai.side * 0.02;
+      m += cand * ai.side * 0.02 - Math.max(0, Math.abs(cand) - 3.0) * 0.8;      // sem mureta: evita colar na borda
       if (m > bm) { bm = m; best = cand; }
     }
     return best;
@@ -47,13 +47,15 @@ function speedLimitAt(c, sG) {
   if (er && er.slow) return er.slow;
   let lim = 99;
   const nx = track[i + 1];
-  if (p.turn) lim = (nx && (nx.type === 'bridge' || nx.type === 'holes')) ? 15.5 + c.ai.skill * 1.5 : 17.5 + c.ai.skill * 2.2;
+  const n2 = track[i + 2], haz = t => !!t && (t.type === 'bridge' || t.type === 'holes' || t.type === 'ice' || t.type === 'wind' || t.type === 'narrow');
+  if (p.turn) lim = haz(nx) ? 15 + c.ai.skill * 1.5 : haz(n2) ? 16.5 + c.ai.skill * 1.5 : 17.5 + c.ai.skill * 2.2;
   else if (p.type === 'bridge') lim = 16 + c.ai.skill * 2.5;
   else if (p.type === 'ice') lim = 15.5 + c.ai.skill * 2;
   else if (p.type === 'holes') lim = 16 + c.ai.skill * 2;
   else if (p.type === 'wind') lim = 20 + c.ai.skill * 2;
   else if (p.type === 'bumps') lim = 22;
   else if (p.type === 'chicane') lim = 14 + c.ai.skill * 2;
+  if (!p.turn && nx && nx.turn && (haz(n2) || haz(track[i + 3]))) lim = Math.min(lim, 18);    // reta antes de curva que antecede perigo: já alivia
   for (const o of obstacles) if (o.pi === i && o.type === 'spinner') lim = Math.min(lim, 18);
   return lim;
 }
@@ -92,7 +94,8 @@ export function aiDrive(c, dt, inp) {
   if (c.grounded && Q && Q.hw && !planned && Math.abs(Q.v) > Q.hw - 1.5 && (c.vx * Q.rx + c.vz * Q.rz) * Math.sign(Q.v) > 0) lane = 0;
   trackPoint(sG + look, lane, tmpA);
   const err = wrapA(Math.atan2(tmpA.z - c.z, tmpA.x - c.x) - c.a);
-  inp.steer = clamp(err * 2.4, -1, 1);
+  const slick = Pc && (Pc.type === 'ice' || Pc.type === 'wind');
+  inp.steer = clamp(err * (slick ? 1.6 : 2.4), -1, 1);                       // gelo/vento: menos esterço brusco
   let target = PH.maxSpeed;
   for (let d = 0; d <= 20; d += 4) { const lim = speedLimitAt(c, sG + d + 2); target = Math.min(target, Math.sqrt(lim * lim + 2 * 32 * d)); }
   if (c.finished) target = 0;
@@ -100,5 +103,11 @@ export function aiDrive(c, dt, inp) {
   if (v < target - 0.5) { inp.throttle = 1; inp.brake = 0; }
   else if (v > target + 1.5) { inp.throttle = 0; inp.brake = 1; }
   else { inp.throttle = 0.5; inp.brake = 0; }
+  // guarda de borda forte (sem muretas): muito perto da borda e indo para fora -> tira o pé e contra-esterça ao máximo
+  if (c.grounded && Q && Q.hw && !planned && Math.abs(Q.v) > Q.hw - 0.9 && (c.vx * Q.rx + c.vz * Q.rz) * Math.sign(Q.v) > 0) {
+    trackPoint(sG + look, 0, tmpA);
+    inp.steer = clamp(wrapA(Math.atan2(tmpA.z - c.z, tmpA.x - c.x) - c.a) * 5, -1, 1);
+    inp.throttle = 0.25; inp.brake = 0; inp.drift = false;
+  }
   if (!c.finished && c.grounded && !c.voidFall && v < 1.5 && G.state === 'race') { c.stuckT += dt; if (c.stuckT > 1.8) respawn(c); } else c.stuckT = 0;
 }

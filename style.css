@@ -92,13 +92,13 @@ body[data-touch="1"] #itemHud .ih-key{display:none}
   font-size:calc(var(--u)*.24);border-color:rgba(166,255,59,.7);background:rgba(166,255,59,.14)}
 #tGas.on{background:rgba(166,255,59,.42)}
 #tGas.auto{box-shadow:0 0 0 4px rgba(166,255,59,.35),0 0 24px rgba(166,255,59,.5)}
-#tDrift{width:calc(var(--u)*1.45);height:calc(var(--u)*1.45);right:calc(2.5vw + var(--safeR) + var(--u)*1.95 + 10px);
-  bottom:calc(3.5vh + var(--safeB) + var(--u)*.12);font-size:calc(var(--u)*.2);border-color:rgba(0,229,255,.75);background:rgba(0,229,255,.14)}
+#tDrift{width:calc(var(--u)*1.45);height:calc(var(--u)*1.45);right:calc(2.5vw + var(--safeR) + var(--u)*.48);
+  bottom:calc(3.5vh + var(--safeB) + var(--u)*1.95 + 12px);font-size:calc(var(--u)*.2);border-color:rgba(0,229,255,.75);background:rgba(0,229,255,.14)}
 #tDrift.on{background:rgba(0,229,255,.45)}
-#tBrake{width:calc(var(--u)*1.0);height:calc(var(--u)*1.0);right:calc(2.5vw + var(--safeR) + var(--u)*.48);
-  bottom:calc(3.5vh + var(--safeB) + var(--u)*1.95 + 12px);font-size:calc(var(--u)*.17);border-color:rgba(255,46,136,.7);background:rgba(255,46,136,.14)}
+#tBrake{width:calc(var(--u)*1.0);height:calc(var(--u)*1.0);right:calc(2.5vw + var(--safeR) + var(--u)*1.95 + 10px);
+  bottom:calc(3.5vh + var(--safeB) + var(--u)*.12);font-size:calc(var(--u)*.17);border-color:rgba(255,46,136,.7);background:rgba(255,46,136,.14)}
 #tBrake.on{background:rgba(255,46,136,.45)}
-#tAuto{position:absolute;pointer-events:auto;right:calc(2.5vw + var(--safeR) + var(--u)*1.6);bottom:calc(3.5vh + var(--safeB) + var(--u)*1.75);
+#tAuto{position:absolute;pointer-events:auto;right:calc(2.5vw + var(--safeR) + var(--u)*1.95 + 10px);bottom:calc(3.5vh + var(--safeB) + var(--u)*1.25 + 12px);
   border-radius:999px;border:2px solid rgba(255,255,255,.35);background:rgba(10,8,30,.55);color:#fff;font-weight:900;font-size:12px;
   padding:8px 12px;touch-action:none;letter-spacing:.5px}
 #tAuto.on{border-color:var(--lime);color:var(--lime)}
@@ -229,3 +229,12 @@ body.portrait.building #board{display:none}
 @keyframes fall{to{transform:translateY(110vh) rotate(720deg)}}
 .trophy{font-size:clamp(60px,14vh,120px);line-height:1;filter:drop-shadow(0 0 20px rgba(255,210,63,.6))}
 #loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:50;background:#07031a;font-weight:900;font-style:italic;font-size:22px;color:var(--cyan);text-align:center;padding:20px}
+
+/* ---------- vidas (mini-pontos dentro do #info) e câmera espectador ---------- */
+#lives{display:flex;justify-content:flex-end;gap:4px;margin-top:3px;height:6px}
+#lives i{display:block;width:6px;height:6px;border-radius:50%;background:#53ff9a;box-shadow:0 0 4px rgba(83,255,154,.8)}
+#lives i.lost{background:rgba(255,255,255,.18);box-shadow:none}
+body.building #lives,body.building #specTxt{display:none}
+#specTxt{font-size:11px;color:#bfe9ff;min-height:0;margin-top:2px}
+body.spectating #info{pointer-events:auto;cursor:pointer}
+#board .sb.dead{opacity:.45}

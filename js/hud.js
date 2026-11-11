@@ -1,7 +1,7 @@
 // HUD: toasts, placar, velocímetro e indicador de rede.
-import { G } from './state.js';
+import { G, hooks } from './state.js';
 import { $, clamp, esc } from './utils.js';
-import { DRIFT, fmtPts, POWER, PTS } from './config.js';
+import { DRIFT, fmtPts, MAX_DEATHS, POWER, PTS } from './config.js';
 import { cars, myCar, NET } from './cars.js';
 
 // ---------------------------------------------------------------- HUD
@@ -21,8 +21,9 @@ export function centerText(t, color) {
 export function updateBoard() {
   const b = $('board');
   const list = G.players.slice().sort((a, c) => c.score - a.score);
+  lastLives = '';                                        // placar redesenhado: reaplica as linhas "dead"
   b.innerHTML = `<div class="hd"><span>PLACAR</span><span>META ${fmtPts(G.TARGET)} PTS</span></div>` + list.map(p =>
-    `<div class="sb ${p.id === G.myId ? 'me' : ''}"><span class="nm">${esc(p.name)}</span><div class="bar"><i style="background:${p.color};width:${clamp(p.score / G.TARGET * 100, 0, 100)}%"></i></div><span class="pt">${p.score}</span></div>`).join('');
+    `<div class="sb ${p.id === G.myId ? 'me' : ''}" data-pid="${p.id}"><span class="nm">${esc(p.name)}</span><div class="bar"><i style="background:${p.color};width:${clamp(p.score / G.TARGET * 100, 0, 100)}%"></i></div><span class="pt">${p.score}</span></div>`).join('');
 }
 G.lastHud = {};
 // slot de item: vazio / sorteando (roleta curta) / pronto
@@ -41,9 +42,24 @@ function updateItemHud(p) {
   for (const e of [el, $('tItem')]) if (e) { e.dataset.state = st; const s = e.querySelector('svg'); if (s) s.innerHTML = icon; }
   el.querySelector('.ih-nm').textContent = name;
 }
+// vidas (3 mini-pontos no #info), linhas "dead" no placar e nome de quem o espectador está seguindo
+let lastLives = '';
+function updateLives(p) {
+  const left = Math.max(0, MAX_DEATHS - (p.deaths || 0));
+  const dead = cars.filter(c => !c.alive && (c.deaths || 0) >= MAX_DEATHS).map(c => c.pid).join();
+  const spec = G.state === 'race' && (p.finished || !p.alive) && !(G.R && G.R.spectateT > 0);
+  const tgt = spec ? hooks.specTarget() : null;
+  const sig = left + '|' + dead + '|' + (tgt ? tgt.pid : '-') + spec;
+  if (sig === lastLives) return;
+  lastLives = sig;
+  const ds = $('lives').children; for (let i = 0; i < ds.length; i++) ds[i].classList.toggle('lost', i >= left);
+  for (const e of document.querySelectorAll('#board .sb')) e.classList.toggle('dead', dead.split(',').includes(e.dataset.pid));
+  document.body.classList.toggle('spectating', spec);
+  $('specTxt').textContent = spec && tgt ? '🎥 ' + tgt.name : '';
+}
 export function updateHud() {
   const p = myCar(); if (!p) return;
-  updateItemHud(p);
+  updateItemHud(p); updateLives(p);
   const rank = rankOf(p);
   if (G.lastHud.rank !== rank || G.lastHud.n !== cars.length) { $('pos').innerHTML = `${rank}<small>º/${cars.length}</small>`; $('pos').style.color = rank === 1 ? '#ffd23f' : '#fff'; G.lastHud.rank = rank; G.lastHud.n = cars.length; }
   const kmh = Math.round(Math.hypot(p.vx, p.vz) * 3.6 * 1.4);

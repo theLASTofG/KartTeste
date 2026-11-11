@@ -1,7 +1,7 @@
 // Máquina de estados/fases, telas e lobby.
 import { G, hooks } from './state.js';
 import { $, clamp, esc, rnd, store } from './utils.js';
-import { fmtPts, GRID_SLOTS, MAXP, PH, TARGET_OPTS } from './config.js';
+import { fmtPts, GRID_SLOTS, HW, MAXP, PH, SIDE_WALLS, TARGET_OPTS } from './config.js';
 import { SFX } from './audio.js';
 import { applyTheme, themeKey, THEMES } from './scene.js';
 import { applyTrack, finishGlobal, INITIAL_TYPES, obstacles, PRESETS, tmpW, track, trackTypes } from './track.js';
@@ -70,7 +70,7 @@ function placeCars(grid) {
     Object.assign(c, {
       x: tmpW.x, z: tmpW.z, y: 0, a: tmpW.a, vx: 0, vz: 0, vy: 0, vf: 0, vl: 0, steer: 0, grip: PH.grip, kick: 0, hop: 0,
       drifting: false, driftDir: 0, driftT: 0, driftLevel: 0, boostT: 0, boostPow: 0, boostMax: 1, padCool: 0, oilT: 0,
-      pi: 0, s: sl[0], v: sl[1], prog: sl[0], grounded: true, voidFall: false, item: null, itemReadyAt: 0, itemRollEnd: 0, itemCool: 0, pickCool: 0, freezeT: 0, slowT: 0, stunT: 0, spinT: 0, spinDir: 1, immuneT: 0, alive: true, finished: false, finishOrder: 0, finishT: 0, fallProg: 0,
+      pi: 0, s: sl[0], v: sl[1], prog: sl[0], grounded: true, voidFall: false, item: null, itemReadyAt: 0, itemRollEnd: 0, itemCool: 0, pickCool: 0, deaths: 0, checkpointIdx: 0, checkpointS: 2.2, invuln: 0, lastHitBy: null, lastHitTimer: 0, freezeT: 0, slowT: 0, stunT: 0, spinT: 0, spinDir: 1, immuneT: 0, alive: true, finished: false, finishOrder: 0, finishT: 0, fallProg: 0,
       hitCool: 0, stuckT: 0, airT: 0, tumbleX: 0, tumbleZ: 0, spin: 0, pitch: 0, roll: 0, fxAcc: 0, braking: false, squash: 0, net: null, maxMul: 1,
       buf: null, netTs: 0, netOff: undefined, jit: undefined, interp: undefined, cpx: tmpW.x, cpz: tmpW.z, kickCool: 0
     });
@@ -80,7 +80,7 @@ function placeCars(grid) {
       const k = 1.25 - c.ai.skill;
       if (p.type === 'bridge' && Math.random() < 1.1 * k) return { lane: (Math.random() < 0.5 ? -1 : 1) * rnd(1.6, 3.2) };
       if (p.type === 'jump' && Math.random() < 0.6 * k) return { slow: rnd(9, 15) };
-      if (p.turn && Math.random() < 0.55 * k) return { lane: p.turn * rnd(4.4, 6.5) };
+      if (p.turn && Math.random() < 0.55 * k) return { lane: p.turn * (SIDE_WALLS ? rnd(4.4, 6.5) : rnd(2.4, HW - 1.6)) };   // sem mureta, nunca mira fora da pista
       if (p.type === 'holes' && Math.random() < 0.8 * k) return { lane: rnd(-1.2, 1.2) };
       if (p.type === 'wind' && Math.random() < 0.7 * k) return { lane: p.windDir * rnd(1.5, 3) };
       if (p.type === 'bigjump' && Math.random() < 0.5 * k) return { slow: rnd(14, 20) };

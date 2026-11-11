@@ -7,7 +7,7 @@ import { isHost, myCar } from './cars.js';
 import { toast } from './hud.js';
 import { respawn } from './physics.js';
 import { setStatus } from './net.js';
-import { BC, panBy, pinchInfo, PTRS, zoomBy } from './camera.js';
+import { BC, cycleSpectate, isSpectating, panBy, pinchInfo, PTRS, zoomBy } from './camera.js';
 import { pickCard, tryPlaceAt } from './build-ui.js';
 import { act, pauseGame, resume } from './phases.js';
 import { useItem } from './items.js';
@@ -50,6 +50,8 @@ window.addEventListener('keydown', e => {
     if (dg) { const n = +dg[2]; pickCard(n === 0 ? 9 : n - 1); return; }
     if (e.code === 'Escape' || e.code === 'Backspace') { act('backcards'); return; }
   }
+  if (G.state === 'race' && isSpectating() && (e.code === 'Tab' || e.code === 'ArrowRight' || e.code === 'ArrowLeft')) { e.preventDefault(); cycleSpectate(e.code === 'ArrowLeft' ? -1 : 1); return; }
+  if (e.code === 'Tab' && G.state === 'race') e.preventDefault();
   if (e.code === 'KeyR') doTap('reset');
   else if (e.code === 'KeyP' || e.code === 'Escape') doTap('pause');
   else if (e.code === 'KeyM') doTap('mute');
@@ -134,6 +136,7 @@ $('optAuto').addEventListener('click', () => doTap('auto'));
 function doTap(what) {
   SFX.init();
   if (what === 'item') { if (G.state === 'race') useItem(); return; }
+  if (what === 'spec') { if (isSpectating()) cycleSpectate(1); return; }
   if (what === 'pause') { if (G.state === 'paused' || G.menuOpen) resume(); else if (uiActive()) pauseGame(); }
   else if (what === 'reset') { const p = myCar(); if (p && G.state === 'race' && p.alive && p.grounded && !p.voidFall && !p.finished) respawn(p); }
   else if (what === 'mute') { SFX.setMute(!SFX.muted); refreshButtons(); }

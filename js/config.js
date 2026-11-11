@@ -7,6 +7,7 @@ export const CELL = 26, HW = 5.5, RC = CELL / 2;
 export const WALL_H = 0.9, CAR_R = 1.05, GRAV = 26, FINISH_S = 7, MAXP = 8;
 // muretas laterais das pistas comuns (visual E física). Chicane, obstáculos, largada e chegada têm barreiras próprias.
 export const SIDE_WALLS = false;
+export const MAX_DEATHS = 3;          // vidas por rodada: quedas no abismo antes de ser eliminado
 export const TARGET_OPTS = [1000, 2500, 5000, 10000];
 G.TARGET = 10000;                       // meta de pontos (o host escolhe no lobby)
 export const fmtPts = n => n.toLocaleString('pt-BR');

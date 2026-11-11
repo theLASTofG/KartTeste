@@ -222,6 +222,20 @@ export function straightBase(g, s0, s1, walls = true, laneM = null) {
   box(len, 0.12, 0.12, M.edge, cx, -1.0, HW, g, false);
   box(len, 0.12, 0.12, M.edge, cx, -1.0, -HW, g, false);
 }
+// libera GPU de um objeto removido (geometrias e materiais próprios). Materiais compartilhados (M.*) e os registrados
+// com keepResource() NÃO são descartados; texturas nunca são tocadas aqui.
+const KEEP = new Set();
+export const keepResource = r => { KEEP.add(r); return r; };
+export function disposeObject3D(obj) {
+  if (!obj) return;
+  if (!KEEP.size) for (const k in M) KEEP.add(M[k]);
+  if (obj.parent) obj.parent.remove(obj);
+  obj.traverse(o => {
+    if (o.geometry && !KEEP.has(o.geometry)) o.geometry.dispose();
+    const ms = Array.isArray(o.material) ? o.material : o.material ? [o.material] : [];
+    for (const m of ms) if (!KEEP.has(m)) m.dispose();
+  });
+}
 export function disposeGroup(g) {
   if (!g) return;
   if (g.parent) g.parent.remove(g);

@@ -49,12 +49,33 @@ export function pinchInfo() { const [a, b] = [...PTRS.values()]; return { d: Mat
 // --------------------------------------------------------------- update
 G.camSnap = true; let camYaw = 0; G.clockT = 0;
 const camLook = new THREE.Vector3(), camDesired = new THREE.Vector3(), vLook = new THREE.Vector3();
+// espectador: quem já terminou ou perdeu as 3 vidas escolhe qual carro vivo assistir (Tab/setas no PC, toque no #info no celular)
+G.specId = -1;
+export function isSpectating() {
+  const p = myCar();
+  return !!(p && G.state === 'race' && (p.finished || !p.alive) && !(G.R && G.R.spectateT > 0));
+}
+function specList() {
+  let l = cars.filter(c => c.alive && !c.finished && c.pid !== G.myId);        // ainda correndo
+  if (!l.length) l = cars.filter(c => c.alive && c.pid !== G.myId);
+  return l.sort((a, b) => cmpRace(a, b));
+}
+export function specTarget() {
+  const l = specList();
+  return l.find(c => c.pid === G.specId) || l[0] || null;
+}
+export function cycleSpectate(dir) {
+  const l = specList(); if (!l.length) return;
+  const i = l.indexOf(specTarget());
+  G.specId = l[((i < 0 ? 0 : i + dir) % l.length + l.length) % l.length].pid;
+  G.camSnap = true;
+}
 function camTarget() {
   const p = myCar();
-  if (p && (p.alive || (G.R && G.R.spectateT > 0))) return p;
-  let best = null;
-  for (const c of cars) if (c.alive && (!best || cmpRace(c, best) < 0)) best = c;
-  return best || p || cars[0];
+  if (p && p.alive && !p.finished) return p;
+  if (p && (G.R && G.R.spectateT > 0)) return p;
+  if (p && p.finished && p.alive) { const t = specTarget(); return t || p; }
+  return specTarget() || p || cars[0];
 }
 export function followCamera(dt) {
   const c = camTarget(); if (!c) return;
