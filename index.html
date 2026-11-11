@@ -1,0 +1,1949 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#090b10" />
+  <link rel="manifest" href="/manifest.json" />
+  <title>KartTeste — Turbo Drift Arcade</title>
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <style>
+    :root {
+      --bg: #080a0f;
+      --panel: rgba(14, 18, 28, 0.86);
+      --cyan: #00f0ff;
+      --orange: #ff8800;
+      --purple: #d946ef;
+      --green: #10b981;
+      --red: #ef4444;
+      --yellow: #facc15;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+      touch-action: none;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      color: #fff;
+    }
+
+    #gameCanvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    /* HUD SUPERIOR */
+    #hud {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      padding: 10px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .hud-group {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .hud-card {
+      background: var(--panel);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 12px;
+      padding: 6px 12px;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+    }
+
+    .hud-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #94a3b8;
+      font-weight: 700;
+    }
+
+    .hud-value {
+      font-size: 20px;
+      font-weight: 900;
+      font-variant-numeric: tabular-nums;
+    }
+
+    #posDisplay {
+      color: var(--yellow);
+      font-size: 24px;
+    }
+
+    /* BOTÕES RÁPIDOS NO TOPO */
+    .top-actions {
+      pointer-events: auto;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .btn-top {
+      background: var(--panel);
+      color: #e2e8f0;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 10px;
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: transform 0.1s, border-color 0.15s, background 0.15s;
+    }
+
+    .btn-top:active {
+      transform: scale(0.94);
+    }
+
+    .btn-top.active {
+      background: rgba(16, 185, 129, 0.28);
+      border-color: var(--green);
+      color: #6ee7b7;
+    }
+
+    /* BARRA DE TURBO / VELOCÍMETRO */
+    #bottomHud {
+      position: fixed;
+      bottom: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    #speedBox {
+      display: flex;
+      align-items: baseline;
+      gap: 5px;
+      background: var(--panel);
+      padding: 4px 16px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    #speedVal {
+      font-size: 26px;
+      font-weight: 900;
+      color: var(--cyan);
+      font-variant-numeric: tabular-nums;
+    }
+
+    #driftMeterWrap {
+      width: 190px;
+      height: 12px;
+      background: rgba(0, 0, 0, 0.65);
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      border-radius: 999px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    #driftMeterBar {
+      width: 0%;
+      height: 100%;
+      background: var(--cyan);
+      transition: background 0.1s;
+    }
+
+    #statusBanner {
+      font-size: 13px;
+      font-weight: 900;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      min-height: 18px;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.9);
+    }
+
+    /* CONTROLES TOUCH MOBILE */
+    #touchControls {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 12;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      padding: 18px 22px;
+    }
+
+    .touch-cluster {
+      display: flex;
+      gap: 14px;
+      align-items: flex-end;
+      pointer-events: auto;
+    }
+
+    .touch-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border-radius: 22px;
+      border: 2px solid rgba(255, 255, 255, 0.28);
+      background: rgba(15, 23, 42, 0.62);
+      color: #fff;
+      font-weight: 900;
+      backdrop-filter: blur(6px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+      transition: transform 0.06s, background 0.06s, border-color 0.06s;
+    }
+
+    .touch-btn.pressed {
+      transform: scale(0.92);
+      border-color: #fff;
+    }
+
+    .btn-steer {
+      width: 86px;
+      height: 86px;
+      font-size: 34px;
+    }
+
+    .btn-steer.pressed {
+      background: rgba(0, 240, 255, 0.35);
+      border-color: var(--cyan);
+    }
+
+    .btn-brake {
+      width: 72px;
+      height: 72px;
+      font-size: 13px;
+      border-color: rgba(239, 68, 68, 0.55);
+      background: rgba(127, 29, 29, 0.45);
+    }
+
+    .btn-brake.pressed {
+      background: rgba(239, 68, 68, 0.75);
+    }
+
+    .btn-drift {
+      width: 88px;
+      height: 88px;
+      font-size: 15px;
+      border-color: rgba(217, 70, 239, 0.65);
+      background: rgba(112, 26, 117, 0.52);
+    }
+
+    .btn-drift.pressed {
+      background: rgba(217, 70, 239, 0.82);
+      box-shadow: 0 0 24px rgba(217, 70, 239, 0.7);
+    }
+
+    .btn-gas {
+      width: 104px;
+      height: 104px;
+      font-size: 17px;
+      border-color: rgba(16, 185, 129, 0.7);
+      background: rgba(6, 95, 70, 0.58);
+    }
+
+    .btn-gas.pressed {
+      background: rgba(16, 185, 129, 0.85);
+      box-shadow: 0 0 28px rgba(16, 185, 129, 0.7);
+    }
+
+    .btn-sub {
+      font-size: 10px;
+      opacity: 0.8;
+      margin-top: 2px;
+    }
+
+    /* CONTAGEM REGRESSIVA CENTRAL */
+    #centerAnnounce {
+      position: fixed;
+      top: 38%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 72px;
+      font-weight: 900;
+      font-style: italic;
+      text-shadow: 0 6px 28px rgba(0, 0, 0, 0.85);
+      pointer-events: none;
+      z-index: 15;
+      transition: transform 0.15s, opacity 0.15s;
+    }
+
+    /* MODAL MENU / SALA ONLINE */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(5, 8, 15, 0.82);
+      backdrop-filter: blur(10px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 30;
+      padding: 16px;
+    }
+
+    .modal-backdrop.hidden {
+      display: none;
+    }
+
+    .modal-box {
+      background: #0f1624;
+      border: 1px solid rgba(0, 240, 255, 0.3);
+      border-radius: 20px;
+      padding: 22px;
+      max-width: 500px;
+      width: 100%;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.75);
+      text-align: center;
+    }
+
+    .modal-title {
+      font-size: 28px;
+      font-weight: 900;
+      font-style: italic;
+      background: linear-gradient(90deg, #00f0ff, #facc15, #d946ef);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 6px;
+    }
+
+    .modal-sub {
+      font-size: 13px;
+      color: #94a3b8;
+      margin-bottom: 16px;
+    }
+
+    .track-selector {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .track-card {
+      background: rgba(255, 255, 255, 0.05);
+      border: 2px solid rgba(255, 255, 255, 0.12);
+      border-radius: 12px;
+      padding: 10px 6px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .track-card.selected {
+      border-color: var(--cyan);
+      background: rgba(0, 240, 255, 0.14);
+    }
+
+    .track-card h4 {
+      font-size: 13px;
+      margin-bottom: 3px;
+    }
+
+    .track-card p {
+      font-size: 10px;
+      color: #94a3b8;
+    }
+
+    .online-box {
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 16px;
+    }
+
+    .online-row {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      align-items: center;
+      margin-top: 8px;
+      flex-wrap: wrap;
+    }
+
+    .input-code {
+      background: #1e293b;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      color: #fff;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 800;
+      text-transform: uppercase;
+      width: 130px;
+      text-align: center;
+      user-select: text;
+      -webkit-user-select: text;
+      touch-action: auto;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: #fff;
+      border: none;
+      border-radius: 14px;
+      padding: 14px 28px;
+      font-size: 18px;
+      font-weight: 900;
+      width: 100%;
+      cursor: pointer;
+      box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
+    }
+
+    .btn-secondary {
+      background: #1e293b;
+      color: #fff;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    @media (max-width: 700px) {
+      .btn-steer { width: 74px; height: 74px; font-size: 28px; }
+      .btn-gas { width: 92px; height: 92px; font-size: 15px; }
+      .btn-drift { width: 78px; height: 78px; font-size: 13px; }
+      .btn-brake { width: 62px; height: 62px; font-size: 11px; }
+      .hud-value { font-size: 16px; }
+      #posDisplay { font-size: 20px; }
+    }
+  </style>
+</head>
+<body>
+
+  <canvas id="gameCanvas"></canvas>
+
+  <!-- HUD SUPERIOR -->
+  <div id="hud">
+    <div class="hud-group">
+      <div class="hud-card">
+        <div class="hud-label">Posição</div>
+        <div class="hud-value" id="posDisplay">1º / 5</div>
+      </div>
+      <div class="hud-card">
+        <div class="hud-label">Volta</div>
+        <div class="hud-value" id="lapDisplay">1 / 3</div>
+      </div>
+      <div class="hud-card">
+        <div class="hud-label">Tempo</div>
+        <div class="hud-value" id="timeDisplay">00:00.0</div>
+      </div>
+      <div class="hud-card">
+        <div class="hud-label">Recorde</div>
+        <div class="hud-value" id="bestDisplay" style="color: #00f0ff;">--:--.-</div>
+      </div>
+    </div>
+
+    <div class="top-actions">
+      <button class="btn-top" id="btnAutoGas" title="Acelerar sozinho no celular">⚡ AUTO-GAS: OFF</button>
+      <button class="btn-top" id="btnCam" title="Alternar câmera (Tecla C)">🎥 CÂMERA: DINÂMICA</button>
+      <button class="btn-top" id="btnReset" title="Voltar para a pista (Tecla R)">🔄 RESET</button>
+      <button class="btn-top" id="btnMenu">🏁 PISTAS / ONLINE</button>
+    </div>
+  </div>
+
+  <!-- ANÚNCIO CENTRAL (3, 2, 1, GO!) -->
+  <div id="centerAnnounce"></div>
+
+  <!-- VELOCÍMETRO E BARRA DE DRIFT/TURBO -->
+  <div id="bottomHud">
+    <div id="statusBanner"></div>
+    <div id="driftMeterWrap">
+      <div id="driftMeterBar"></div>
+    </div>
+    <div id="speedBox">
+      <span id="speedVal">0</span>
+      <span style="font-size: 11px; color: #94a3b8; font-weight: 800;">KM/H</span>
+    </div>
+  </div>
+
+  <!-- CONTROLES TOUCH MULTI-TOQUE (MOBILE + TABLET) -->
+  <div id="touchControls">
+    <div class="touch-cluster" id="leftCluster">
+      <div class="touch-btn btn-steer" data-action="left">◄</div>
+      <div class="touch-btn btn-steer" data-action="right">►</div>
+    </div>
+
+    <div class="touch-cluster" id="rightCluster">
+      <div class="touch-btn btn-brake" data-action="brake">
+        FREIO
+        <span class="btn-sub">RÉ</span>
+      </div>
+      <div class="touch-btn btn-drift" data-action="drift">
+        DRIFT
+        <span class="btn-sub">TURBO</span>
+      </div>
+      <div class="touch-btn btn-gas" data-action="gas">
+        ACELERAR
+        <span class="btn-sub">GAS</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- MENU INICIAL / SELEÇÃO DE PISTA / MULTIPLAYER ONLINE -->
+  <div class="modal-backdrop" id="menuModal">
+    <div class="modal-box">
+      <div class="modal-title">KART TESTE: TURBO DRIFT</div>
+      <div class="modal-sub">Física Arcade Ultra-Fluida • PC (WASD + Espaço) & Mobile Multi-Touch</div>
+
+      <div class="track-selector" id="trackSelector">
+        <div class="track-card selected" data-track="0">
+          <h4>1. Circuito Neon</h4>
+          <p>Rápido & Largo</p>
+        </div>
+        <div class="track-card" data-track="1">
+          <h4>2. Vale do Drift</h4>
+          <p>Curvas em S & Turbo</p>
+        </div>
+        <div class="track-card" data-track="2">
+          <h4>3. Arena Turbo 8</h4>
+          <p>Cruzamento Insano</p>
+        </div>
+      </div>
+
+      <div class="online-box">
+        <div style="font-size: 12px; font-weight: 800; color: #00f0ff;">🌐 MULTIPLAYER ONLINE INSTANTÂNEO (P2P)</div>
+        <div id="onlineStatusText" style="font-size: 11px; color: #94a3b8; margin-top: 4px;">
+          Jogue solo contra IA ou crie uma sala para correr com amigos!
+        </div>
+        <div class="online-row">
+          <button class="btn-secondary" id="btnCreateRoom">Criar Sala Online</button>
+          <input class="input-code" id="roomCodeInput" placeholder="CÓDIGO" maxlength="6" />
+          <button class="btn-secondary" id="btnJoinRoom">Entrar</button>
+        </div>
+      </div>
+
+      <button class="btn-primary" id="btnStartRace">🚀 ACELERAR AGORA!</button>
+    </div>
+  </div>
+
+  <script>
+    /******************************************************************
+     * 1. MOTOR DE ÁUDIO PROCEDURAL (WEB AUDIO API - ZERO ARQUIVOS)
+     ******************************************************************/
+    class SoundEngine {
+      constructor() {
+        this.ctx = null;
+        this.engineOsc = null;
+        this.engineGain = null;
+        this.driftNoiseGain = null;
+        this.initialized = false;
+      }
+
+      init() {
+        if (this.initialized) return;
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        this.ctx = new AudioCtx();
+
+        // Oscilador do motor
+        this.engineOsc = this.ctx.createOscillator();
+        this.engineOsc.type = 'sawtooth';
+        this.engineOsc.frequency.value = 55;
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 340;
+
+        this.engineGain = this.ctx.createGain();
+        this.engineGain.gain.value = 0.05;
+
+        this.engineOsc.connect(filter);
+        filter.connect(this.engineGain);
+        this.engineGain.connect(this.ctx.destination);
+        this.engineOsc.start();
+
+        // Ruído branco filtrado para pneu cantando no drift
+        const bufferSize = this.ctx.sampleRate * 1.5;
+        const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const output = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          output[i] = Math.random() * 2 - 1;
+        }
+        const whiteNoise = this.ctx.createBufferSource();
+        whiteNoise.buffer = noiseBuffer;
+        whiteNoise.loop = true;
+
+        const bandpass = this.ctx.createBiquadFilter();
+        bandpass.type = 'bandpass';
+        bandpass.frequency.value = 1100;
+        bandpass.Q.value = 3.5;
+
+        this.driftNoiseGain = this.ctx.createGain();
+        this.driftNoiseGain.gain.value = 0.0;
+
+        whiteNoise.connect(bandpass);
+        bandpass.connect(this.driftNoiseGain);
+        this.driftNoiseGain.connect(this.ctx.destination);
+        whiteNoise.start();
+
+        this.initialized = true;
+      }
+
+      updateEngine(speedRatio, isDrifting, boostTime) {
+        if (!this.initialized || !this.ctx) return;
+        if (this.ctx.state === 'suspended') this.ctx.resume();
+
+        const now = this.ctx.currentTime;
+        const baseFreq = 52 + Math.abs(speedRatio) * 145 + (boostTime > 0 ? 45 : 0);
+        this.engineOsc.frequency.setTargetAtTime(baseFreq, now, 0.04);
+        this.engineGain.gain.setTargetAtTime(0.04 + Math.min(0.06, Math.abs(speedRatio) * 0.05), now, 0.05);
+
+        const targetDriftGain = (isDrifting && Math.abs(speedRatio) > 0.25) ? 0.045 : 0.0;
+        this.driftNoiseGain.gain.setTargetAtTime(targetDriftGain, now, 0.06);
+      }
+
+      beep(freq = 440, duration = 0.14, type = 'sine', vol = 0.12) {
+        if (!this.initialized || !this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+        gain.gain.setValueAtTime(vol, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + duration);
+      }
+
+      playBoost(level = 1) {
+        if (!this.initialized || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(180 + level * 90, now);
+        osc.frequency.exponentialRampToValueAtTime(520 + level * 140, now + 0.28);
+        gain.gain.setValueAtTime(0.14, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(now + 0.32);
+      }
+    }
+
+    const sound = new SoundEngine();
+
+    /******************************************************************
+     * 2. CONTROLES HÍBRIDOS PC + MOBILE MULTI-TOUCH SEM CONFLITO
+     ******************************************************************/
+    class InputManager {
+      constructor() {
+        this.keys = {};
+        this.touchActions = { left: false, right: false, gas: false, brake: false, drift: false };
+        this.autoGas = false;
+        this.justPressedDrift = false;
+        this._prevDrift = false;
+
+        window.addEventListener('keydown', (e) => {
+          this.keys[e.code] = true;
+          if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) {
+            e.preventDefault();
+          }
+          if (e.code === 'KeyR') game.resetPlayerToTrack();
+          if (e.code === 'KeyC') game.toggleCameraMode();
+        });
+
+        window.addEventListener('keyup', (e) => {
+          this.keys[e.code] = false;
+        });
+
+        this.setupMultiTouch();
+      }
+
+      setupMultiTouch() {
+        const buttons = Array.from(document.querySelectorAll('.touch-btn'));
+
+        const evaluateTouches = (e) => {
+          sound.init();
+          const nextState = { left: false, right: false, gas: false, brake: false, drift: false };
+
+          // Verifica todos os dedos ativos na tela (permite segurar Acelerar + deslizar Direção + apertar Drift juntos!)
+          for (let i = 0; i < e.touches.length; i++) {
+            const t = e.touches[i];
+            const el = document.elementFromPoint(t.clientX, t.clientY);
+            const btn = el ? el.closest('.touch-btn') : null;
+            if (btn && btn.dataset.action) {
+              nextState[btn.dataset.action] = true;
+            }
+          }
+
+          this.touchActions = nextState;
+          buttons.forEach((b) => {
+            const act = b.dataset.action;
+            b.classList.toggle('pressed', !!this.touchActions[act]);
+          });
+        };
+
+        const touchContainer = document.getElementById('touchControls');
+        ['touchstart', 'touchmove', 'touchend', 'touchcancel'].forEach((evtName) => {
+          touchContainer.addEventListener(evtName, (e) => {
+            e.preventDefault();
+            evaluateTouches(e);
+          }, { passive: false });
+        });
+
+        // Suporte a clique de mouse nos botões da tela para testar no PC também
+        buttons.forEach((btn) => {
+          const act = btn.dataset.action;
+          btn.addEventListener('mousedown', () => {
+            sound.init();
+            this.touchActions[act] = true;
+            btn.classList.add('pressed');
+          });
+          window.addEventListener('mouseup', () => {
+            this.touchActions[act] = false;
+            btn.classList.remove('pressed');
+          });
+        });
+      }
+
+      getState() {
+        const left = this.keys['ArrowLeft'] || this.keys['KeyA'] || this.touchActions.left;
+        const right = this.keys['ArrowRight'] || this.keys['KeyD'] || this.touchActions.right;
+        const gas = this.autoGas || this.keys['ArrowUp'] || this.keys['KeyW'] || this.touchActions.gas;
+        const brake = this.keys['ArrowDown'] || this.keys['KeyS'] || this.touchActions.brake;
+        const drift = this.keys['Space'] || this.keys['ShiftLeft'] || this.keys['ShiftRight'] || this.touchActions.drift;
+
+        this.justPressedDrift = drift && !this._prevDrift;
+        this._prevDrift = drift;
+
+        return {
+          steer: (right ? 1 : 0) - (left ? 1 : 0),
+          gas,
+          brake,
+          drift,
+          justPressedDrift: this.justPressedDrift
+        };
+      }
+    }
+
+    /******************************************************************
+     * 3. GERADOR DE PISTAS (SPLINE SUAVE + BOOST PADS + CHECKPOINTS)
+     ******************************************************************/
+    const TRACK_DEFS = [
+      {
+        name: 'Circuito Neon GP',
+        roadWidth: 215,
+        theme: { grass: '#090d16', asphalt: '#1a2234', kerbA: '#00f0ff', kerbB: '#1e293b', glow: '#00f0ff' },
+        points: [
+          { x: 0, y: 0 },
+          { x: 950, y: 0 },
+          { x: 1550, y: 380 },
+          { x: 1450, y: 1120 },
+          { x: 750, y: 1420 },
+          { x: 100, y: 1100 },
+          { x: -450, y: 1380 },
+          { x: -1150, y: 1020 },
+          { x: -1200, y: 260 },
+          { x: -650, y: -20 }
+        ],
+        boostIndices: [18, 62, 118, 165]
+      },
+      {
+        name: 'Vale do Drift',
+        roadWidth: 195,
+        theme: { grass: '#0d0914', asphalt: '#211830', kerbA: '#d946ef', kerbB: '#facc15', glow: '#d946ef' },
+        points: [
+          { x: 0, y: 0 },
+          { x: 880, y: -40 },
+          { x: 1360, y: 320 },
+          { x: 860, y: 740 },
+          { x: 1420, y: 1240 },
+          { x: 780, y: 1680 },
+          { x: 0, y: 1320 },
+          { x: -680, y: 1650 },
+          { x: -1240, y: 1120 },
+          { x: -720, y: 600 },
+          { x: -1180, y: 140 },
+          { x: -580, y: -120 }
+        ],
+        boostIndices: [14, 88, 145, 200]
+      },
+      {
+        name: 'Arena Turbo 8',
+        roadWidth: 210,
+        theme: { grass: '#08120e', asphalt: '#182825', kerbA: '#10b981', kerbB: '#ffffff', glow: '#10b981' },
+        points: [
+          { x: -400, y: 0 },
+          { x: 450, y: 0 },
+          { x: 1180, y: -420 },
+          { x: 1650, y: 150 },
+          { x: 1200, y: 780 },
+          { x: 320, y: 420 },
+          { x: -520, y: 820 },
+          { x: -1320, y: 760 },
+          { x: -1620, y: 120 },
+          { x: -1120, y: -420 }
+        ],
+        boostIndices: [10, 52, 108, 155, 195]
+      }
+    ];
+
+    class Track {
+      constructor(defIndex = 0) {
+        const def = TRACK_DEFS[defIndex] || TRACK_DEFS[0];
+        this.name = def.name;
+        this.roadWidth = def.roadWidth;
+        this.theme = def.theme;
+        this.samples = this.buildCatmullRomSamples(def.points, 220);
+        this.boostPads = def.boostIndices.map((idx) => {
+          const s = this.samples[idx % this.samples.length];
+          return { x: s.x, y: s.y, angle: s.angle, radius: 58 };
+        });
+      }
+
+      buildCatmullRomSamples(pts, totalSamples) {
+        const res = [];
+        const n = pts.length;
+        for (let i = 0; i < totalSamples; i++) {
+          const tGlobal = (i / totalSamples) * n;
+          const idx = Math.floor(tGlobal);
+          const t = tGlobal - idx;
+
+          const p0 = pts[(idx - 1 + n) % n];
+          const p1 = pts[idx % n];
+          const p2 = pts[(idx + 1) % n];
+          const p3 = pts[(idx + 2) % n];
+
+          const t2 = t * t;
+          const t3 = t2 * t;
+
+          const x = 0.5 * (
+            (2 * p1.x) +
+            (-p0.x + p2.x) * t +
+            (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 +
+            (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3
+          );
+          const y = 0.5 * (
+            (2 * p1.y) +
+            (-p0.y + p2.y) * t +
+            (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 +
+            (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3
+          );
+
+          res.push({ x, y, angle: 0, nx: 0, ny: 0 });
+        }
+
+        for (let i = 0; i < res.length; i++) {
+          const curr = res[i];
+          const next = res[(i + 1) % res.length];
+          const dx = next.x - curr.x;
+          const dy = next.y - curr.y;
+          curr.angle = Math.atan2(dy, dx);
+          const len = Math.hypot(dx, dy) || 1;
+          curr.nx = -dy / len;
+          curr.ny = dx / len;
+        }
+        return res;
+      }
+
+      getNearestSample(x, y) {
+        let bestIdx = 0;
+        let bestDistSq = Infinity;
+        for (let i = 0; i < this.samples.length; i++) {
+          const s = this.samples[i];
+          const dSq = (x - s.x) ** 2 + (y - s.y) ** 2;
+          if (dSq < bestDistSq) {
+            bestDistSq = dSq;
+            bestIdx = i;
+          }
+        }
+        return { index: bestIdx, sample: this.samples[bestIdx], dist: Math.sqrt(bestDistSq) };
+      }
+    }
+
+    /******************************************************************
+     * 4. FÍSICA ARCADE DO KART (DRIFT + MINI-TURBO + VÁCUO + SLIDE)
+     ******************************************************************/
+    class Kart {
+      constructor(opts) {
+        this.id = opts.id || 'player';
+        this.name = opts.name || 'VOCÊ';
+        this.color = opts.color || '#00f0ff';
+        this.isAI = !!opts.isAI;
+        this.isRemote = !!opts.isRemote;
+        this.aiSkill = opts.aiSkill || 1.0;
+        this.aiLaneOffset = opts.aiLaneOffset || 0;
+
+        this.resetState(opts.x || 0, opts.y || 0, opts.angle || 0);
+      }
+
+      resetState(x, y, angle) {
+        this.x = x;
+        this.y = y;
+        this.vx = 0;
+        this.vy = 0;
+        this.angle = angle;
+        this.speed = 0;
+        this.steerVisual = 0;
+
+        // Drift & Boost (Estilo Mario Kart)
+        this.isDrifting = false;
+        this.driftDir = 0;
+        this.driftCharge = 0; // 0 a 3.2s
+        this.driftLevel = 0;  // 0, 1 (Azul), 2 (Laranja), 3 (Roxo)
+        this.boostTimer = 0;
+        this.boostPower = 0;
+        this.hopTimer = 0;
+        this.slipstreamCharge = 0;
+
+        // Progresso da corrida
+        this.lap = 1;
+        this.lastSampleIndex = 0;
+        this.totalProgress = 0;
+        this.passedHalfway = false;
+        this.finished = false;
+      }
+
+      update(dt, input, track, allKarts, canDrive) {
+        if (this.isRemote) return;
+
+        if (!canDrive) {
+          this.vx *= 0.9;
+          this.vy *= 0.9;
+          return;
+        }
+
+        if (this.isAI) {
+          input = this.computeAIInput(track, allKarts);
+        }
+
+        // Parâmetros de física arcade super responsiva
+        const maxSpeedBase = 760 * (this.isAI ? this.aiSkill : 1.0);
+        const accel = 880;
+        const reverseAccel = 520;
+        const turnRate = 3.15;
+
+        // Hop inicial ao apertar Drift
+        if (input.justPressedDrift && this.speed > 220 && !this.isDrifting) {
+          this.hopTimer = 0.14;
+          if (input.steer !== 0) {
+            this.isDrifting = true;
+            this.driftDir = input.steer;
+            this.driftCharge = 0;
+            this.driftLevel = 0;
+          }
+        }
+
+        if (this.hopTimer > 0) {
+          this.hopTimer = Math.max(0, this.hopTimer - dt);
+          if (!this.isDrifting && input.drift && input.steer !== 0 && this.speed > 220) {
+            this.isDrifting = true;
+            this.driftDir = input.steer;
+          }
+        }
+
+        // Gerenciamento do Drift e liberação do Mini-Turbo
+        if (this.isDrifting) {
+          if (!input.drift || this.speed < 190) {
+            // Soltou o drift! Ativa o Boost se tiver carregado!
+            if (this.driftLevel > 0) {
+              const durations = [0, 0.75, 1.25, 1.85];
+              const powers = [0, 260, 360, 480];
+              this.boostTimer = durations[this.driftLevel];
+              this.boostPower = powers[this.driftLevel];
+              if (!this.isAI) {
+                sound.playBoost(this.driftLevel);
+                game.triggerCameraKick(this.driftLevel * 4.5);
+              }
+            }
+            this.isDrifting = false;
+            this.driftDir = 0;
+            this.driftCharge = 0;
+            this.driftLevel = 0;
+          } else {
+            // Acumula faísca de turbo durante a curva
+            const steerBonus = (input.steer === this.driftDir) ? 1.35 : 0.75;
+            this.driftCharge += dt * steerBonus;
+            const prevLevel = this.driftLevel;
+            if (this.driftCharge >= 2.1) this.driftLevel = 3;
+            else if (this.driftCharge >= 1.1) this.driftLevel = 2;
+            else if (this.driftCharge >= 0.42) this.driftLevel = 1;
+
+            if (!this.isAI && this.driftLevel > prevLevel) {
+              sound.beep(360 + this.driftLevel * 180, 0.09, 'triangle', 0.1);
+            }
+          }
+        }
+
+        // Vácuo (Slipstream) atrás de outros karts
+        let inSlipstream = false;
+        const fx = Math.cos(this.angle);
+        const fy = Math.sin(this.angle);
+        for (const other of allKarts) {
+          if (other === this) continue;
+          const dx = other.x - this.x;
+          const dy = other.y - this.y;
+          const dist = Math.hypot(dx, dy);
+          if (dist > 55 && dist < 290 && this.speed > 320) {
+            const dot = (dx * fx + dy * fy) / dist;
+            if (dot > 0.88) {
+              inSlipstream = true;
+              break;
+            }
+          }
+        }
+
+        if (inSlipstream) {
+          this.slipstreamCharge = Math.min(1.5, this.slipstreamCharge + dt * 1.4);
+        } else {
+          this.slipstreamCharge = Math.max(0, this.slipstreamCharge - dt * 1.0);
+        }
+
+        if (this.boostTimer > 0) {
+          this.boostTimer = Math.max(0, this.boostTimer - dt);
+        } else {
+          this.boostPower = 0;
+        }
+
+        // Direção suave + contra-esterço no drift
+        this.steerVisual += (input.steer - this.steerVisual) * Math.min(1, dt * 14);
+        const speedFactor = Math.min(1, Math.hypot(this.vx, this.vy) / 140);
+        if (this.isDrifting) {
+          // No drift, você tem rotação base na direção do drift + controle fino no volante
+          const effectiveTurn = this.driftDir * 0.68 + input.steer * 0.55;
+          this.angle += effectiveTurn * turnRate * dt;
+        } else {
+          const reverseSign = this.speed < -20 ? -1 : 1;
+          this.angle += input.steer * turnRate * speedFactor * reverseSign * dt;
+        }
+
+        // Vetores frente e lateral do kart
+        const forwardX = Math.cos(this.angle);
+        const forwardY = Math.sin(this.angle);
+        const rightX = -forwardY;
+        const rightY = forwardX;
+
+        // Decomposição da velocidade atual
+        let forwardVel = this.vx * forwardX + this.vy * forwardY;
+        let lateralVel = this.vx * rightX + this.vy * rightY;
+
+        const slipstreamBoost = this.slipstreamCharge > 0.45 ? 135 : 0;
+        const currentMaxSpeed = maxSpeedBase + this.boostPower + slipstreamBoost;
+
+        if (input.gas) {
+          forwardVel += (accel + (this.boostTimer > 0 ? 520 : 0)) * dt;
+        } else if (input.brake) {
+          if (forwardVel > 40) {
+            forwardVel -= accel * 1.35 * dt;
+          } else {
+            forwardVel -= reverseAccel * dt;
+          }
+        } else {
+          // Desaceleração natural suave
+          forwardVel *= Math.pow(0.45, dt);
+        }
+
+        // Limite suave de velocidade máxima
+        if (forwardVel > currentMaxSpeed) {
+          forwardVel += (currentMaxSpeed - forwardVel) * Math.min(1, dt * 6);
+        }
+        if (forwardVel < -260) forwardVel = -260;
+
+        // Aderência lateral (Grip vs. Drift suave)
+        const lateralGrip = this.isDrifting ? 3.2 : 11.5;
+        lateralVel *= Math.exp(-lateralGrip * dt);
+
+        // Reconstrói velocidade no mundo
+        this.vx = forwardX * forwardVel + rightX * lateralVel;
+        this.vy = forwardY * forwardVel + rightY * lateralVel;
+        this.speed = forwardVel;
+
+        // Move o kart
+        this.x += this.vx * dt;
+        this.y += this.vy * dt;
+
+        // Verifica Boost Pads na pista
+        for (const pad of track.boostPads) {
+          if (Math.hypot(this.x - pad.x, this.y - pad.y) < pad.radius) {
+            if (this.boostTimer < 0.4) {
+              if (!this.isAI) {
+                sound.playBoost(2);
+                game.triggerCameraKick(7);
+              }
+            }
+            this.boostTimer = Math.max(this.boostTimer, 0.95);
+            this.boostPower = Math.max(this.boostPower, 380);
+          }
+        }
+
+        // Colisão deslizante com as bordas da pista (NUNCA trava o carro!)
+        const nearest = track.getNearestSample(this.x, this.y);
+        const maxOffset = track.roadWidth * 0.5 - 18;
+        if (nearest.dist > maxOffset) {
+          const s = nearest.sample;
+          const dx = this.x - s.x;
+          const dy = this.y - s.y;
+          const dist = Math.hypot(dx, dy) || 1;
+          const nx = dx / dist;
+          const ny = dy / dist;
+
+          // Reposiciona suavemente na borda e desliza o vetor velocidade na tangente da pista
+          this.x = s.x + nx * maxOffset;
+          this.y = s.y + ny * maxOffset;
+
+          const outDot = this.vx * nx + this.vy * ny;
+          if (outDot > 0) {
+            this.vx -= nx * outDot * 1.15;
+            this.vy -= ny * outDot * 1.15;
+            // Perde apenas um pouquinho de velocidade ao raspar no muro
+            this.vx *= 0.94;
+            this.vy *= 0.94;
+          }
+
+          if (Math.abs(this.speed) > 220) {
+            game.spawnSparks(this.x, this.y, '#facc15', 2);
+          }
+        }
+
+        // Marcas de pneu e partículas de drift/boost
+        if ((this.isDrifting || Math.abs(lateralVel) > 135) && Math.abs(this.speed) > 200) {
+          game.addSkidMark(this.x, this.y, this.angle);
+          if (this.driftLevel > 0) {
+            const sparkColors = ['', '#00f0ff', '#ff8800', '#e879f9'];
+            game.spawnSparks(
+              this.x - forwardX * 20,
+              this.y - forwardY * 20,
+              sparkColors[this.driftLevel],
+              this.driftLevel
+            );
+          }
+        }
+
+        if (this.boostTimer > 0) {
+          game.spawnSparks(this.x - forwardX * 24, this.y - forwardY * 24, '#38bdf8', 2);
+        }
+
+        // Atualiza progresso e voltas
+        this.updateLapProgress(nearest.index, track.samples.length);
+      }
+
+      updateLapProgress(currentIndex, totalSamples) {
+        const half = Math.floor(totalSamples * 0.5);
+        if (Math.abs(currentIndex - half) < 18) {
+          this.passedHalfway = true;
+        }
+
+        // Cruzou a linha de chegada na direção certa após passar pela metade da pista
+        if (this.lastSampleIndex > totalSamples * 0.82 && currentIndex < totalSamples * 0.18) {
+          if (this.passedHalfway) {
+            this.passedHalfway = false;
+            if (this.id === 'player') {
+              game.onPlayerCompletedLap();
+            }
+            this.lap++;
+          }
+        }
+        this.lastSampleIndex = currentIndex;
+        this.totalProgress = (this.lap - 1) * totalSamples + currentIndex;
+      }
+
+      computeAIInput(track, allKarts) {
+        const nearest = track.getNearestSample(this.x, this.y);
+        const lookAheadIdx = (nearest.index + 10) % track.samples.length;
+        const farAheadIdx = (nearest.index + 22) % track.samples.length;
+        const targetSample = track.samples[lookAheadIdx];
+        const farSample = track.samples[farAheadIdx];
+
+        const tx = targetSample.x + targetSample.nx * this.aiLaneOffset;
+        const ty = targetSample.y + targetSample.ny * this.aiLaneOffset;
+
+        const desiredAngle = Math.atan2(ty - this.y, tx - this.x);
+        let diff = desiredAngle - this.angle;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+
+        // Verifica se vem curva fechada pra IA usar Drift!
+        let curveDiff = farSample.angle - targetSample.angle;
+        while (curveDiff > Math.PI) curveDiff -= Math.PI * 2;
+        while (curveDiff < -Math.PI) curveDiff += Math.PI * 2;
+
+        const steer = diff > 0.08 ? 1 : (diff < -0.08 ? -1 : 0);
+        const wantDrift = Math.abs(curveDiff) > 0.45 && this.speed > 420 && this.driftCharge < 1.3;
+        const justPressedDrift = wantDrift && !this.isDrifting;
+
+        return {
+          steer,
+          gas: true,
+          brake: false,
+          drift: wantDrift,
+          justPressedDrift
+        };
+      }
+    }
+
+    /******************************************************************
+     * 5. MULTIPLAYER ONLINE P2P (PEERJS) — SALAS POR CÓDIGO
+     ******************************************************************/
+    class NetworkManager {
+      constructor(gameRef) {
+        this.game = gameRef;
+        this.peer = null;
+        this.connections = [];
+        this.roomCode = null;
+        this.isHost = false;
+        this.sendTimer = 0;
+      }
+
+      createRoom() {
+        const code = Math.random().toString(36).substring(2, 6).toUpperCase();
+        this.roomCode = code;
+        this.isHost = true;
+        const statusEl = document.getElementById('onlineStatusText');
+        statusEl.textContent = `Criando sala ${code}...`;
+
+        this.peer = new Peer('KARTTESTE-' + code);
+        this.peer.on('open', () => {
+          statusEl.innerHTML = `✅ Sala criada! Código: <b style="color:#facc15;font-size:14px">${code}</b> (Passe para seu amigo!)`;
+          document.getElementById('roomCodeInput').value = code;
+        });
+
+        this.peer.on('connection', (conn) => {
+          this.setupConnection(conn);
+        });
+
+        this.peer.on('error', (err) => {
+          statusEl.textContent = 'Aviso Online: ' + err.type;
+        });
+      }
+
+      joinRoom(rawCode) {
+        const code = (rawCode || '').trim().toUpperCase();
+        if (!code) return;
+        this.roomCode = code;
+        this.isHost = false;
+        const statusEl = document.getElementById('onlineStatusText');
+        statusEl.textContent = `Conectando na sala ${code}...`;
+
+        this.peer = new Peer();
+        this.peer.on('open', () => {
+          const conn = this.peer.connect('KARTTESTE-' + code, { reliable: false });
+          this.setupConnection(conn);
+        });
+      }
+
+      setupConnection(conn) {
+        conn.on('open', () => {
+          this.connections.push(conn);
+          document.getElementById('onlineStatusText').innerHTML =
+            `🟢 Conectado na sala <b style="color:#10b981">${this.roomCode}</b>! (${this.connections.length} online)`;
+          conn.send({ type: 'track', trackIndex: this.game.currentTrackIndex });
+        });
+
+        conn.on('data', (data) => {
+          if (!data) return;
+          if (data.type === 'track' && !this.isHost) {
+            this.game.selectTrack(data.trackIndex);
+          } else if (data.type === 'state') {
+            this.game.updateRemoteKart(conn.peer, data);
+          }
+        });
+      }
+
+      broadcastPlayerState(kart, dt) {
+        if (this.connections.length === 0) return;
+        this.sendTimer += dt;
+        if (this.sendTimer < 0.04) return; // 25 pacotes/seg
+        this.sendTimer = 0;
+
+        const payload = {
+          type: 'state',
+          x: Math.round(kart.x),
+          y: Math.round(kart.y),
+          vx: Math.round(kart.vx),
+          vy: Math.round(kart.vy),
+          angle: Number(kart.angle.toFixed(3)),
+          driftLevel: kart.driftLevel,
+          boost: kart.boostTimer > 0
+        };
+
+        for (const c of this.connections) {
+          if (c.open) c.send(payload);
+        }
+      }
+    }
+
+    /******************************************************************
+     * 6. GERENCIADOR PRINCIPAL DO JOGO E RENDERIZADOR 60/120 FPS
+     ******************************************************************/
+    class Game {
+      constructor() {
+        this.canvas = document.getElementById('gameCanvas');
+        this.ctx = this.canvas.getContext('2d');
+        this.input = new InputManager();
+        this.net = new NetworkManager(this);
+
+        this.currentTrackIndex = 0;
+        this.track = new Track(0);
+        this.karts = [];
+        this.remoteKarts = new Map();
+        this.player = null;
+
+        this.skidMarks = [];
+        this.particles = [];
+
+        this.camera = {
+          x: 0,
+          y: 0,
+          zoom: 0.85,
+          angle: 0,
+          shake: 0,
+          mode: 0 // 0 = Dinâmica (Look-Ahead), 1 = Perseguição Rotativa
+        };
+
+        this.totalLaps = 3;
+        this.raceTimer = 0;
+        this.lapStartTime = 0;
+        this.bestLapTime = Number(localStorage.getItem('kart_best_0')) || 0;
+        this.countdown = 0;
+        this.canDrive = false;
+
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+        this.setupUI();
+        this.initRace();
+
+        this.lastTime = performance.now();
+        requestAnimationFrame((t) => this.loop(t));
+      }
+
+      resize() {
+        this.canvas.width = window.innerWidth;
+        this.canvas.height = window.innerHeight;
+      }
+
+      setupUI() {
+        const btnAutoGas = document.getElementById('btnAutoGas');
+        btnAutoGas.addEventListener('click', () => {
+          this.input.autoGas = !this.input.autoGas;
+          btnAutoGas.textContent = `⚡ AUTO-GAS: ${this.input.autoGas ? 'ON' : 'OFF'}`;
+          btnAutoGas.classList.toggle('active', this.input.autoGas);
+        });
+
+        document.getElementById('btnCam').addEventListener('click', () => this.toggleCameraMode());
+        document.getElementById('btnReset').addEventListener('click', () => this.resetPlayerToTrack());
+
+        const menuModal = document.getElementById('menuModal');
+        document.getElementById('btnMenu').addEventListener('click', () => {
+          menuModal.classList.remove('hidden');
+        });
+
+        document.getElementById('btnStartRace').addEventListener('click', () => {
+          sound.init();
+          menuModal.classList.add('hidden');
+          this.initRace();
+        });
+
+        document.querySelectorAll('.track-card').forEach((card) => {
+          card.addEventListener('click', () => {
+            const idx = Number(card.dataset.track);
+            this.selectTrack(idx);
+          });
+        });
+
+        document.getElementById('btnCreateRoom').addEventListener('click', () => {
+          this.net.createRoom();
+        });
+
+        document.getElementById('btnJoinRoom').addEventListener('click', () => {
+          const code = document.getElementById('roomCodeInput').value;
+          this.net.joinRoom(code);
+        });
+
+        // Se abriu com ?room=XXXX na URL
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('room')) {
+          document.getElementById('roomCodeInput').value = params.get('room');
+          this.net.joinRoom(params.get('room'));
+        }
+      }
+
+      selectTrack(idx) {
+        this.currentTrackIndex = idx;
+        document.querySelectorAll('.track-card').forEach((c) => {
+          c.classList.toggle('selected', Number(c.dataset.track) === idx);
+        });
+        this.bestLapTime = Number(localStorage.getItem(`kart_best_${idx}`)) || 0;
+        this.updateBestLapHUD();
+        this.initRace();
+      }
+
+      toggleCameraMode() {
+        this.camera.mode = (this.camera.mode + 1) % 2;
+        document.getElementById('btnCam').textContent =
+          this.camera.mode === 0 ? '🎥 CÂMERA: DINÂMICA' : '🎥 CÂMERA: CHASE 360°';
+      }
+
+      initRace() {
+        this.track = new Track(this.currentTrackIndex);
+        this.skidMarks = [];
+        this.particles = [];
+        this.karts = [];
+
+        const startSample = this.track.samples[0];
+        const backX = -Math.cos(startSample.angle);
+        const backY = -Math.sin(startSample.angle);
+
+        // Cria o Jogador e 4 Rivais de IA no grid de largada
+        const racers = [
+          { id: 'player', name: 'VOCÊ', color: '#00f0ff', isAI: false, skill: 1.0, lane: 0 },
+          { id: 'ai1', name: 'NITRO', color: '#ef4444', isAI: true, skill: 0.99, lane: -48 },
+          { id: 'ai2', name: 'APEX', color: '#facc15', isAI: true, skill: 0.96, lane: 48 },
+          { id: 'ai3', name: 'VORTEX', color: '#d946ef', isAI: true, skill: 0.93, lane: -35 },
+          { id: 'ai4', name: 'BLAZE', color: '#10b981', isAI: true, skill: 0.90, lane: 35 }
+        ];
+
+        racers.forEach((r, idx) => {
+          const row = Math.floor(idx / 2);
+          const side = (idx % 2 === 0 ? -1 : 1) * (idx === 0 ? 0 : 44);
+          const x = startSample.x + backX * (row * 68 + 20) + startSample.nx * side;
+          const y = startSample.y + backY * (row * 68 + 20) + startSample.ny * side;
+
+          const kart = new Kart({
+            id: r.id,
+            name: r.name,
+            color: r.color,
+            isAI: r.isAI,
+            aiSkill: r.skill,
+            aiLaneOffset: r.lane,
+            x,
+            y,
+            angle: startSample.angle
+          });
+          this.karts.push(kart);
+          if (r.id === 'player') this.player = kart;
+        });
+
+        this.camera.x = this.player.x;
+        this.camera.y = this.player.y;
+        this.raceTimer = 0;
+        this.lapStartTime = 0;
+        this.updateBestLapHUD();
+        this.startCountdown();
+      }
+
+      startCountdown() {
+        this.canDrive = false;
+        this.countdown = 3.2;
+        this._lastCountBeep = 4;
+      }
+
+      resetPlayerToTrack() {
+        if (!this.player) return;
+        const nearest = this.track.getNearestSample(this.player.x, this.player.y);
+        this.player.x = nearest.sample.x;
+        this.player.y = nearest.sample.y;
+        this.player.angle = nearest.sample.angle;
+        this.player.vx = 0;
+        this.player.vy = 0;
+        this.player.speed = 0;
+      }
+
+      onPlayerCompletedLap() {
+        const lapTime = this.raceTimer - this.lapStartTime;
+        this.lapStartTime = this.raceTimer;
+
+        if (lapTime > 4 && (this.bestLapTime === 0 || lapTime < this.bestLapTime)) {
+          this.bestLapTime = lapTime;
+          localStorage.setItem(`kart_best_${this.currentTrackIndex}`, String(lapTime));
+          this.updateBestLapHUD();
+          this.announce('NOVO RECORDE!', '#00f0ff', 1.4);
+        } else {
+          this.announce(`VOLTA ${this.player.lap}/${this.totalLaps}`, '#facc15', 1.1);
+        }
+        sound.beep(880, 0.22, 'triangle', 0.16);
+      }
+
+      updateBestLapHUD() {
+        document.getElementById('bestDisplay').textContent =
+          this.bestLapTime > 0 ? this.formatTime(this.bestLapTime) : '--:--.-';
+      }
+
+      announce(text, color = '#fff', duration = 1.0) {
+        const el = document.getElementById('centerAnnounce');
+        el.textContent = text;
+        el.style.color = color;
+        el.style.opacity = '1';
+        clearTimeout(this._announceTimeout);
+        this._announceTimeout = setTimeout(() => {
+          el.style.opacity = '0';
+        }, duration * 1000);
+      }
+
+      triggerCameraKick(amount) {
+        this.camera.shake = Math.min(18, this.camera.shake + amount);
+      }
+
+      addSkidMark(x, y, angle) {
+        this.skidMarks.push({ x, y, angle, alpha: 0.48 });
+        if (this.skidMarks.length > 420) this.skidMarks.shift();
+      }
+
+      spawnSparks(x, y, color, count = 2) {
+        for (let i = 0; i < count; i++) {
+          const a = Math.random() * Math.PI * 2;
+          const spd = 40 + Math.random() * 140;
+          this.particles.push({
+            x,
+            y,
+            vx: Math.cos(a) * spd,
+            vy: Math.sin(a) * spd,
+            life: 0.22 + Math.random() * 0.2,
+            maxLife: 0.4,
+            color,
+            size: 3 + Math.random() * 4
+          });
+        }
+      }
+
+      updateRemoteKart(peerId, data) {
+        let rk = this.remoteKarts.get(peerId);
+        if (!rk) {
+          rk = new Kart({ id: peerId, name: 'ONLINE', color: '#38bdf8', isRemote: true });
+          this.remoteKarts.set(peerId, rk);
+          this.karts.push(rk);
+        }
+        rk.targetX = data.x;
+        rk.targetY = data.y;
+        rk.vx = data.vx;
+        rk.vy = data.vy;
+        rk.targetAngle = data.angle;
+        rk.driftLevel = data.driftLevel;
+        rk.boostTimer = data.boost ? 0.2 : 0;
+      }
+
+      resolveKartCollisions() {
+        const radius = 23;
+        for (let i = 0; i < this.karts.length; i++) {
+          for (let j = i + 1; j < this.karts.length; j++) {
+            const a = this.karts[i];
+            const b = this.karts[j];
+            const dx = b.x - a.x;
+            const dy = b.y - a.y;
+            const dist = Math.hypot(dx, dy);
+            if (dist > 0 && dist < radius * 2) {
+              const overlap = (radius * 2 - dist) * 0.5;
+              const nx = dx / dist;
+              const ny = dy / dist;
+              a.x -= nx * overlap;
+              a.y -= ny * overlap;
+              b.x += nx * overlap;
+              b.y += ny * overlap;
+
+              // Troca elástica suave de impulso
+              const kx = a.vx - b.vx;
+              const ky = a.vy - b.vy;
+              const p = 2 * (nx * kx + ny * ky) / 2;
+              a.vx -= p * nx * 0.65;
+              a.vy -= p * ny * 0.65;
+              b.vx += p * nx * 0.65;
+              b.vy += p * ny * 0.65;
+
+              this.spawnSparks((a.x + b.x) * 0.5, (a.y + b.y) * 0.5, '#ffffff', 3);
+            }
+          }
+        }
+      }
+
+      update(dt) {
+        // Contagem regressiva de largada
+        if (!this.canDrive) {
+          this.countdown -= dt;
+          const sec = Math.ceil(this.countdown);
+          if (sec !== this._lastCountBeep && sec >= 1 && sec <= 3) {
+            this._lastCountBeep = sec;
+            this.announce(String(sec), '#facc15', 0.8);
+            sound.beep(440, 0.12, 'square', 0.12);
+          }
+          if (this.countdown <= 0.2) {
+            this.canDrive = true;
+            this.announce('VAI!!', '#10b981', 0.9);
+            sound.beep(880, 0.28, 'sawtooth', 0.16);
+          }
+        } else {
+          this.raceTimer += dt;
+        }
+
+        const playerInput = this.input.getState();
+
+        // Rubber-banding sutil para manter os rivais IA sempre divertidos
+        for (const k of this.karts) {
+          if (k.isAI && this.player) {
+            const diff = this.player.totalProgress - k.totalProgress;
+            k.aiSkill = 0.96 + Math.max(-0.08, Math.min(0.12, diff * 0.0022));
+          }
+          if (k.isRemote && k.targetX !== undefined) {
+            k.x += (k.targetX - k.x) * Math.min(1, dt * 15);
+            k.y += (k.targetY - k.y) * Math.min(1, dt * 15);
+            k.angle += (k.targetAngle - k.angle) * Math.min(1, dt * 15);
+          } else {
+            k.update(dt, k.id === 'player' ? playerInput : null, this.track, this.karts, this.canDrive);
+          }
+        }
+
+        this.resolveKartCollisions();
+
+        // Atualiza Partículas
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+          const p = this.particles[i];
+          p.x += p.vx * dt;
+          p.y += p.vy * dt;
+          p.life -= dt;
+          if (p.life <= 0) this.particles.splice(i, 1);
+        }
+
+        // Câmera Dinâmica com Look-Ahead e Zoom de Velocidade
+        if (this.player) {
+          const lookAheadX = this.player.vx * 0.22;
+          const lookAheadY = this.player.vy * 0.22;
+          const targetX = this.player.x + lookAheadX;
+          const targetY = this.player.y + lookAheadY;
+
+          this.camera.x += (targetX - this.camera.x) * Math.min(1, dt * 8.5);
+          this.camera.y += (targetY - this.camera.y) * Math.min(1, dt * 8.5);
+
+          const speedRatio = Math.min(1, Math.abs(this.player.speed) / 950);
+          const baseZoom = window.innerWidth < 750 ? 0.62 : 0.82;
+          const targetZoom = baseZoom - speedRatio * 0.14 - (this.player.boostTimer > 0 ? 0.05 : 0);
+          this.camera.zoom += (targetZoom - this.camera.zoom) * Math.min(1, dt * 5);
+
+          if (this.camera.mode === 1) {
+            const desiredCamAngle = -this.player.angle - Math.PI * 0.5;
+            let aDiff = desiredCamAngle - this.camera.angle;
+            while (aDiff > Math.PI) aDiff -= Math.PI * 2;
+            while (aDiff < -Math.PI) aDiff += Math.PI * 2;
+            this.camera.angle += aDiff * Math.min(1, dt * 7);
+          } else {
+            this.camera.angle += (0 - this.camera.angle) * Math.min(1, dt * 8);
+          }
+
+          if (this.camera.shake > 0) {
+            this.camera.shake = Math.max(0, this.camera.shake - dt * 28);
+          }
+
+          sound.updateEngine(speedRatio, this.player.isDrifting, this.player.boostTimer);
+          this.net.broadcastPlayerState(this.player, dt);
+          this.updateHUD();
+        }
+      }
+
+      updateHUD() {
+        const sorted = [...this.karts].sort((a, b) => b.totalProgress - a.totalProgress);
+        const pos = sorted.indexOf(this.player) + 1;
+        document.getElementById('posDisplay').textContent = `${pos}º / ${this.karts.length}`;
+        document.getElementById('lapDisplay').textContent = `${Math.min(this.totalLaps, this.player.lap)} / ${this.totalLaps}`;
+        document.getElementById('timeDisplay').textContent = this.formatTime(this.raceTimer);
+
+        const kmh = Math.round(Math.abs(this.player.speed) * 0.28);
+        document.getElementById('speedVal').textContent = String(kmh);
+
+        const bar = document.getElementById('driftMeterBar');
+        const banner = document.getElementById('statusBanner');
+
+        if (this.player.boostTimer > 0) {
+          bar.style.width = '100%';
+          bar.style.background = '#00f0ff';
+          banner.textContent = '🔥 TURBO BOOST ATIVO!';
+          banner.style.color = '#00f0ff';
+        } else if (this.player.isDrifting) {
+          const pct = Math.min(100, (this.player.driftCharge / 2.1) * 100);
+          bar.style.width = `${pct}%`;
+          const colors = ['#64748b', '#00f0ff', '#ff8800', '#d946ef'];
+          const labels = ['DRIFT...', '⚡ MINI-TURBO PRONTO (SOLTE!)', '🔥 SUPER-TURBO PRONTO!', '💜 ULTRA-TURBO MÁXIMO!!'];
+          bar.style.background = colors[this.player.driftLevel];
+          banner.textContent = labels[this.player.driftLevel];
+          banner.style.color = colors[this.player.driftLevel];
+        } else if (this.player.slipstreamCharge > 0.45) {
+          bar.style.width = `${Math.min(100, (this.player.slipstreamCharge / 1.5) * 100)}%`;
+          bar.style.background = '#facc15';
+          banner.textContent = '💨 VÁCUO ATIVO (+VELOCIDADE)';
+          banner.style.color = '#facc15';
+        } else {
+          bar.style.width = '0%';
+          banner.textContent = '';
+        }
+      }
+
+      formatTime(t) {
+        const mins = Math.floor(t / 60);
+        const secs = Math.floor(t % 60);
+        const tenths = Math.floor((t * 10) % 10);
+        return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}.${tenths}`;
+      }
+
+      draw() {
+        const ctx = this.ctx;
+        const w = this.canvas.width;
+        const h = this.canvas.height;
+
+        ctx.fillStyle = this.track.theme.grass;
+        ctx.fillRect(0, 0, w, h);
+
+        ctx.save();
+        const shakeX = (Math.random() - 0.5) * this.camera.shake;
+        const shakeY = (Math.random() - 0.5) * this.camera.shake;
+        ctx.translate(w * 0.5 + shakeX, h * 0.5 + shakeY);
+        ctx.scale(this.camera.zoom, this.camera.zoom);
+        ctx.rotate(this.camera.angle);
+        ctx.translate(-this.camera.x, -this.camera.y);
+
+        this.drawBackgroundGrid(ctx);
+        this.drawTrack(ctx);
+        this.drawSkidMarks(ctx);
+        this.drawBoostPads(ctx);
+        this.drawParticles(ctx);
+
+        for (const k of this.karts) {
+          this.drawKart(ctx, k);
+        }
+
+        ctx.restore();
+      }
+
+      drawBackgroundGrid(ctx) {
+        const step = 180;
+        const span = 2200;
+        const startX = Math.floor((this.camera.x - span) / step) * step;
+        const endX = this.camera.x + span;
+        const startY = Math.floor((this.camera.y - span) / step) * step;
+        const endY = this.camera.y + span;
+
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.035)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (let x = startX; x <= endX; x += step) {
+          ctx.moveTo(x, startY);
+          ctx.lineTo(x, endY);
+        }
+        for (let y = startY; y <= endY; y += step) {
+          ctx.moveTo(startX, y);
+          ctx.lineTo(endX, y);
+        }
+        ctx.stroke();
+      }
+
+      drawTrack(ctx) {
+        const samples = this.track.samples;
+        const rw = this.track.roadWidth;
+
+        // Zebras externas (Kerbs)
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        for (let i = 0; i < samples.length; i++) {
+          const s1 = samples[i];
+          const s2 = samples[(i + 1) % samples.length];
+          ctx.strokeStyle = i % 2 === 0 ? this.track.theme.kerbA : this.track.theme.kerbB;
+          ctx.lineWidth = rw + 26;
+          ctx.beginPath();
+          ctx.moveTo(s1.x, s1.y);
+          ctx.lineTo(s2.x, s2.y);
+          ctx.stroke();
+        }
+
+        // Asfalto principal
+        ctx.strokeStyle = this.track.theme.asphalt;
+        ctx.lineWidth = rw;
+        ctx.beginPath();
+        samples.forEach((s, i) => {
+          if (i === 0) ctx.moveTo(s.x, s.y);
+          else ctx.lineTo(s.x, s.y);
+        });
+        ctx.closePath();
+        ctx.stroke();
+
+        // Linha central tracejada
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.14)';
+        ctx.lineWidth = 4;
+        ctx.setLineDash([28, 28]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Linha de Largada / Chegada quadriculada
+        const s0 = samples[0];
+        ctx.save();
+        ctx.translate(s0.x, s0.y);
+        ctx.rotate(s0.angle);
+        const squares = 10;
+        const sqSize = rw / squares;
+        for (let r = 0; r < 2; r++) {
+          for (let c = 0; c < squares; c++) {
+            ctx.fillStyle = (r + c) % 2 === 0 ? '#ffffff' : '#0f172a';
+            ctx.fillRect((r - 1) * sqSize, -rw * 0.5 + c * sqSize, sqSize, sqSize);
+          }
+        }
+        ctx.restore();
+      }
+
+      drawBoostPads(ctx) {
+        const pulse = (Math.sin(performance.now() * 0.012) + 1) * 0.5;
+        for (const pad of this.track.boostPads) {
+          ctx.save();
+          ctx.translate(pad.x, pad.y);
+          ctx.rotate(pad.angle);
+
+          ctx.fillStyle = `rgba(0, 240, 255, ${0.22 + pulse * 0.25})`;
+          ctx.strokeStyle = '#00f0ff';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.roundRect(-36, -34, 72, 68, 10);
+          ctx.fill();
+          ctx.stroke();
+
+          // Setas >>> luminosas
+          ctx.strokeStyle = '#facc15';
+          ctx.lineWidth = 5;
+          for (let i = -1; i <= 1; i++) {
+            const ox = i * 16;
+            ctx.beginPath();
+            ctx.moveTo(ox - 8, -16);
+            ctx.lineTo(ox + 8, 0);
+            ctx.lineTo(ox - 8, 16);
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
+      }
+
+      drawSkidMarks(ctx) {
+        ctx.fillStyle = 'rgba(10, 12, 18, 0.42)';
+        for (const m of this.skidMarks) {
+          ctx.save();
+          ctx.translate(m.x, m.y);
+          ctx.rotate(m.angle);
+          ctx.fillRect(-14, -14, 10, 5);
+          ctx.fillRect(-14, 9, 10, 5);
+          ctx.restore();
+        }
+      }
+
+      drawParticles(ctx) {
+        for (const p of this.particles) {
+          ctx.fillStyle = p.color;
+          ctx.globalAlpha = Math.max(0, p.life / p.maxLife);
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      drawKart(ctx, k) {
+        ctx.save();
+        ctx.translate(k.x, k.y);
+        ctx.rotate(k.angle);
+
+        // Efeito de pulo (Hop) ao iniciar o drift
+        const hopScale = k.hopTimer > 0 ? 1.15 : 1.0;
+        ctx.scale(hopScale, hopScale);
+
+        // Aura de Turbo ou Carga de Drift
+        if (k.boostTimer > 0) {
+          ctx.fillStyle = 'rgba(0, 240, 255, 0.32)';
+          ctx.beginPath();
+          ctx.arc(0, 0, 34, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (k.driftLevel > 0) {
+          const glowColors = ['', 'rgba(0,240,255,0.35)', 'rgba(255,136,0,0.42)', 'rgba(217,70,239,0.5)'];
+          ctx.fillStyle = glowColors[k.driftLevel];
+          ctx.beginPath();
+          ctx.arc(-12, 0, 24 + k.driftLevel * 4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // 4 Rodas (as dianteiras esterçam visualmente!)
+        ctx.fillStyle = '#090b10';
+        // Traseiras
+        ctx.fillRect(-19, -20, 12, 7);
+        ctx.fillRect(-19, 13, 12, 7);
+        // Dianteiras com ângulo de direção
+        const drawFrontWheel = (wy) => {
+          ctx.save();
+          ctx.translate(12, wy);
+          ctx.rotate(k.steerVisual * 0.45);
+          ctx.fillRect(-6, -3.5, 12, 7);
+          ctx.restore();
+        };
+        drawFrontWheel(-16);
+        drawFrontWheel(16);
+
+        // Chassi do Kart
+        ctx.fillStyle = k.color;
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(-22, -14, 44, 28, 9);
+        ctx.fill();
+        ctx.stroke();
+
+        // Faixa esportiva e Cockpit
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+        ctx.fillRect(-18, -4, 36, 8);
+
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        ctx.arc(-2, 0, 8, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Capacete do piloto
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(-1, 0, 5.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+
+        // Nome acima do Kart
+        ctx.save();
+        ctx.translate(k.x, k.y - 32);
+        ctx.rotate(-this.camera.angle);
+        ctx.font = '900 12px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = k.id === 'player' ? '#facc15' : '#e2e8f0';
+        ctx.fillText(k.name, 0, 0);
+        ctx.restore();
+      }
+
+      loop(now) {
+        const dt = Math.min(0.05, (now - this.lastTime) / 1000);
+        this.lastTime = now;
+
+        this.update(dt);
+        this.draw();
+
+        requestAnimationFrame((t) => this.loop(t));
+      }
+    }
+
+    const game = new Game();
+  </script>
+</body>
+</html>

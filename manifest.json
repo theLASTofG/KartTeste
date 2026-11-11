@@ -1,0 +1,10 @@
+{
+  "name": "KartTeste Turbo Drift",
+  "short_name": "KartTeste",
+  "description": "Jogo de corrida arcade ultra-fluido com Drift, Turbo e Multiplayer Online para PC e Celular.",
+  "start_url": "/",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#090b10",
+  "theme_color": "#00f0ff"
+}
