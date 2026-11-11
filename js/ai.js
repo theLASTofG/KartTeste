@@ -4,6 +4,7 @@ import { clamp, wrapA } from './utils.js';
 import { CAR_R, PH, PROFILES } from './config.js';
 import { obstacles, pieceAt, pieceStart, track, trackPoint } from './track.js';
 import { respawn } from './physics.js';
+import { cars } from './cars.js';
 
 // ------------------------------------------------------------------- IA
 const tmpA = {};
@@ -17,11 +18,11 @@ function laneFor(c, sG) {
   let near = null;
   for (const o of obstacles) if (o.pi === i && Math.abs(o.s - s) < 7.5) { near = o; break; }
   if (near) {
-    if (near.type === 'mboost') return near.v;
+    if (near.type === 'mboost' || (near.type === 'itembox' && !c.item)) return near.v;
     let best = 0, bm = -1e9;
     for (const cand of [-4.1, -2.7, 0, 2.7, 4.1]) {
       let m = 1e9;
-      for (const o of obstacles) if (o.pi === i && Math.abs(o.s - s) < 7.5 && o.type !== 'mboost') m = Math.min(m, Math.abs(cand - o.v) - obsHalf(o.type) - CAR_R);
+      for (const o of obstacles) if (o.pi === i && Math.abs(o.s - s) < 7.5 && o.type !== 'mboost' && o.type !== 'itembox') m = Math.min(m, Math.abs(cand - o.v) - obsHalf(o.type) - CAR_R);
       m += cand * ai.side * 0.02;
       if (m > bm) { bm = m; best = cand; }
     }
@@ -55,6 +56,26 @@ function speedLimitAt(c, sG) {
   else if (p.type === 'chicane') lim = 14 + c.ai.skill * 2;
   for (const o of obstacles) if (o.pi === i && o.type === 'spinner') lim = Math.min(lim, 18);
   return lim;
+}
+// bot decide usar o item (com pequeno atraso aleatório); o host consome o item uma única vez
+export function aiWantsItem(c, dt) {
+  const a = c.ai;
+  if (!c.item || !c.alive || c.finished || c.voidFall || G.state !== 'race') { a.itemWait = -1; return false; }
+  const fx = Math.cos(c.a), fz = Math.sin(c.a);
+  let ahead = false, behind = false, active = 0;
+  for (const o of cars) {
+    if (o === c || !o.alive || o.finished || o.voidFall) continue;
+    const ox = o.owned ? o.x : (o.cpx ?? o.x), oz = o.owned ? o.z : (o.cpz ?? o.z);
+    const dx = ox - c.x, dz = oz - c.z, along = dx * fx + dz * fz, lat = -dx * fz + dz * fx;
+    if (!(o.immuneT > 0)) active++;
+    if (along > 4 && along < 55 && Math.abs(lat) < 3.2) ahead = true;
+    if (along < -3 && along > -22 && Math.abs(lat) < 4) behind = true;
+  }
+  const want = c.item === 'frost' ? ahead : c.item === 'peel' ? behind && c.grounded : active > 0;
+  if (!want) { a.itemWait = -1; return false; }
+  if (a.itemWait === undefined || a.itemWait < 0) a.itemWait = 0.5 + Math.random() * 1.8;
+  a.itemWait -= dt;
+  return a.itemWait <= 0;
 }
 export function aiDrive(c, dt, inp) {
   if (!c.alive || c.voidFall) { inp.throttle = 0; inp.brake = 0; inp.steer = 0; inp.drift = false; return; }

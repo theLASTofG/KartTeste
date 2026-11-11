@@ -1,7 +1,7 @@
 // Física arcade dos carros: passo, contato com pista/mureta, obstáculos e colisões.
 import { G, hooks } from './state.js';
 import { clamp, lerp, rnd, wrapA } from './utils.js';
-import { BARRIERS, CAR_R, DRIFT, FINISH_S, GRAV, PAD, PH, profileSeg, RAMP_PADS, WALL_H, WIND_ACC } from './config.js';
+import { BARRIERS, CAR_R, DRIFT, FINISH_S, GRAV, PAD, PH, POWER, profileSeg, RAMP_PADS, WALL_H, WIND_ACC } from './config.js';
 import { SFX } from './audio.js';
 import { burst } from './fx.js';
 import { obstacles, pieceStart, tmpW, track } from './track.js';
@@ -72,11 +72,17 @@ function freeFall(c, dt) {
     if (c.isLocal) { SFX.fall(); toast('CAIU NO ABISMO!', '#ff2e55', 2); G.R.spectateT = 1.6; }
   }
 }
+const NO_INP = { steer: 0, throttle: 0, brake: 0, drift: false, gasRaw: false };
+const SCR = { steer: 0, throttle: 0, brake: 0, drift: false, gasRaw: false };
 export function stepCar(c, inp, dt) {
   if (c.voidFall) { freeFall(c, dt); return; }
   if (!c.alive) { c.vy -= GRAV * dt; c.x += c.vx * dt; c.y += c.vy * dt; c.z += c.vz * dt; c.tumbleX += dt * 3.1; c.tumbleZ += dt * 2.3; return; }
+  // efeitos de item: congelado/atordoado ignoram o controle; casca bloqueia o drift; congelamento deixa lento e com pouca direção
+  if (c.freezeT > 0 || c.stunT > 0) inp = NO_INP;
+  else if (c.spinT > 0 && inp.drift) { SCR.steer = inp.steer; SCR.throttle = inp.throttle; SCR.brake = inp.brake; SCR.drift = false; inp = SCR; }
+  const slowed = c.slowT > 0;
   const air = !c.grounded;
-  const tgt = inp.steer;
+  const tgt = inp.steer * (slowed ? POWER.frost.steerMul : 1);
   const rate = (tgt === 0 || (c.steer !== 0 && Math.sign(tgt) !== Math.sign(c.steer))) ? 14 : 9;
   c.steer += clamp(tgt - c.steer, -rate * dt, rate * dt);
   let fx = Math.cos(c.a), fz = Math.sin(c.a);
@@ -100,12 +106,17 @@ export function stepCar(c, inp, dt) {
   const sf = clamp(av / 5, 0, 1) * (1 - 0.3 * clamp((av - 14) / 18, 0, 1));
   const turn = PH.turn * sf * (c.drifting ? 1.32 : 1) * (air ? PH.airTurn : 1);
   c.a += (st * turn * (vf >= -0.3 ? 1 : -1) + c.kick) * dt;
+  if (c.spinT > 0) {
+    c.a += c.spinDir * POWER.peel.spinRate * clamp(c.spinT, 0, 1) * dt;
+    c.oilT = Math.max(c.oilT || 0, 0.2);                                  // grip baixo enquanto gira
+    if (c.drifting) { c.drifting = false; c.driftT = 0; c.driftLevel = 0; }
+  }
   c.kick *= Math.exp(-10 * dt); c.hop = Math.max(0, c.hop - dt);
   fx = Math.cos(c.a); fz = Math.sin(c.a);
   vf = c.vx * fx + c.vz * fz;
   let vl = -c.vx * fz + c.vz * fx;
   const boosting = c.boostT > 0;
-  const vmax = PH.maxSpeed * (1 + (boosting ? c.boostPow : 0)) * (c.maxMul || 1);
+  const vmax = PH.maxSpeed * (1 + (boosting ? c.boostPow : 0)) * (c.maxMul || 1) * (slowed ? POWER.frost.slowMul : 1);
   c.braking = false;
   c.oilT = Math.max(0, (c.oilT || 0) - dt);
   if (!air) {
@@ -133,6 +144,8 @@ export function stepCar(c, inp, dt) {
     if (c.drifting) vf -= vf * 0.10 * dt;
   } else { vf -= vf * 0.04 * dt; vl *= Math.exp(-0.5 * dt); }
   if (c.boostT > 0) { c.boostT -= dt; if (c.boostT <= 0) { c.boostT = 0; c.boostPow = 0; } }
+  if (c.freezeT > 0) { vf *= Math.exp(-4.5 * dt); vl *= Math.exp(-4 * dt); }        // congelado: freia sozinho (sem teleporte)
+  else if (c.stunT > 0) { vf *= Math.exp(-2.2 * dt); vl *= Math.exp(-3 * dt); }
   c.vx = fx * vf - fz * vl; c.vz = fz * vf + fx * vl; c.vf = vf; c.vl = vl;
   if (c.Q && c.Q.wind) { c.vx += c.Q.rx * c.Q.wind * WIND_ACC * dt; c.vz += c.Q.rz * c.Q.wind * WIND_ACC * dt; }   // vento lateral
   c.kickCool = (c.kickCool || 0) - dt;

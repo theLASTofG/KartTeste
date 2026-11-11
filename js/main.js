@@ -13,19 +13,21 @@ import { carCollisions, giveBoost, obsClock, pistonLift, stepCar, trackContact }
 import { aiDrive } from './ai.js';
 import { broadcast, broadcastFast, packCar, setStatus, toHost, toHostFast, updateRemote } from './net.js';
 import { BC, drawFx, followCamera, overviewCamera, panBy, PTRS, zoomBy } from './camera.js';
+import { applyEffect, resetItems, hostPickup, hostUse, itemClientMsg, itemHostMsg, itemSnapshot, IT, updateItems, useItem } from './items.js';
 import { applyTray, buildMode, itemEnabled, pickCard, renderBuild, tryPlaceAt } from './build-ui.js';
 import { hostEndRound, hostPick, hostPlace, hostRegisterFinish, hostUnpick, hostUpdateBuild } from './host.js';
 import { act, enterPhase, goTitle, renderLobby, setState } from './phases.js';
 import { applyDevice, keys, readPlayerInput, refreshButtons, syncTouch, tmap, uiActive } from './input.js';
 
 // funções chamadas "de baixo para cima" (ver state.js)
-Object.assign(hooks, { applyTray, BC, enterPhase, goTitle, hostPick, hostPlace, hostRegisterFinish, hostUnpick, rebuildSlots, renderBuild, renderLobby, syncObstacles, syncTouch, tmap, uiActive });
+Object.assign(hooks, { applyTray, BC, enterPhase, goTitle, hostPick, hostPlace, hostRegisterFinish, hostUnpick, itemClientMsg, itemHostMsg, itemSnapshot, rebuildSlots, renderBuild, renderLobby, syncObstacles, syncTouch, tmap, uiActive });
 function update(dt) {
   G.clockT += dt;
   G.phaseT += dt;
   texChevron.offset.x -= dt * 2.2; texChevron1.offset.x -= dt * 2.2; texWind.offset.x -= dt * 1.6;
   updateDrops(dt);
   animateObstacles(dt);
+  updateItems(dt);
   if (G.state === 'countdown' || G.state === 'race') { updateRace(dt); return; }
   if (isHost()) hostUpdateBuild();
   if (G.state === 'pick') {
@@ -230,6 +232,7 @@ window.__game = {
   get state() { return G.state; }, get R() { return G.R; }, get track() { return track; }, get obstacles() { return obstacles; },
   get tray() { return G.tray; }, get holds() { return G.holds; }, get placed() { return G.placed; }, get players() { return G.players; },
   get NET() { return NET; }, cars, update, act, canPlace, freeSlots, hostPick, hostPlace, toHost, myCar, keys,
-  get BC() { return BC; }, PTRS, pickCard, buildMode, itemEnabled, stepCar, trackContact, tryPlaceAt, panBy, zoomBy, applyTrack, camera
+  get BC() { return BC; }, PTRS, pickCard, buildMode, itemEnabled, stepCar, trackContact, tryPlaceAt, panBy, zoomBy, applyTrack, camera,
+  IT, useItem, hostUse, hostPickup, applyEffect, itemSnapshot, itemClientMsg, resetItems
 };
 requestAnimationFrame(frame);

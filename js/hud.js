@@ -1,7 +1,7 @@
 // HUD: toasts, placar, velocímetro e indicador de rede.
 import { G } from './state.js';
 import { $, clamp, esc } from './utils.js';
-import { DRIFT, fmtPts, PTS } from './config.js';
+import { DRIFT, fmtPts, POWER, PTS } from './config.js';
 import { cars, myCar, NET } from './cars.js';
 
 // ---------------------------------------------------------------- HUD
@@ -25,8 +25,25 @@ export function updateBoard() {
     `<div class="sb ${p.id === G.myId ? 'me' : ''}"><span class="nm">${esc(p.name)}</span><div class="bar"><i style="background:${p.color};width:${clamp(p.score / G.TARGET * 100, 0, 100)}%"></i></div><span class="pt">${p.score}</span></div>`).join('');
 }
 G.lastHud = {};
+// slot de item: vazio / sorteando (roleta curta) / pronto
+let lastItemHud = '';
+function updateItemHud(p) {
+  const el = $('itemHud'); if (!el) return;
+  const now = performance.now();
+  let st = 'empty', icon = '', name = 'SEM ITEM';
+  if (p.item && POWER.types[p.item]) {
+    if (now < p.itemRollEnd) { st = 'rolling'; const ks = Object.keys(POWER.types); icon = POWER.types[ks[Math.floor(now / 90) % ks.length]].svg; name = 'SORTEANDO...'; }
+    else { st = 'ready'; icon = POWER.types[p.item].svg; name = POWER.types[p.item].name; }
+  }
+  const sig = st + icon + name;
+  if (sig === lastItemHud) return;
+  lastItemHud = sig;
+  for (const e of [el, $('tItem')]) if (e) { e.dataset.state = st; const s = e.querySelector('svg'); if (s) s.innerHTML = icon; }
+  el.querySelector('.ih-nm').textContent = name;
+}
 export function updateHud() {
   const p = myCar(); if (!p) return;
+  updateItemHud(p);
   const rank = rankOf(p);
   if (G.lastHud.rank !== rank || G.lastHud.n !== cars.length) { $('pos').innerHTML = `${rank}<small>º/${cars.length}</small>`; $('pos').style.color = rank === 1 ? '#ffd23f' : '#fff'; G.lastHud.rank = rank; G.lastHud.n = cars.length; }
   const kmh = Math.round(Math.hypot(p.vx, p.vz) * 3.6 * 1.4);

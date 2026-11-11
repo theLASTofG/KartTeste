@@ -10,6 +10,7 @@ import { setStatus } from './net.js';
 import { BC, panBy, pinchInfo, PTRS, zoomBy } from './camera.js';
 import { pickCard, tryPlaceAt } from './build-ui.js';
 import { act, pauseGame, resume } from './phases.js';
+import { useItem } from './items.js';
 
 // --------------------------------------------------------------- entrada
 export const keys = Object.create(null);
@@ -53,6 +54,7 @@ window.addEventListener('keydown', e => {
   else if (e.code === 'KeyP' || e.code === 'Escape') doTap('pause');
   else if (e.code === 'KeyM') doTap('mute');
   else if (e.code === 'KeyG') doTap('auto');
+  else if (e.code === 'KeyQ') { const t = e.target; if (!(t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable))) doTap('item'); }
   else if (e.code === 'KeyF') doTap('fs');
   else if (e.code === 'Enter') {
     if (G.state === 'results' && isHost()) act('continue');
@@ -131,6 +133,7 @@ $('optAuto').addEventListener('click', () => doTap('auto'));
 
 function doTap(what) {
   SFX.init();
+  if (what === 'item') { if (G.state === 'race') useItem(); return; }
   if (what === 'pause') { if (G.state === 'paused' || G.menuOpen) resume(); else if (uiActive()) pauseGame(); }
   else if (what === 'reset') { const p = myCar(); if (p && G.state === 'race' && p.alive && p.grounded && !p.voidFall && !p.finished) respawn(p); }
   else if (what === 'mute') { SFX.setMute(!SFX.muted); refreshButtons(); }

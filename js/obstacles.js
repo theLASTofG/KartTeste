@@ -5,6 +5,10 @@ import { box, disposeGroup, M } from './scene.js';
 import { addDrop, obstacles, slotGroup, tmpW, track, trackRoot } from './track.js';
 
 // ---------------------------------------------------------- obstáculos
+const matBoxGlass = new THREE.MeshBasicMaterial({ color: 0x00e5ff, transparent: true, opacity: 0.32, depthWrite: false });
+const matBoxEdge = new THREE.LineBasicMaterial({ color: 0xffffff });
+const matBoxCore = new THREE.MeshBasicMaterial({ color: 0xff2e88 });
+const matBoxRing = new THREE.MeshBasicMaterial({ color: 0x00e5ff });
 export const obsData = () => obstacles.map(o => ({ key: o.key, type: o.type, ph: o.ph, spd: o.spd }));
 function makeObstacle(type, k, ph, spd) {
   const [pi, si] = k.split(':').map(Number);
@@ -36,6 +40,13 @@ function makeObstacle(type, k, ph, spd) {
     const kg = new THREE.ExtrudeGeometry(ks, { depth: 3.0, bevelEnabled: false }); kg.translate(0, 0, -1.5);
     const km = new THREE.Mesh(kg, M.ramp); km.castShadow = km.receiveShadow = true; g.add(km);
     box(0.2, 0.06, 3.0, M.edgeY, 1.2, 0.9, 0, g, false);
+  } else if (type === 'itembox') {
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.12, 8, 28), matBoxRing); ring.rotation.x = Math.PI / 2; ring.position.y = 0.08; g.add(ring);
+    const cube = new THREE.Group(); cube.position.y = 1.5; g.add(cube);
+    cube.add(new THREE.Mesh(new THREE.BoxGeometry(1.7, 1.7, 1.7), matBoxGlass));
+    cube.add(new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1.72, 1.72, 1.72)), matBoxEdge));
+    cube.add(new THREE.Mesh(new THREE.OctahedronGeometry(0.55, 0), matBoxCore));
+    o.bar = cube;
   } else if (type === 'piston') {
     const base = box(2.8, 0.08, 2.8, M.hazard, 0, 0.03, 0, g, false);
     const arm = new THREE.Group(); g.add(arm);

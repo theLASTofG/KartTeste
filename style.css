@@ -65,6 +65,26 @@ body.racing[data-touch="1"] #touch{display:block}
   background:rgba(255,255,255,.10);color:rgba(255,255,255,.95);font-weight:900;font-style:italic;display:flex;align-items:center;
   justify-content:center;text-align:center;line-height:1.05;transition:background .05s,transform .05s;padding:0;text-shadow:0 2px 4px rgba(0,0,0,.6)}
 .tb.on{background:rgba(255,255,255,.34);transform:scale(.94);border-color:#fff}
+/* ---------- itens de corrida ---------- */
+#itemHud{position:absolute;right:calc(10px + var(--safeR));top:calc(96px + var(--safeT));width:84px;pointer-events:auto;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 6px 5px;border-radius:14px;border:2px solid rgba(255,255,255,.28);
+  background:rgba(10,8,30,.62);backdrop-filter:blur(3px);text-align:center;font-weight:900;text-shadow:0 2px 0 rgba(0,0,0,.5)}
+#itemHud svg{width:44px;height:44px;display:block}
+#itemHud .ih-nm{font-size:10px;line-height:1.1;letter-spacing:.3px;opacity:.9;min-height:22px;display:flex;align-items:center}
+#itemHud .ih-key{position:absolute;top:3px;left:6px;font-size:10px;opacity:.55}
+#itemHud[data-state="empty"]{opacity:.55}
+#itemHud[data-state="rolling"]{border-color:#ffd23f;animation:ihroll .3s linear infinite}
+#itemHud[data-state="ready"]{border-color:#a6ff3b;box-shadow:0 0 14px rgba(166,255,59,.55);animation:ihpulse .9s ease-in-out infinite}
+@keyframes ihroll{50%{transform:scale(1.06)}}
+@keyframes ihpulse{50%{transform:scale(1.05)}}
+body.building #itemHud{display:none}
+body[data-touch="1"] #itemHud .ih-key{display:none}
+@media (max-height:480px){#itemHud{width:68px;top:calc(78px + var(--safeT));padding:4px}#itemHud svg{width:32px;height:32px}#itemHud .ih-nm{font-size:9px;min-height:18px}}
+#tItem{left:calc(2.5vw + var(--safeL));bottom:calc(3.5vh + var(--safeB) + var(--u)*1.55 + 16px);width:calc(var(--u)*1.15);height:calc(var(--u)*1.15);
+  flex-direction:column;font-size:calc(var(--u)*.18);border-color:rgba(255,210,63,.75);background:rgba(255,210,63,.13)}
+#tItem svg{width:55%;height:55%}
+#tItem[data-state="empty"]{opacity:.45}
+#tItem[data-state="ready"]{border-color:#a6ff3b;box-shadow:0 0 12px rgba(166,255,59,.6)}
 .arrow{width:calc(var(--u)*1.55);height:calc(var(--u)*1.55);border-radius:22%;font-size:calc(var(--u)*.6);bottom:calc(3.5vh + var(--safeB))}
 #tLeft{left:calc(2.5vw + var(--safeL))}
 #tRight{left:calc(2.5vw + var(--safeL) + var(--u)*1.55 + 12px)}

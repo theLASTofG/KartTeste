@@ -11,6 +11,7 @@ import { createRoom, hostLobbyChanged, joinRoom, leaveRoom, startSolo, toHost } 
 import { setSlotMode } from './camera.js';
 import { applyTray, buildMode, showChampion, showResults } from './build-ui.js';
 import { hostAfterResults, hostEnter, hostStartMatch } from './host.js';
+import { resetItems } from './items.js';
 export function setState(s) {
   G.state = s;
   document.body.classList.toggle('racing', s === 'countdown' || s === 'race');
@@ -25,6 +26,7 @@ function hidePhaseUI() {
 export function enterPhase(ph, d) {
   d = d || {};
   G.phaseT = 0; G.phaseDur = d.dur || 0;
+  resetItems();                                    // itens/caixas/projéteis nunca atravessam rodadas
   hidePhaseUI();
   if (d.target) G.TARGET = d.target;
   if (d.theme && d.theme !== themeKey) applyTheme(d.theme);
@@ -68,7 +70,7 @@ function placeCars(grid) {
     Object.assign(c, {
       x: tmpW.x, z: tmpW.z, y: 0, a: tmpW.a, vx: 0, vz: 0, vy: 0, vf: 0, vl: 0, steer: 0, grip: PH.grip, kick: 0, hop: 0,
       drifting: false, driftDir: 0, driftT: 0, driftLevel: 0, boostT: 0, boostPow: 0, boostMax: 1, padCool: 0, oilT: 0,
-      pi: 0, s: sl[0], v: sl[1], prog: sl[0], grounded: true, voidFall: false, alive: true, finished: false, finishOrder: 0, finishT: 0, fallProg: 0,
+      pi: 0, s: sl[0], v: sl[1], prog: sl[0], grounded: true, voidFall: false, item: null, itemReadyAt: 0, itemRollEnd: 0, itemCool: 0, pickCool: 0, freezeT: 0, slowT: 0, stunT: 0, spinT: 0, spinDir: 1, immuneT: 0, alive: true, finished: false, finishOrder: 0, finishT: 0, fallProg: 0,
       hitCool: 0, stuckT: 0, airT: 0, tumbleX: 0, tumbleZ: 0, spin: 0, pitch: 0, roll: 0, fxAcc: 0, braking: false, squash: 0, net: null, maxMul: 1,
       buf: null, netTs: 0, netOff: undefined, jit: undefined, interp: undefined, cpx: tmpW.x, cpz: tmpW.z, kickCool: 0
     });
@@ -140,7 +142,7 @@ export function act(a) {
   }
 }
 export function goTitle() {
-  hidePhaseUI(); $('confetti').style.display = 'none';
+  resetItems(); hidePhaseUI(); $('confetti').style.display = 'none';
   G.R = null; setState('title'); showScreen('title'); SFX.update(0, 0, false, 0, false, 0);
   for (const c of cars) c.mesh.root.visible = false;
   if (trackTypes().join() !== INITIAL_TYPES.join() || obstacles.length) { applyTrack(['start', 'finish'], [], false); applyTrack(INITIAL_TYPES, [], false); }

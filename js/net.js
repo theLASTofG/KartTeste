@@ -120,6 +120,7 @@ function hostRejoin(conn, p) {
     conn.send({ t: 'phase', ph: L.ph, d: Object.assign({}, L.d, { players: plist(), tray: G.state === 'pick' ? G.tray : L.d.tray }) });
   }
   conn.send({ t: 'track', types: trackTypes(), obs: obsData(), placed: G.placed });
+  if (racing) conn.send(hooks.itemSnapshot());       // inventário, caixas, projéteis, cascas, efeitos e imunidades
   hostLobbyChanged();
   toast(p.name + ' VOLTOU!', '#a6ff3b', 1.4);
 }
@@ -223,6 +224,7 @@ function onClientMsg(msg) {
         else applyNet(c, arr, true);
       }
       break;
+    case 'item_granted': case 'item_state': case 'item_spawn': case 'item_despawn': case 'item_effect': hooks.itemClientMsg(msg); break;
     case 'tray': hooks.applyTray(msg.tray); break;
     case 'track': applyTrack(msg.types, msg.obs, true); G.placed = msg.placed || {}; hooks.renderBuild(); break;
     case 'msg': toast(msg.text, msg.color || '#fff', 1.6); if (msg.deny) SFX.deny(); break;
@@ -240,6 +242,7 @@ function hostHandle(pid, msg) {
     case 'pick': hooks.hostPick(pid, msg.id); break;
     case 'place': hooks.hostPlace(pid, msg.key); break;
     case 'unpick': hooks.hostUnpick(pid); break;
+    case 'item_pickup': case 'item_use': hooks.itemHostMsg(pid, msg); break;
   }
 }
 // ---- estado de carro na rede

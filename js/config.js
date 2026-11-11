@@ -75,7 +75,8 @@ export const ITEMS = {
   bumper: { kind: 'obs', name: 'Bumper Mola', w: 1.0, svg: '<circle cx="32" cy="32" r="20" fill="#ff2e88"/><circle cx="32" cy="32" r="11" fill="none" stroke="#00e5ff" stroke-width="5"/>' },
   spinner: { kind: 'obs', name: 'Hélice', w: 0.9, svg: '<rect x="4" y="28" width="56" height="8" rx="3" fill="#ffd23f" transform="rotate(-25 32 32)"/><circle cx="32" cy="32" r="6" fill="#e8ecff"/><path d="M46 8 A26 26 0 0 1 58 26" stroke="#fff" stroke-width="3" fill="none"/>' },
   oil: { kind: 'obs', name: 'Óleo', w: 1.0, svg: '<ellipse cx="32" cy="34" rx="25" ry="17" fill="#0b0b12" stroke="#5a3cff" stroke-width="2"/><ellipse cx="25" cy="29" rx="9" ry="4" fill="#7a5cff" opacity=".7"/>' },
-  mboost: { kind: 'obs', name: 'Mini Boost', w: 0.6, svg: '<rect x="12" y="12" width="40" height="40" rx="5" fill="#1b3a0a" stroke="#a6ff3b" stroke-width="2"/><path d="M22 40 L32 28 L42 40" stroke="#a6ff3b" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>' }
+  mboost: { kind: 'obs', name: 'Mini Boost', w: 0.6, svg: '<rect x="12" y="12" width="40" height="40" rx="5" fill="#1b3a0a" stroke="#a6ff3b" stroke-width="2"/><path d="M22 40 L32 28 L42 40" stroke="#a6ff3b" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>' },
+  itembox: { kind: 'obs', name: 'Caixa de Poder', w: 0.9, svg: '<rect x="14" y="14" width="36" height="36" rx="7" fill="#0c2a3a" stroke="#00e5ff" stroke-width="3"/><text x="32" y="43" text-anchor="middle" font-size="28" font-weight="900" fill="#ff2e88" font-family="Arial Black,sans-serif">?</text>' },
 };
 export function bridgeHW(s) {
   const L = 2 * CELL;
@@ -83,3 +84,23 @@ export function bridgeHW(s) {
   if (s > L - 8) return lerp(2.5, HW, clamp((s - (L - 8)) / 8, 0, 1));
   return 2.5;
 }
+
+// ---------------------------------------------------------- itens de corrida (js/items.js) — tudo centralizado aqui
+export const POWER = {
+  boxRespawn: 6,            // s até a Caixa de Poder reaparecer
+  boxRadius: 2.2,           // raio de coleta (m)
+  pickupSlack: 9,           // tolerância do host (m) ao validar coleta de carro remoto (latência)
+  rollTime: 1.1,            // s da roleta antes do item ficar pronto
+  useCool: 0.6,             // s entre usos
+  types: {
+    frost: { name: 'Raio Congelante', w: 45, color: '#4df3ff',
+      svg: '<g stroke="#4df3ff" stroke-width="5" stroke-linecap="round"><path d="M32 8V56M11 20L53 44M11 44L53 20"/></g><circle cx="32" cy="32" r="7" fill="#e8fdff"/>' },
+    peel: { name: 'Casca Derrapante', w: 40, color: '#ffd23f',
+      svg: '<path d="M10 40C14 18 40 10 54 28C46 24 40 30 38 38C32 34 20 36 10 40Z" fill="#ffd23f" stroke="#b07a00" stroke-width="3"/><circle cx="46" cy="48" r="5" fill="#ff2e88"/>' },
+    pulse: { name: 'Pulso Elétrico', w: 15, color: '#c084ff',
+      svg: '<path d="M36 6L16 36H30L26 58L48 26H34Z" fill="#ffe14d" stroke="#8a4dff" stroke-width="3" stroke-linejoin="round"/>' }
+  },
+  frost: { speed: 46, ttl: 2.4, radius: 1.7, freeze: 0.7, slow: 1.5, slowMul: 0.6, steerMul: 0.55, immune: 1.2 },
+  peel: { ttl: 14, radius: 1.5, back: 3.0, spin: 1.0, kick: 4.5, spinRate: 9, immune: 0.8 },
+  pulse: { stun: 0.8, immune: 2.0 }
+};
