@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { G, hooks } from './state.js';
 import { clamp, lerp, store, wrapA } from './utils.js';
-import { BARRIERS, bridgeHW, bumpH, bumpSlope, CELL, DIRS, FINISH_S, GRID_SLOTS, HOLES, HW, PAD, PROFILES, profileSeg, PT, RAMP_PADS, RC, SLOTS, WALL_H } from './config.js';
+import { BARRIERS, bridgeHW, bumpH, bumpSlope, CELL, DIRS, FINISH_S, GRID_SLOTS, HOLES, HW, PAD, PROFILES, profileSeg, PT, RAMP_PADS, RC, SIDE_WALLS, SLOTS, WALL_H } from './config.js';
 import { box, disposeGroup, M, scene, sector, straightBase, strip } from './scene.js';
 
 // ------------------------------------------------------------- peças
@@ -65,6 +65,7 @@ class Piece {
       wl = wr = false;
       for (const hl of HOLES) if (s > hl.s0 && s < hl.s1 && o.v > hl.v0 && o.v < hl.v1) { floor = false; break; }
     }
+    if (!SIDE_WALLS) wl = wr = false;
     o.hw = hw; o.h = h; o.slope = slope; o.wallL = wl; o.wallR = wr; o.ice = ice; o.wind = wind;
     o.floor = floor && Math.abs(o.v) <= hw;
     return o;
@@ -78,8 +79,10 @@ class Piece {
       sector(cz, RC - HW, RC + HW, a0, a1, 0, 1, M.floor, g);
       sector(cz, RC + HW - 0.22, RC + HW, a0, a1, 0.06, 0.06, M.edge, g, false);
       sector(cz, RC - HW, RC - HW + 0.22, a0, a1, 0.06, 0.06, M.edgeY, g, false);
-      sector(cz, rO, rO + 0.5, a0, a1, WALL_H, WALL_H, M.wall, g);
-      sector(cz, rO - 0.02, rO + 0.52, a0, a1, WALL_H + 0.08, 0.08, M.wallCap, g, false);
+      if (SIDE_WALLS) {
+        sector(cz, rO, rO + 0.5, a0, a1, WALL_H, WALL_H, M.wall, g);
+        sector(cz, rO - 0.02, rO + 0.52, a0, a1, WALL_H + 0.08, 0.08, M.wallCap, g, false);
+      }
       sector(cz, RC + HW - 0.06, RC + HW + 0.06, a0, a1, -0.94, 0.12, M.edge, g, false);
       sector(cz, RC - HW - 0.06, RC - HW + 0.06, a0, a1, -0.94, 0.12, M.edge, g, false);
       for (let k = 0; k < 3; k++) {
@@ -95,7 +98,7 @@ class Piece {
           const rs = new THREE.Shape(); rs.moveTo(s0, h0 - 1); rs.lineTo(s0, h0); rs.lineTo(s1, h1); rs.lineTo(s1, h1 - 1);
           const rg = new THREE.ExtrudeGeometry(rs, { depth: 2 * HW, bevelEnabled: false }); rg.translate(0, 0, -HW);
           const rm = new THREE.Mesh(rg, M.ramp); rm.castShadow = rm.receiveShadow = true; g.add(rm);
-          for (const sd of [-1, 1]) {
+          if (SIDE_WALLS) for (const sd of [-1, 1]) {
             const ws = new THREE.Shape(); ws.moveTo(s0, h0); ws.lineTo(s1, h1); ws.lineTo(s1, h1 + WALL_H); ws.lineTo(s0, h0 + WALL_H);
             const wg = new THREE.ExtrudeGeometry(ws, { depth: 0.5, bevelEnabled: false }); wg.translate(0, 0, sd > 0 ? HW : -HW - 0.5);
             const wm = new THREE.Mesh(wg, M.wall); wm.castShadow = true; g.add(wm);

@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { G } from './state.js';
 import { $, rnd } from './utils.js';
-import { HW, WALL_H } from './config.js';
+import { HW, SIDE_WALLS, WALL_H } from './config.js';
 
 // ------------------------------------------------------ Three.js setup
 G.PR = Math.min(window.devicePixelRatio || 1, 1.75);
@@ -215,7 +215,7 @@ export function straightBase(g, s0, s1, walls = true, laneM = null) {
   box(len, 0.06, 0.22, M.edge, cx, 0.03, HW - 0.11, g, false);
   box(len, 0.06, 0.22, M.edge, cx, 0.03, -HW + 0.11, g, false);
   const wf = Array.isArray(walls) ? walls : [walls, walls];       // [esquerda, direita]
-  for (const sd of [-1, 1]) if (wf[sd < 0 ? 0 : 1]) {
+  for (const sd of [-1, 1]) if (SIDE_WALLS && wf[sd < 0 ? 0 : 1]) {
     box(len, WALL_H, 0.5, M.wall, cx, WALL_H / 2, sd * (HW + 0.25), g);
     box(len, 0.08, 0.54, M.wallCap, cx, WALL_H + 0.04, sd * (HW + 0.25), g, false);
   }

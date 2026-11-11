@@ -132,7 +132,7 @@ $('optAuto').addEventListener('click', () => doTap('auto'));
 function doTap(what) {
   SFX.init();
   if (what === 'pause') { if (G.state === 'paused' || G.menuOpen) resume(); else if (uiActive()) pauseGame(); }
-  else if (what === 'reset') { const p = myCar(); if (p && G.state === 'race' && p.alive && p.grounded && !p.finished) respawn(p); }
+  else if (what === 'reset') { const p = myCar(); if (p && G.state === 'race' && p.alive && p.grounded && !p.voidFall && !p.finished) respawn(p); }
   else if (what === 'mute') { SFX.setMute(!SFX.muted); refreshButtons(); }
   else if (what === 'auto') { autoGas = !autoGas; store.set('autogas', autoGas); refreshButtons(); if (uiActive()) toast(autoGas ? 'AUTO-GAS ON' : 'AUTO-GAS OFF', '#a6ff3b', 1); }
   else if (what === 'fs') toggleFS();
@@ -159,6 +159,7 @@ export function readPlayerInput(inp) {
   const gl = $('gl');
   gl.addEventListener('pointerdown', e => {
     if (!BC.active) return;
+    if (e.pointerType === 'mouse' && (e.button !== 0 || !e.isPrimary)) return;      // só botão esquerdo; direito/meio nunca chegam a tryPlaceAt
     try { gl.setPointerCapture(e.pointerId); } catch (x) { }
     PTRS.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, moved: false, pinch: false });
     if (PTRS.size >= 2) { for (const q of PTRS.values()) q.pinch = true; G.pinch = pinchInfo(); }

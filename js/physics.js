@@ -35,7 +35,7 @@ export function respawn(c) {
   P0.world(s, 0, tmpW);
   c.x = tmpW.x; c.z = tmpW.z; c.a = tmpW.a; c.y = P0.query(c.x, c.z, c.Q).h;
   c.vx = Math.cos(c.a) * 6; c.vz = Math.sin(c.a) * 6; c.vy = 0; c.grounded = true;
-  c.drifting = false; c.driftT = 0; c.driftLevel = 0; c.kick = 0; c.steer = 0; c.stuckT = 0;
+  c.drifting = false; c.driftT = 0; c.driftLevel = 0; c.kick = 0; c.steer = 0; c.stuckT = 0; c.voidFall = false;
   if (c.isLocal) toast('REPOSICIONADO', '#fff', 0.8);
 }
 function pushOut(c, nx, nz, over, dt, bounce = 0.35) {
@@ -62,7 +62,18 @@ function pushOut(c, nx, nz, over, dt, bounce = 0.35) {
   if (c.drifting) c.driftT = Math.max(0, c.driftT - dt * 1.5);
   return 0;
 }
+// queda livre (voidFall): só gravidade + inércia. Nada reposiciona, empurra ou captura o carro; morre abaixo de y = -20.
+function freeFall(c, dt) {
+  c.grounded = false;
+  c.vy -= GRAV * dt; c.x += c.vx * dt; c.y += c.vy * dt; c.z += c.vz * dt; c.airT += dt;
+  c.tumbleX += dt * 3.1; c.tumbleZ += dt * 2.3;
+  if (c.y < -20 && c.alive) {
+    c.alive = false; c.fallProg = c.prog;
+    if (c.isLocal) { SFX.fall(); toast('CAIU NO ABISMO!', '#ff2e55', 2); G.R.spectateT = 1.6; }
+  }
+}
 export function stepCar(c, inp, dt) {
+  if (c.voidFall) { freeFall(c, dt); return; }
   if (!c.alive) { c.vy -= GRAV * dt; c.x += c.vx * dt; c.y += c.vy * dt; c.z += c.vz * dt; c.tumbleX += dt * 3.1; c.tumbleZ += dt * 2.3; return; }
   const air = !c.grounded;
   const tgt = inp.steer;
@@ -211,7 +222,7 @@ export function trackContact(c, dt) {
   Pc.query(c.x, c.z, Q);
   // troca de peça só com o carro lateralmente sobre a pista: fora da borda, nenhuma outra peça "captura" o carro
   for (let k = 0; k < 3; k++) {
-    if (Math.abs(Q.v) > Q.hw + 0.25) break;
+    if (c.voidFall || Math.abs(Q.v) > Q.hw + 0.25) break;
     if (Q.s > Pc.len && c.pi < track.length - 1) { c.pi++; Pc = track[c.pi]; Pc.query(c.x, c.z, Q); }
     else if (Q.s < 0 && c.pi > 0) { c.pi--; Pc = track[c.pi]; Pc.query(c.x, c.z, Q); }
     else break;
@@ -228,14 +239,22 @@ export function trackContact(c, dt) {
     }
   }
   if (!c.grounded) {
+    const prevY = c.y;
     c.vy -= GRAV * dt; c.y += c.vy * dt; c.airT += dt;
-    if (Q.floor && c.vy <= 0 && c.y <= Q.h && c.y > Q.h - 1.4) {
+    // só pousa atravessando a superfície DE CIMA PARA BAIXO (prevY acima do piso, com folga mínima pela inclinação).
+    // Quem já estava abaixo do piso nunca é "pescado" de volta: vira queda livre (voidFall) e ninguém mais o captura.
+    const tol = 0.15 + Math.abs(Q.slope) * Math.hypot(c.vx, c.vz) * dt;
+    if (Q.floor && c.vy <= 0 && prevY >= Q.h - tol && c.y <= Q.h) {
       const impact = -c.vy;
       c.y = Q.h; c.vy = 0; c.grounded = true; c.squash = 0.22;
       if (impact > 6) {
         burst(c.x, c.y + 0.2, c.z, 12, 0.7, 0.8, 1, 5, 0.4, 8);
         if (c.isLocal) { SFX.land(impact); G.shake = Math.max(G.shake, clamp(impact / 40, 0.1, 0.4)); }
       }
+    } else if (c.y < Q.h - tol && c.vy <= 0) {
+      c.voidFall = true; c.drifting = false; c.driftT = 0; c.driftLevel = 0; c.boostT = 0; c.boostPow = 0;
+      c.s = Q.s; c.v = Q.v; c.prog = pieceStart[c.pi] + clamp(Q.s, 0, Pc.len);
+      return;
     }
   }
   // mureta unilateral: só empurra de dentro para fora, na faixa entre o limite interno e o centro da parede.
@@ -249,7 +268,7 @@ export function trackContact(c, dt) {
       if (Pc.type === 'finish' && Q.s > Pc.len - 0.8 - CAR_R) pushOut(c, -Q.fx, -Q.fz, Q.s - (Pc.len - 0.8 - CAR_R), dt);
     }
   }
-  if (Pc.type === 'chicane' && c.y < Q.h + 1.5) for (const b of BARRIERS) boxPushLocal(c, Q, b.s, (b.v0 + b.v1) / 2, 0.6, (b.v1 - b.v0) / 2, dt);
+  if (Pc.type === 'chicane' && c.y > Q.h - 0.5 && c.y < Q.h + 1.5) for (const b of BARRIERS) boxPushLocal(c, Q, b.s, (b.v0 + b.v1) / 2, 0.6, (b.v1 - b.v0) / 2, dt);
   obstacleContact(c, dt);
   c.padCool -= dt; c.hitCool -= dt;
   if (Pc.type === 'boost' && c.grounded && c.padCool <= 0 && Q.s > PAD.s0 && Q.s < PAD.s1 && Math.abs(Q.v) < PAD.hv) {
@@ -261,7 +280,7 @@ export function trackContact(c, dt) {
     giveBoost(c, 0.5, 1.3, 5); c.padCool = 0.8;
     if (c.isLocal) { SFX.boost(2); toast('MEGA TURBO!', '#ff2e88', 0.8); G.shake = Math.max(G.shake, 0.25); }
   }
-  if (Pc.type === 'finish' && Q.s >= FINISH_S && !c.finished && c.pi === track.length - 1 && c.alive) {
+  if (Pc.type === 'finish' && Q.s >= FINISH_S && !c.finished && c.pi === track.length - 1 && c.alive && !c.voidFall) {
     c.finished = true; c.finishT = G.R.t;
     burst(c.x, c.y + 1, c.z, 30, 1, 0.85, 0.3, 9, 0.8, 8);
     if (isHost()) hooks.hostRegisterFinish(c);
@@ -279,7 +298,7 @@ export function carCollisions() {
   for (let i = 0; i < cars.length; i++) for (let j = i + 1; j < cars.length; j++) {
     const a = cars[i], b = cars[j];
     if (!a.owned && !b.owned) continue;
-    if (!a.alive || !b.alive || Math.abs(a.y - b.y) > 1.4) continue;
+    if (!a.alive || !b.alive || a.voidFall || b.voidFall || Math.abs(a.y - b.y) > 1.4) continue;
     // carro remoto colide pela posição "presente" (extrapolada), não pela desenhada (atrasada)
     const ax = a.owned ? a.x : (a.cpx ?? a.x), az = a.owned ? a.z : (a.cpz ?? a.z);
     const bx = b.owned ? b.x : (b.cpx ?? b.x), bz = b.owned ? b.z : (b.cpz ?? b.z);

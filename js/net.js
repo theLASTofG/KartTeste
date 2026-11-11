@@ -112,7 +112,7 @@ function hostRejoin(conn, p) {
   NET.fastPending.delete(conn.peer);
   p.connected = true; p.name = p.name.replace(/ 🤖$/, '');
   const racing = G.state === 'countdown' || G.state === 'race';
-  if (racing) p.rejoin = true; else { p.bot = false; delete HST.botAt[p.id]; }
+  if (racing) p.rejoin = true; else { p.bot = false; delete HST.botAt[p.id]; delete HST.botPlaceAt[p.id]; }
   conn.send({ t: 'welcome', id: p.id, code: NET.code, rejoin: true });
   conn.send({ t: 'lobby', players: plist(), target: G.TARGET, theme: themeKey, preset: G.presetKey });
   const L = HST.last;
@@ -244,7 +244,7 @@ function hostHandle(pid, msg) {
 }
 // ---- estado de carro na rede
 export function packCar(c) {
-  const f = (c.alive ? 1 : 0) | (c.finished ? 2 : 0) | (c.grounded ? 4 : 0) | (c.drifting ? 8 : 0) | (c.boostT > 0 ? 16 : 0) | (c.braking ? 32 : 0);
+  const f = (c.alive ? 1 : 0) | (c.finished ? 2 : 0) | (c.grounded ? 4 : 0) | (c.drifting ? 8 : 0) | (c.boostT > 0 ? 16 : 0) | (c.braking ? 32 : 0) | (c.voidFall ? 64 : 0);
   // ts = relógio de quem SIMULA o carro (host repassa sem mudar) -> interpolação por tempo de origem
   const ts = c.owned ? Math.round(performance.now()) : (c.netTs || 0);
   return [c.pid, r2(c.x), r2(c.y), r2(c.z), r3(c.a), r2(c.vx), r2(c.vy), r2(c.vz), r2(c.steer || 0), f, c.driftLevel || 0, r2(c.prog), c.finishOrder || 0, c.pi, r2(c.boostPow || 0), ts];
@@ -269,7 +269,7 @@ function applyNet(c, a, fromHost) {
   const f = g(9);
   const wasAlive = c.alive, wasFin = c.finished;
   c.alive = !!(f & 1); c.finished = !!(f & 2); c.grounded = !!(f & 4); c.drifting = !!(f & 8);
-  c.boostT = f & 16 ? 0.3 : 0; c.braking = !!(f & 32); c.driftLevel = g(10); c.prog = g(11);
+  c.boostT = f & 16 ? 0.3 : 0; c.braking = !!(f & 32); if (f & 64) c.voidFall = true; c.driftLevel = g(10); c.prog = g(11);
   c.pi = clamp(g(13), 0, track.length - 1); c.boostPow = g(14);
   if (fromHost) c.finishOrder = a[12];
   else if (G.R && (G.state === 'race' || G.state === 'countdown')) {           // host detecta chegada/queda de clientes

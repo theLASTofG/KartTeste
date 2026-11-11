@@ -69,7 +69,7 @@ function createCar(p) {
     pid: p.id, name: p.name, color: p.color, mesh: makeCarMesh(p.color, p.id === G.myId), isLocal: p.id === G.myId, owned: false, bot: p.bot,
     ai: { skill: p.bot ? rnd(0.9, 0.99) : 0.92, lane: 0, wob: 0, wf: rnd(0.6, 1.4), ph: rnd(0, 6), side: Math.random() < 0.5 ? 1 : -1, err: null },
     inp: { steer: 0, throttle: 0, brake: 0, drift: false, gasRaw: false }, Q: {}, net: null,
-    x: 0, y: 0, z: 0, a: 0, vx: 0, vy: 0, vz: 0, vf: 0, vl: 0, alive: true, finished: false, finishOrder: 0, prog: 0, pi: 0, grounded: true
+    x: 0, y: 0, z: 0, a: 0, vx: 0, vy: 0, vz: 0, vf: 0, vl: 0, alive: true, finished: false, finishOrder: 0, prog: 0, pi: 0, grounded: true, voidFall: false
   };
   c.ai.wob = 0.3 + (1 - c.ai.skill) * 5;
   scene.add(c.mesh.root);
