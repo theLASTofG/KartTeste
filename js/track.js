@@ -2,14 +2,15 @@
 import * as THREE from 'three';
 import { G, hooks } from './state.js';
 import { clamp, lerp, store, wrapA } from './utils.js';
-import { BARRIERS, bridgeHW, MEGA, bumpH, bumpSlope, CELL, DIRS, FINISH_S, GRID_SLOTS, HOLES, HW, PAD, PROFILES, profileSeg, PT, RAMP_PADS, RC, SIDE_WALLS, SLOTS, WALL_H } from './config.js';
-import { megaBuild, megaQuery, megaWorld, serpBuild, serpQuery, serpWorld, SERP_LEN } from './pieces-special.js';
+import { BARRIERS, bridgeHW, MEGA, SERP, bumpH, bumpSlope, CELL, DIRS, FINISH_S, GRID_SLOTS, HOLES, HW, PAD, PROFILES, profileSeg, PT, RAMP_PADS, RC, SIDE_WALLS, SLOTS, WALL_H } from './config.js';
+import { megaBuild, megaQuery, megaWorld, serpBuild, serpQuery, serpWorld, SERP_LEN, spiralBuild, spiralQuery, spiralWorld, SPIRAL_LEN } from './pieces-special.js';
 import { box, disposeGroup, M, scene, sector, straightBase, strip } from './scene.js';
 
 // ------------------------------------------------------------- peças
 export const tmpW = {};
 class Piece {
-  constructor(type, ci, cj, dir) {
+  constructor(type, ci, cj, dir, baseH = 0) {
+    this.baseH = baseH; this.nextH = baseH + ((PT[type] && PT[type].dh) || 0);        // andar de entrada / de saída (altura)
     this.type = type; this.def = PT[type]; this.ci = ci; this.cj = cj; this.dir = dir;
     this.a = dir * Math.PI / 2;
     this.fx = Math.round(Math.cos(this.a)); this.fz = Math.round(Math.sin(this.a));
@@ -30,7 +31,12 @@ class Piece {
     this.next = [last[0] + ed[0], last[1] + ed[1]];
     this.special = this.def.special || null;
     this.branch = -1; this.auto = false; this.prev = -1; this.nextIdx = []; this.exitIdx = null;
-    if (this.special === 'serp') {                     // 2x2 células: vai, sobe em S, volta 180° ao lado e sai no sentido oposto
+    if (this.special === 'spiral') {                   // 2 células (A e A ao lado): reta, meia-volta subindo e reta de volta
+      const rx = this.rx, rz = this.rz;
+      this.len = SPIRAL_LEN; this.exitDir = (dir + 2) % 4;
+      this.cells = [[ci, cj], [ci + rx, cj + rz]];
+      this.next = [ci + rx - dx, cj + rz - dz];
+    } else if (this.special === 'serp') {                     // 2x2 células: vai, sobe em S, volta 180° ao lado e sai no sentido oposto
       const rx = this.rx, rz = this.rz;
       this.len = SERP_LEN; this.exitDir = (dir + 2) % 4;
       this.cells = [[ci, cj], [ci + dx, cj + dz], [ci + rx, cj + rz], [ci + dx + rx, cj + dz + rz]];
@@ -48,6 +54,7 @@ class Piece {
     this.group = null;
   }
   world(s, v, o) {
+    if (this.special === 'spiral') return spiralWorld(this, s, v, o);
     if (this.special === 'serp') return serpWorld(this, s, v, o);
     if (this.special === 'mega') return megaWorld(this, s, v, o);
     if (this.turn) {
@@ -56,7 +63,11 @@ class Piece {
     } else { o.x = this.ex + this.fx * s + this.rx * v; o.z = this.ez + this.fz * s + this.rz * v; o.a = this.a; }
     return o;
   }
-  query(x, z, o) {
+  query(x, z, o) {                                       // h absoluto = altura do andar (baseH) + perfil da peça
+    this._query(x, z, o); o.h += this.baseH; return o;
+  }
+  _query(x, z, o) {
+    if (this.special === 'spiral') return spiralQuery(this, x, z, o);
     if (this.special === 'serp') return serpQuery(this, x, z, o);
     if (this.special === 'mega') return megaQuery(this, x, z, o);
     if (this.turn) {
@@ -91,7 +102,21 @@ class Piece {
     return o;
   }
   build() {
-    if (this.special) { this.group = this.special === 'serp' ? serpBuild(this) : megaBuild(this); return this.group; }
+    const g = this._build(); g.position.y = this.baseH; this.group = g;
+    if (this.baseH > 0 && this.special !== 'serp' && this.special !== 'spiral') this._pillars(g);
+    return g;
+  }
+  // colunas de sustentação do andar elevado até o abismo (as peças comuns só têm apoio no chão)
+  _pillars(g) {
+    const o = {}, h = this.baseH + 30;
+    for (const s of this.len > 40 ? [4, this.len / 2, this.len - 4] : [this.len / 2]) {
+      this.world(s, 0, o);
+      const dx = o.x - this.ex, dz = o.z - this.ez;
+      box(1.4, h, 1.4, M.post, dx * this.fx + dz * this.fz, -1 - h / 2, dx * this.rx + dz * this.rz, g);
+    }
+  }
+  _build() {
+    if (this.special) return this.special === 'serp' ? serpBuild(this) : this.special === 'spiral' ? spiralBuild(this) : megaBuild(this);
     const g = new THREE.Group();
     g.position.set(this.ex, 0, this.ez); g.rotation.y = -this.a;
     const t = this.type, L = this.len;
@@ -220,6 +245,7 @@ class Piece {
 
 // ------------------------------------------------------------- pista
 export let track = [], pieceStart = [], occupied = new Set(), finishGlobal = 0;
+let occMap = new Map();                           // célula -> peças que passam por ela
 export let obstacles = [];                       // {key,type,pi,si,x,z,y,a,s,v,ph,spd,group,bar,pulse}
 export const trackRoot = new THREE.Group(); scene.add(trackRoot);
 export const slotGroup = new THREE.Group(); scene.add(slotGroup);
@@ -232,6 +258,7 @@ export const PRESETS = {
   caos: { name: 'CAÓTICA', types: ['start', 'bumps', 'curveR', 'bridge', 'curveL', 'ice', 'wind', 'curveL', 'holes', 'straight', 'finish'],
     obs: [{ key: '2:0', type: 'bumper', ph: 0, spd: 1.7 }, { key: '5:2', type: 'spinner', ph: 0.7, spd: 1.6 }, { key: '9:0', type: 'piston', ph: 1.3, spd: 1.5 }, { key: '9:1', type: 'oil', ph: 0, spd: 1.7 }] }
 };
+G.allowCross = store.get('cross', false);          // opção do host: a pista pode se cruzar/encontrar com ela mesma
 G.presetKey = store.get('preset', 'curta');
 if (!PRESETS[G.presetKey]) G.presetKey = 'curta';
 const key = (i, j) => i + ',' + j;
@@ -241,22 +268,22 @@ const EXIT_TOKEN = /^x([0-3]):(\w+)$/;
 function layoutTypes(types) {
   const arr = [], ex = [null, null, null, null], main = [];
   for (const t of types) { const m = EXIT_TOKEN.exec(t); if (m) ex[+m[1]] = m[2]; else main.push(t); }
-  let ci = 0, cj = 0, dir = 0;
+  let ci = 0, cj = 0, dir = 0, bh = 0;
   for (const t of main) {
-    const p = new Piece(t, ci, cj, dir); p.prev = arr.length - 1; arr.push(p);
-    ci = p.next[0]; cj = p.next[1]; dir = p.exitDir;
+    const p = new Piece(t, ci, cj, dir, bh); p.prev = arr.length - 1; arr.push(p);
+    ci = p.next[0]; cj = p.next[1]; dir = p.exitDir; bh = p.nextH;               // a próxima peça nasce no andar em que esta termina
     if (p.special === 'mega') break;                                  // depois da Mega Pista só existem as 4 saídas
   }
   const mega = arr[arr.length - 1];
   if (mega && mega.special === 'mega') {
     const mi = arr.length - 1; mega.exitIdx = [];
     for (let k = 0; k < 4; k++) {
-      const [c0, c1] = mega.exitCells[k]; let fi = mi, nx = [c0, c1], nd = mega.dir;
+      const [c0, c1] = mega.exitCells[k]; let fi = mi, nx = [c0, c1], nd = mega.dir, kh = mega.nextH;
       if (ex[k] && PT[ex[k]] && ex[k] !== 'megablock') {
-        const x = new Piece(ex[k], c0, c1, mega.dir); x.branch = k; x.prev = mi; mega.exitIdx[k] = arr.length; arr.push(x);
-        fi = arr.length - 1; nx = x.next; nd = x.exitDir;
+        const x = new Piece(ex[k], c0, c1, mega.dir, kh); x.branch = k; x.prev = mi; mega.exitIdx[k] = arr.length; arr.push(x);
+        fi = arr.length - 1; nx = x.next; nd = x.exitDir; kh = x.nextH;
       } else mega.exitIdx[k] = arr.length;
-      const f = new Piece('finish', nx[0], nx[1], nd); f.branch = k; f.auto = true; f.prev = fi; arr.push(f);
+      const f = new Piece('finish', nx[0], nx[1], nd, kh); f.branch = k; f.auto = true; f.prev = fi; arr.push(f);
     }
   }
   arr.forEach((p, i) => { p.nextIdx = p.special === 'mega' && p.exitIdx ? p.exitIdx.slice() : (arr[i + 1] && arr[i + 1].prev === i ? [i + 1] : []); });
@@ -270,13 +297,13 @@ function recalcTrack() {
   });
   finishGlobal = 0;
   track.forEach((p, i) => { if (p.type === 'finish') finishGlobal = Math.max(finishGlobal, pieceStart[i] + FINISH_S); });
-  occupied = new Set();
-  for (const p of track) for (const c of p.cells) occupied.add(key(c[0], c[1]));
+  occupied = new Set(); occMap = new Map();
+  for (const p of track) for (const c of p.cells) { const k = key(c[0], c[1]); occupied.add(k); if (!occMap.has(k)) occMap.set(k, []); occMap.get(k).push(p); }
 }
 // tokens enviados pela rede: chegadas implícitas (auto) não entram; peças dos ramos viram "x{k}:{tipo}"
 export const trackTypes = () => track.filter(p => !p.auto).map(p => p.branch >= 0 ? 'x' + p.branch + ':' + p.type : p.type);
 export function addDrop(g, delay, piece) { g.position.y += 30; dropAnims.push({ g, t: -delay, dur: 0.7, y0: g.position.y, yEnd: g.position.y - 30, piece, landed: false }); }
-const sig = p => p.type + '|' + p.ci + '|' + p.cj + '|' + p.dir + '|' + p.branch + '|' + p.auto;
+const sig = p => p.type + '|' + p.ci + '|' + p.cj + '|' + p.dir + '|' + p.branch + '|' + p.auto + '|' + p.baseH;
 // aplica a pista (tipos em sequência) + obstáculos; reaproveita o prefixo idêntico e anima peças/obstáculos novos
 export function applyTrack(types, obsList, animate) {
   const all = layoutTypes(types);
@@ -317,11 +344,32 @@ export function freeExits() {
 }
 export function exitPos(k, o) { const m = track[megaIndex()]; return m.world(MEGA.len, MEGA.exitV[k], o); }
 // ---- encaixe
-function fitsAt(type, c0, c1, dir, occ) {
-  const p = new Piece(type, c0, c1, dir);
-  for (const c of p.cells) if (occ.has(key(c[0], c[1]))) return false;
-  if (occ.has(key(p.next[0], p.next[1]))) return false;
-  return p;
+// altura ocupada por uma peça: [andar de entrada, topo] (rampas e serpentina sobem acima do andar)
+function spanOf(p) {
+  let top = Math.max(p.baseH, p.nextH) + 0.6;
+  if (p.special === 'serp') top = p.baseH + SERP.H + 0.6;
+  else if (PROFILES[p.type]) for (const g of PROFILES[p.type]) if (g[2] === 'ramp') top = Math.max(top, p.baseH + g[4] + 0.6);
+  return [p.baseH, top];
+}
+const axisOf = p => (p.special || p.turn) ? -1 : p.dir % 2;
+// a peça nova p cabe nas células dela? Com "cruzar pista" liga, pode dividir célula com outra peça se estiverem em andares
+// diferentes (folga de 4,5 m) ou se forem retas perpendiculares (cruzamento); a largada e a Mega Pista nunca são atravessadas
+function cellsOk(p, ignore) {
+  const [a0, a1] = spanOf(p);
+  for (const c of p.cells) {
+    const list = occMap.get(key(c[0], c[1]));
+    if (!list) continue;
+    for (const q of list) {
+      if (ignore && ignore.includes(q)) continue;
+      if (!G.allowCross) return false;
+      const [b0, b1] = spanOf(q);
+      if (a0 > b1 + 4.5 || b0 > a1 + 4.5) continue;                      // andares diferentes
+      if (q.type === 'start' || q.special === 'mega' || p.special === 'mega') return false;
+      const ax = axisOf(p), bx = axisOf(q);
+      if (!(ax >= 0 && bx >= 0 && ax !== bx)) return false;               // mesma altura: só cruzamento reto perpendicular
+    }
+  }
+  return true;
 }
 export function canPlace(type, exitK = -1) {
   const m = megaIndex();
@@ -330,21 +378,24 @@ export function canPlace(type, exitK = -1) {
     const mp = track[m];
     return freeExits().some(k => {
       if (exitK >= 0 && k !== exitK) return false;
-      const occ = new Set(occupied);
-      const f = track[mp.exitIdx[k]]; occ.delete(key(f.ci, f.cj));
-      const p = fitsAt(type, mp.exitCells[k][0], mp.exitCells[k][1], mp.dir, occ);
-      if (!p) return false;
-      const fp = new Piece('finish', p.next[0], p.next[1], p.exitDir);
-      return !occ.has(key(fp.ci, fp.cj)) && !p.cells.some(q => q[0] === fp.ci && q[1] === fp.cj);
+      const f = track[mp.exitIdx[k]];
+      const p = new Piece(type, mp.exitCells[k][0], mp.exitCells[k][1], mp.dir, f.baseH);
+      if (!cellsOk(p, [f])) return false;
+      const fp = new Piece('finish', p.next[0], p.next[1], p.exitDir, p.nextH);
+      return cellsOk(fp, [f]) && !p.cells.some(q => q[0] === fp.ci && q[1] === fp.cj);
     });
   }
   const fin = track[track.length - 1];
+  const p = new Piece(type, fin.ci, fin.cj, fin.dir, fin.baseH);
+  if (!cellsOk(p, [fin])) return false;
+  if (p.special === 'mega') {                                          // as 4 chegadas iniciais precisam caber
+    return p.exitCells.every(c => { const fp = new Piece('finish', c[0], c[1], p.dir, p.nextH); return cellsOk(fp, [fin]); });
+  }
+  const f = new Piece('finish', p.next[0], p.next[1], p.exitDir, p.nextH);
+  if (!cellsOk(f, [fin]) || p.cells.some(q => q[0] === f.ci && q[1] === f.cj)) return false;
+  if (G.allowCross) return true;                                       // pode sempre continuar crescendo
   const occ = new Set(occupied); occ.delete(key(fin.ci, fin.cj));
-  const p = fitsAt(type, fin.ci, fin.cj, fin.dir, occ);
-  if (!p) return false;
   for (const c of p.cells) occ.add(key(c[0], c[1]));
-  if (p.special === 'mega') return p.exitCells.every(c => !occ.has(key(c[0], c[1])));     // as 4 chegadas iniciais precisam caber
-  const f = new Piece('finish', p.next[0], p.next[1], p.exitDir);
   occ.add(key(f.ci, f.cj));
   const nx = [f.next, ...[1, 3].map(t => { const d = DIRS[(f.dir + t) % 4]; return [f.ci + d[0], f.cj + d[1]]; })];
   return nx.some(c => !occ.has(key(c[0], c[1])));

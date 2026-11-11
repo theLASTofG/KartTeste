@@ -114,7 +114,7 @@ function hostRejoin(conn, p) {
   const racing = G.state === 'countdown' || G.state === 'race';
   if (racing) p.rejoin = true; else { p.bot = false; delete HST.botAt[p.id]; delete HST.botPlaceAt[p.id]; }
   conn.send({ t: 'welcome', id: p.id, code: NET.code, rejoin: true });
-  conn.send({ t: 'lobby', players: plist(), target: G.TARGET, theme: themeKey, preset: G.presetKey });
+  conn.send({ t: 'lobby', players: plist(), target: G.TARGET, theme: themeKey, preset: G.presetKey, cross: G.allowCross });
   const L = HST.last;
   if (L && !racing) {
     conn.send({ t: 'phase', ph: L.ph, d: Object.assign({}, L.d, { players: plist(), tray: G.state === 'pick' ? G.tray : L.d.tray }) });
@@ -134,7 +134,7 @@ export function hostLobbyChanged() {
   syncCars();
   if (G.state === 'lobby') hooks.renderLobby();
   updateBoard();
-  broadcast({ t: 'lobby', players: plist(), target: G.TARGET, theme: themeKey, preset: G.presetKey });
+  broadcast({ t: 'lobby', players: plist(), target: G.TARGET, theme: themeKey, preset: G.presetKey, cross: G.allowCross });
 }
 // conexão caiu no meio da partida: tenta voltar pra mesma vaga algumas vezes
 function tryReconnect(code) {
@@ -212,6 +212,7 @@ function onClientMsg(msg) {
       if (msg.target) G.TARGET = msg.target;
       if (msg.theme && msg.theme !== themeKey) applyTheme(msg.theme);
       if (msg.preset && PRESETS[msg.preset]) G.presetKey = msg.preset;
+      if (msg.cross !== undefined) G.allowCross = !!msg.cross;
       G.players = msg.players; syncCars(); updateBoard();
       if (G.state === 'lobby') hooks.renderLobby();
       break;

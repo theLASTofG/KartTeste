@@ -1,7 +1,7 @@
 // Peças especiais: Serpentina Elevada (caminho 3D por polilinha) e Mega Pista (plataforma com 4 saídas).
 // Coordenadas locais da peça: ls = ao longo da direção de entrada, lv = lateral (para a direita); y = altura.
 import * as THREE from 'three';
-import { MEGA, SERP, HW, WALL_H } from './config.js';
+import { MEGA, SERP, SPIRAL, HW } from './config.js';
 import { clamp, lerp, wrapA } from './utils.js';
 import { box, M } from './scene.js';
 
@@ -38,9 +38,32 @@ function makeSerpPath() {
 }
 export const SERP_PATH = makeSerpPath();
 export const SERP_LEN = SERP_PATH[SERP_PATH.length - 1].ps;
+// ---- Espiral de Andar: reta + meia-volta (raio 13) + reta de volta, subindo SPIRAL.H m de forma suave (novo andar)
+function makeSpiralPath() {
+  const pts = [], R = SPIRAL.R, S = SPIRAL.S;
+  for (let i = 0; i < SPIRAL.N1; i++) pts.push({ ls: S * i / SPIRAL.N1, lv: 0 });                    // reta de entrada
+  for (let i = 0; i < SPIRAL.N2; i++) { const th = Math.PI * i / (SPIRAL.N2 - 1); pts.push({ ls: S + R * Math.sin(th), lv: R * (1 - Math.cos(th)) }); }
+  for (let i = 1; i <= SPIRAL.N3; i++) pts.push({ ls: S - S * i / SPIRAL.N3, lv: 2 * R });            // reta de volta (sai no sentido oposto)
+  pts[0].ps = 0;
+  for (let i = 1; i < pts.length; i++) pts[i].ps = pts[i - 1].ps + Math.hypot(pts[i].ls - pts[i - 1].ls, pts[i].lv - pts[i - 1].lv);
+  const L = pts[pts.length - 1].ps;
+  for (const p of pts) p.h = SPIRAL.H * smooth(p.ps / L);
+  return finishPath(pts);
+}
+function finishPath(pts) {
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)];
+    pts[i].ang = Math.atan2(b.lv - a.lv, b.ls - a.ls);
+    pts[i].sl = (b.h - a.h) / ((b.ps - a.ps) || 1);                 // inclinação por amostra (interpolada: sem degraus que virariam "decolagem")
+  }
+  return pts;
+}
+export const SPIRAL_PATH = makeSpiralPath();
+export const SPIRAL_LEN = SPIRAL_PATH[SPIRAL_PATH.length - 1].ps;
 
-export function serpWorld(p, s, v, o) {
-  const P = SERP_PATH; s = clamp(s, 0, SERP_LEN);
+// ---- funções genéricas sobre uma polilinha 3D (serpentina e espiral)
+export function pathWorld(P, len, p, s, v, o) {
+  s = clamp(s, 0, len);
   let i = 0; while (i < P.length - 2 && P[i + 1].ps < s) i++;
   const A = P[i], B = P[i + 1], t = (s - A.ps) / ((B.ps - A.ps) || 1);
   const ang = A.ang + wrapA(B.ang - A.ang) * t;
@@ -49,8 +72,8 @@ export function serpWorld(p, s, v, o) {
   return o;
 }
 // segmento mais próximo da polilinha (2D). Nas pontas aceita extrapolação para o s sair de [0, len] e trocar de peça
-export function serpQuery(p, x, z, o) {
-  const P = SERP_PATH, dx = x - p.ex, dz = z - p.ez, ls = dx * p.fx + dz * p.fz, lv = dx * p.rx + dz * p.rz;
+export function pathQuery(P, p, x, z, o) {
+  const dx = x - p.ex, dz = z - p.ez, ls = dx * p.fx + dz * p.fz, lv = dx * p.rx + dz * p.rz;
   let bi = 0, bd = 1e18, bt = 0;
   for (let i = 0; i < P.length - 1; i++) {
     const A = P[i], B = P[i + 1], ex = B.ls - A.ls, ev = B.lv - A.lv, l2 = ex * ex + ev * ev;
@@ -71,10 +94,14 @@ export function serpQuery(p, x, z, o) {
   o.floor = Math.abs(o.v) <= HW;
   return o;
 }
-export function serpBuild(p) {
+export const serpWorld = (p, s, v, o) => pathWorld(SERP_PATH, SERP_LEN, p, s, v, o);
+export const serpQuery = (p, x, z, o) => pathQuery(SERP_PATH, p, x, z, o);
+export const spiralWorld = (p, s, v, o) => pathWorld(SPIRAL_PATH, SPIRAL_LEN, p, s, v, o);
+export const spiralQuery = (p, x, z, o) => pathQuery(SPIRAL_PATH, p, x, z, o);
+// fita 3D ao longo da polilinha (piso com espessura, bordas neon, travessas nas curvas e pilares até o abismo)
+function pathBuild(P, p, arcFrom, arcTo) {
   const g = new THREE.Group(); g.position.set(p.ex, 0, p.ez); g.rotation.y = -p.a;
-  const P = SERP_PATH, n = P.length;
-  const top = [], bot = [], idx = [];
+  const n = P.length, top = [], bot = [], idx = [];
   const nrm = i => [-Math.sin(P[i].ang), Math.cos(P[i].ang)];
   for (let i = 0; i < n; i++) {
     const [nl, nv] = nrm(i);
@@ -83,19 +110,17 @@ export function serpBuild(p) {
       bot.push(P[i].ls + nl * HW * sd, P[i].h - 1, P[i].lv + nv * HW * sd);
     }
   }
-  // vértices: [0..2n) topo (esq,dir por amostra), [2n..4n) base
   const pos = top.concat(bot);
   for (let i = 0; i < n - 1; i++) {
     const a = 2 * i, b = 2 * i + 1, c = 2 * i + 2, d = 2 * i + 3, off = 2 * n;
-    idx.push(a, b, d, a, d, c);                                    // topo
-    idx.push(off + a, off + d, off + b, off + a, off + c, off + d); // base
-    idx.push(a, c, off + c, a, off + c, off + a);                  // lateral esquerda
-    idx.push(b, off + b, off + d, b, off + d, d);                  // lateral direita
+    idx.push(a, b, d, a, d, c);
+    idx.push(off + a, off + d, off + b, off + a, off + c, off + d);
+    idx.push(a, c, off + c, a, off + c, off + a);
+    idx.push(b, off + b, off + d, b, off + d, d);
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setIndex(idx); geo.computeVertexNormals();
   const mesh = new THREE.Mesh(geo, matFloor); mesh.castShadow = mesh.receiveShadow = true; g.add(mesh);
-  // faixas neon nas bordas (esq. amarela, dir. ciano) e travessas de seta no retorno do topo
   for (const sd of [-1, 1]) {
     const ep = [], ei = [];
     for (let i = 0; i < n; i++) {
@@ -106,15 +131,17 @@ export function serpBuild(p) {
     const eg = new THREE.BufferGeometry(); eg.setAttribute('position', new THREE.Float32BufferAttribute(ep, 3)); eg.setIndex(ei);
     g.add(new THREE.Mesh(eg, sd < 0 ? matEdgeY : matEdge));
   }
-  for (let i = SERP.N1; i < SERP.N1 + SERP.N2; i += 3) {
+  for (let i = arcFrom; i < arcTo; i += 3) {
     const m = box(0.7, 0.06, HW * 1.5, M.edgeY, P[i].ls, P[i].h + 0.05, P[i].lv, g, false); m.rotation.y = -P[i].ang;
   }
-  for (let i = 0; i < n; i += 5) if (P[i].h > 0.6) {                // pilares até o abismo
-    const top = P[i].h - 1, hgt = top + 30;
-    box(1.4, hgt, 1.4, M.post, P[i].ls, (top - 30) / 2 + 0, P[i].lv, g);
+  for (let i = 0; i < n; i += 5) if (P[i].h + p.baseH > 0.6) {          // pilares até o abismo (inclui a altura do andar)
+    const topY = P[i].h - 1, hgt = topY + 30 + p.baseH;
+    box(1.4, hgt, 1.4, M.post, P[i].ls, topY - hgt / 2, P[i].lv, g);
   }
   return g;
 }
+export const serpBuild = p => pathBuild(SERP_PATH, p, SERP.N1, SERP.N1 + SERP.N2);
+export const spiralBuild = p => pathBuild(SPIRAL_PATH, p, SPIRAL.N1, SPIRAL.N1 + SPIRAL.N2);
 
 // ============================================================ MEGA PISTA
 const lvOf = v => v + MEGA.shift;

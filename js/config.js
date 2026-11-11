@@ -48,6 +48,7 @@ export const PT = {
   bumps: { cells: 1 }, ice: { cells: 1 }, wind: { cells: 1 }, holes: { cells: 2 }, bigjump: { cells: 3 },
   chicane: { cells: 2 }, doublejump: { cells: 3 },
   serpentina: { cells: 4, special: 'serp' },        // ocupa 2x2 células: sobe em S, retorna 180° e desce (sai ao lado, no sentido oposto)
+  spiralup: { cells: 2, special: 'spiral', dh: 6 },  // meia-volta subindo +6 m: as peças seguintes (e a chegada) ficam no andar de cima
   megablock: { cells: 12, special: 'mega' }         // 3 células de comprimento x 4 de largura, com 4 saídas frontais
 };
 // espaços delimitados onde obstáculos podem ser posicionados (s ao longo, v lateral)
@@ -56,12 +57,14 @@ export const SLOTS = {
   curveL: [[RC * Math.PI / 4, 0]], curveR: [[RC * Math.PI / 4, 0]], jump: [[40, -2.4], [40, 2.4]],
   ice: [[8, -2.6], [8, 2.6], [18, 0]], wind: [[13, 0]], bigjump: [[66, -2.4], [66, 2.4]], doublejump: [[30, -2.4], [30, 2.4], [70, 0]],
   start: [], finish: [], bridge: [], bumps: [], holes: [], chicane: [],
-  serpentina: [[22, 0], [58, 0], [100, 0]],
+  serpentina: [[22, 0], [58, 0], [100, 0]], spiralup: [[8, 0], [34, 0], [58, 0]],
   megablock: [[16, -27], [16, 1], [34, -39], [34, 13], [50, -13], [62, 0]]       // v lateral já no eixo do bloco (centro = coluna do meio)
 };
 const ROAD = '<rect x="18" y="2" width="28" height="60" rx="3" fill="#2b3048" stroke="#00e5ff" stroke-width="2"/>';
 // ---- Serpentina Elevada: caminho central (coordenadas locais: s ao longo da entrada, lv lateral p/ a direita)
 export const SERP = { L1: 39, R: 13, L3: 39, H: 5, A: 4, N1: 26, N2: 28, N3: 18 };
+// ---- Espiral de Andar: sobe H m (novo andar) em reta + meia-volta + reta; ocupa 2 células (sai ao lado, no sentido oposto)
+export const SPIRAL = { S: 13, R: 13, H: 6, N1: 8, N2: 28, N3: 8 };
 // ---- Mega Pista: plataforma 3x4 células; entrada na coluna 1 (lv=0) e 4 saídas em lv = -26, 0, 26, 52
 export const MEGA = {
   len: 78, shift: 13, hw: 45, taper: 20, lvMin: -32.5, lvMax: 58.5,
@@ -86,6 +89,7 @@ export const ITEMS = {
   holes: { kind: 'piece', name: 'Ponte Quebrada', w: 0.7, svg: '<rect x="18" y="2" width="28" height="60" fill="#3b3f5c" stroke="#ffd23f" stroke-width="2"/><rect x="18" y="12" width="12" height="9" fill="#07031a"/><rect x="34" y="29" width="12" height="9" fill="#07031a"/><rect x="26" y="46" width="12" height="9" fill="#07031a"/>' },
   bigjump: { kind: 'piece', name: 'Mega Salto', w: 0.6, svg: '<path d="M2 54 L24 32 L24 56 L2 56Z" fill="#ff2e88"/><path d="M6 50 L12 44" stroke="#a6ff3b" stroke-width="4"/><rect x="46" y="48" width="18" height="8" fill="#2b3048" stroke="#00e5ff" stroke-width="1.5"/><path d="M24 30 Q38 0 50 44" stroke="#fff" stroke-width="2.5" stroke-dasharray="4 4" fill="none"/>' },
   serpentina: { kind: 'piece', name: 'Serpentina 180°', w: 1.1, svg: '<path d="M14 60 C14 46 34 50 34 40 C34 30 14 34 14 24 C14 12 36 8 48 14 C58 20 52 36 48 42 L48 58" stroke="#2b3048" stroke-width="12" fill="none" stroke-linecap="round"/><path d="M14 60 C14 46 34 50 34 40 C34 30 14 34 14 24 C14 12 36 8 48 14 C58 20 52 36 48 42 L48 58" stroke="#00e5ff" stroke-width="2" stroke-dasharray="4 4" fill="none"/><path d="M42 50 L48 60 L54 50Z" fill="#a6ff3b"/><text x="30" y="8" font-size="9" font-weight="900" fill="#ffd23f" font-family="Arial Black,sans-serif">5m</text>' },
+  spiralup: { kind: 'piece', name: 'Espiral Subindo', w: 0.9, svg: '<path d="M16 58 L16 40 A14 14 0 0 1 44 40 L44 22" stroke="#2b3048" stroke-width="12" fill="none"/><path d="M16 58 L16 40 A14 14 0 0 1 44 40 L44 22" stroke="#00e5ff" stroke-width="2" stroke-dasharray="4 4" fill="none"/><path d="M36 26 L44 12 L52 26Z" fill="#a6ff3b"/><text x="50" y="58" text-anchor="middle" font-size="12" font-weight="900" fill="#ffd23f" font-family="Arial Black,sans-serif">+6m</text>' },
   megablock: { kind: 'piece', name: 'Mega Pista 4x', w: 1.0, svg: '<rect x="6" y="26" width="52" height="34" rx="4" fill="#2b3048" stroke="#00e5ff" stroke-width="2"/><rect x="26" y="50" width="12" height="14" fill="#2b3048" stroke="#00e5ff" stroke-width="2"/><g fill="none" stroke-width="5" stroke-linecap="round"><path d="M10 26 V6" stroke="#00e5ff"/><path d="M24 26 V6" stroke="#ff2e88"/><path d="M40 26 V6" stroke="#a6ff3b"/><path d="M54 26 V6" stroke="#ffd23f"/></g><circle cx="32" cy="38" r="4" fill="#ff2e88"/><circle cx="18" cy="40" r="3" fill="#9be8ff"/><circle cx="46" cy="40" r="3" fill="#9be8ff"/>' },
   chicane: { kind: 'piece', name: 'Chicane', w: 0.9, svg: ROAD + '<path d="M18 16 H38 M26 32 H46 M18 48 H38" stroke="#ff2e88" stroke-width="5"/><path d="M42 58 L42 44 L22 40 L22 24 L42 20 L42 6" stroke="#a6ff3b" stroke-width="2" stroke-dasharray="3 3" fill="none"/>' },
   doublejump: { kind: 'piece', name: 'Salto Duplo', w: 0.7, svg: '<path d="M0 52 L12 44 L12 56 L0 56Z M32 52 L44 44 L44 56 L32 56Z" fill="#ff9a1f"/><rect x="20" y="50" width="10" height="6" fill="#2b3048"/><rect x="52" y="50" width="12" height="6" fill="#2b3048"/><path d="M12 42 Q18 26 22 48 M44 42 Q50 26 54 48" stroke="#fff" stroke-width="2" stroke-dasharray="3 3" fill="none"/>' },

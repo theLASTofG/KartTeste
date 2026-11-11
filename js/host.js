@@ -12,7 +12,7 @@ import { applyTray, itemEnabled, renderBuild } from './build-ui.js';
 
 // ---------------------------------------------------- lógica do HOST
 export function hostEnter(ph, d) {
-  d = Object.assign({ target: G.TARGET, theme: themeKey }, d);
+  d = Object.assign({ target: G.TARGET, theme: themeKey, cross: G.allowCross }, d);
   HST.last = { ph, d };                       // guardado para quem reconectar no meio da partida
   hooks.enterPhase(ph, d); broadcast({ t: 'phase', ph, d });
 }

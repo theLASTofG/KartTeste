@@ -29,6 +29,7 @@ export function enterPhase(ph, d) {
   resetItems();                                    // itens/caixas/projéteis nunca atravessam rodadas
   hidePhaseUI();
   if (d.target) G.TARGET = d.target;
+  if (d.cross !== undefined) G.allowCross = !!d.cross;
   if (d.theme && d.theme !== themeKey) applyTheme(d.theme);
   if (d.players) { G.players = d.players; syncCars(); updateBoard(); }
   $('confetti').style.display = 'none';
@@ -124,6 +125,7 @@ export function act(a) {
       const i = TARGET_OPTS.indexOf(G.TARGET), j = clamp((i < 0 ? 3 : i) + (a === 'targetplus' ? 1 : -1), 0, TARGET_OPTS.length - 1);
       G.TARGET = TARGET_OPTS[j]; store.set('target', G.TARGET); hostLobbyChanged();
     } break;
+    case 'cross': if (isHost() && G.state === 'lobby') { G.allowCross = !G.allowCross; store.set('cross', G.allowCross); hostLobbyChanged(); } break;
     case 'preset': if (isHost() && G.state === 'lobby') {
       const ks = Object.keys(PRESETS); G.presetKey = ks[(ks.indexOf(G.presetKey) + 1) % ks.length]; store.set('preset', G.presetKey); hostLobbyChanged();
     } break;
@@ -158,6 +160,7 @@ export function renderLobby() {
   $('targetN').textContent = fmtPts(G.TARGET);
   $('presetBtn').textContent = 'PISTA INICIAL: ' + PRESETS[G.presetKey].name;
   $('themeBtn').textContent = 'TEMA: ' + THEMES[themeKey].name;
+  $('crossBtn').textContent = 'CRUZAR PISTA: ' + (G.allowCross ? 'SIM' : 'NÃO');
   if (!$('lobbyWait').dataset.rejoin) $('lobbyWait').textContent = 'Aguardando o host começar... Meta: ' + fmtPts(G.TARGET) + ' pts · Pista: ' + PRESETS[G.presetKey].name + ' · Tema: ' + THEMES[themeKey].name;
   $('lobbyList').innerHTML = G.players.map(p => `<div class="pl"><span class="sw" style="background:${p.color}"></span><span>${esc(p.name)}${p.id === G.myId ? ' <span style="opacity:.6">(você)</span>' : ''}</span>
     ${p.id === 0 && !p.bot ? '<span class="hostb">HOST</span>' : ''}<span class="dv">${p.bot ? '🤖 BOT' : p.device === 'mobile' ? '📱 CELULAR' : '💻 PC'}</span></div>`).join('') +

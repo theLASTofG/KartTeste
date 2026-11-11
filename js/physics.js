@@ -63,7 +63,7 @@ function pushOut(c, nx, nz, over, dt, bounce = 0.35) {
   return 0;
 }
 // peças onde NÃO se salva checkpoint (o renascimento cairia de novo)
-const NO_CHECKPOINT = new Set(['start', 'finish', 'holes', 'bridge', 'jump', 'bigjump', 'doublejump', 'serpentina', 'megablock']);
+const NO_CHECKPOINT = new Set(['start', 'finish', 'holes', 'bridge', 'jump', 'bigjump', 'doublejump', 'serpentina', 'spiralup', 'megablock']);
 // renasce no último checkpoint seguro: centro da peça, alinhado, parado e invulnerável por 2 s
 export function respawnAtCheckpoint(c) {
   const idx = clamp(c.checkpointIdx || 0, 0, track.length - 1), P0 = track[idx];
@@ -94,8 +94,9 @@ function freeFall(c, dt) {
   c.grounded = false;
   c.vy -= GRAV * dt; c.x += c.vx * dt; c.y += c.vy * dt; c.z += c.vz * dt; c.airT += dt;
   c.tumbleX += dt * 3.1; c.tumbleZ += dt * 2.3;
-  if (c.y < -20 && c.alive) fallDeath(c);
+  if (c.y < baseOf(c) - 20 && c.alive) fallDeath(c);        // limite do abismo relativo ao andar da peça atual
 }
+const baseOf = c => (track[c.pi] && track[c.pi].baseH) || 0;
 const NO_INP = { steer: 0, throttle: 0, brake: 0, drift: false, gasRaw: false };
 const SCR = { steer: 0, throttle: 0, brake: 0, drift: false, gasRaw: false };
 export function stepCar(c, inp, dt) {
@@ -287,9 +288,13 @@ export function trackContact(c, dt) {
   }
   if (c.grounded && c.alive && !c.voidFall && c.pi > (c.checkpointIdx || 0) && !NO_CHECKPOINT.has(Pc.type)) { c.checkpointIdx = c.pi; c.checkpointS = 3; }
   if (c.grounded) {
-    if (Q.floor && Math.abs(c.y - Q.h) < 0.8) {
+    if (Q.floor && Math.abs(c.y - Q.h) < 1.15) {
       const along = c.vx * Q.fx + c.vz * Q.fz, vg = along * Q.slope;
-      if (c.vy > 1 && vg < c.vy - GRAV * dt * 1.5) { c.grounded = false; c.airT = 0; }   // passou da crista rápido: decola (lombadas)
+      const dSlope = (c.prevSlope ?? Q.slope) - Q.slope;
+      c.prevSlope = Q.slope;
+      // decola só quando a INCLINAÇÃO da pista diminui (crista/lombada/ponta da rampa). Frear, dar ré ou desacelerar na subida
+      // mudam "along" mas não a pista: nunca soltam o carro do chão.
+      if (c.vy > 1 && !c.braking && dSlope > 0.01 && vg < c.vy - GRAV * dt * 1.5) { c.grounded = false; c.airT = 0; }
       else { c.y = Q.h; c.vy = vg; }
     } else {
       c.grounded = false; c.airT = 0;
@@ -302,9 +307,12 @@ export function trackContact(c, dt) {
     c.vy -= GRAV * dt; c.y += c.vy * dt; c.airT += dt;
     // só pousa atravessando a superfície DE CIMA PARA BAIXO (prevY acima do piso, com folga mínima pela inclinação).
     // Quem já estava abaixo do piso nunca é "pescado" de volta: vira queda livre (voidFall) e ninguém mais o captura.
-    const tol = 0.15 + Math.abs(Q.slope) * Math.hypot(c.vx, c.vz) * dt;
-    if (Q.floor && c.vy <= 0 && prevY >= Q.h - tol && c.y <= Q.h) {
-      const impact = -c.vy;
+    // folga maior em rampas/curvas inclinadas (no raio interno o s avança até 1,8x mais rápido)
+    const tol = 0.28 + Math.abs(Q.slope) * (Math.hypot(c.vx, c.vz) * dt * 1.8 + 0.15);
+    // velocidade vertical RELATIVA à rampa: subindo junto com a pista (micro-pulo, hop do drift) também pousa
+    const vgA = (c.vx * Q.fx + c.vz * Q.fz) * Q.slope, relVy = c.vy - vgA;
+    if (Q.floor && (c.vy <= 0 || relVy <= 0.4) && prevY >= Q.h - tol && c.y <= Q.h + 0.05) {
+      const impact = Math.max(0, -relVy);
       c.y = Q.h; c.vy = 0; c.grounded = true; c.squash = 0.22;
       if (impact > 6) {
         burst(c.x, c.y + 0.2, c.z, 12, 0.7, 0.8, 1, 5, 0.4, 8);
@@ -348,7 +356,7 @@ export function trackContact(c, dt) {
   }
   c.s = Q.s; c.v = Q.v;
   c.prog = pieceStart[c.pi] + clamp(Q.s, 0, Pc.len);
-  if (c.y < -20 && c.alive) fallDeath(c);
+  if (c.y < baseOf(c) - 20 && c.alive) fallDeath(c);
 }
 export function carCollisions() {
   const D = CAR_R * 2, D2 = D * D;

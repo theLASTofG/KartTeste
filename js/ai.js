@@ -19,7 +19,7 @@ function laneFor(c, sG) {
     const t = clamp((s - 12) / 22, 0, 1), k = ai.exit === undefined ? 1 : ai.exit;
     return -MEGA.shift + (MEGA.exitV[k] + MEGA.shift) * t * t * (3 - 2 * t);
   }
-  if (p.type === 'serpentina') return wob * 0.3;
+  if (p.type === 'serpentina' || p.type === 'spiralup') return wob * 0.3;
   // desvia de obstáculos próximos (ou mira no mini boost)
   let near = null;
   for (const o of obstacles) if (o.pi === i && Math.abs(o.s - s) < 7.5) { near = o; break; }
@@ -62,6 +62,7 @@ function speedLimitAt(c, sG) {
   else if (p.type === 'bumps') lim = 22;
   else if (p.type === 'chicane') lim = 14 + c.ai.skill * 2;
   else if (p.type === 'serpentina') lim = 15.5 + c.ai.skill * 2;
+  else if (p.type === 'spiralup') lim = 14.5 + c.ai.skill * 2;
   else if (p.special === 'mega') lim = (c.ai.exit === 0 || c.ai.exit === 3) ? 15 + c.ai.skill * 1.5 : 18.5 + c.ai.skill * 1.5;
   if (!p.turn && nx && nx.turn && haz(n2)) lim = Math.min(lim, 18);    // reta antes de curva que antecede perigo: já alivia
   for (const o of obstacles) if (o.pi === i && o.type === 'spinner') lim = Math.min(lim, 18);
