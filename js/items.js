@@ -229,7 +229,7 @@ export function updateItems(dt) {
     if (!race || o.ttl <= 0) { despawnObj(o.id); broadcast({ t: 'item_despawn', kind: 'obj', id: o.id }); continue; }
     let P = track[o.pi]; P.query(o.x, o.z, QQ);
     for (let k = 0; k < 3; k++) {
-      const n = QQ.s > P.len ? succIdx(o.pi, QQ.v) : QQ.s < 0 ? prevIdx(o.pi) : -1;
+      const n = QQ.s > P.len ? succIdx(o.pi, QQ.v) : QQ.s < 0 ? prevIdx(o.pi, QQ.v) : -1;
       if (n >= 0 && n !== o.pi) { o.pi = n; P = track[n]; P.query(o.x, o.z, QQ); } else break;
     }
     if (Math.abs(QQ.v) > QQ.hw + 0.8 || (QQ.s > P.len && succIdx(o.pi, QQ.v) < 0)) {       // saiu da pista

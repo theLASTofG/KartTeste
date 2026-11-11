@@ -1,7 +1,7 @@
 // Peças especiais: Serpentina Elevada (caminho 3D por polilinha) e Mega Pista (plataforma com 4 saídas).
 // Coordenadas locais da peça: ls = ao longo da direção de entrada, lv = lateral (para a direita); y = altura.
 import * as THREE from 'three';
-import { MEGA, SERP, SPIRAL, HW } from './config.js';
+import { MEGA, SERP, SPIRAL, HW, CELL } from './config.js';
 import { clamp, lerp, wrapA } from './utils.js';
 import { box, M } from './scene.js';
 
@@ -217,3 +217,51 @@ export function megaBuild(p) {
   for (const [s, lv] of [[0, 5.5], [0, -5.5], [L, MEGA.lvMin], [L, MEGA.lvMax], [T + 20, MEGA.lvMin], [T + 20, MEGA.lvMax]]) box(1.4, 30, 1.4, M.post, s, -16, lv, g);
   return g;
 }
+
+// ============================================================ FUNIL (4 faixas -> 1 pista)
+export const FUNNEL_LEN = MEGA.funnelLen;
+export function funnelBounds(s) {
+  const t = smooth(clamp(s / FUNNEL_LEN, 0, 1));
+  return [MEGA.lvMin + (-5.5 - MEGA.lvMin) * t, MEGA.lvMax + (5.5 - MEGA.lvMax) * t];
+}
+export const funnelWorld = (p, s, v, o) => megaWorld(p, s, v, o);
+export function funnelQuery(p, x, z, o) {
+  const dx = x - p.ex, dz = z - p.ez, s = dx * p.fx + dz * p.fz, lv = dx * p.rx + dz * p.rz;
+  o.s = s; o.v = lv - MEGA.shift; o.fx = p.fx; o.fz = p.fz; o.rx = p.rx; o.rz = p.rz;
+  const [lo, hi] = funnelBounds(s);
+  o.h = 0; o.slope = 0; o.hw = MEGA.hw; o.wallL = o.wallR = false; o.wind = 0; o.ice = false;
+  o.floor = s >= 0 && s <= FUNNEL_LEN && lv >= lo && lv <= hi;
+  return o;
+}
+// faixa 3D entre duas listas de pontos [ls, lv]
+function ribbon(Lp, Rp, y0, y1, mat, g) {
+  const n = Lp.length, pos = [], idx = [];
+  for (let i = 0; i < n; i++) pos.push(Lp[i][0], y1, Lp[i][1], Rp[i][0], y1, Rp[i][1]);
+  if (y0 !== y1) for (let i = 0; i < n; i++) pos.push(Lp[i][0], y0, Lp[i][1], Rp[i][0], y0, Rp[i][1]);
+  for (let i = 0; i < n - 1; i++) {
+    const a = 2 * i, b = a + 1, c = a + 2, d = a + 3, o = 2 * n;
+    idx.push(a, b, d, a, d, c);
+    if (y0 !== y1) { idx.push(o + a, o + d, o + b, o + a, o + c, o + d, a, c, o + c, a, o + c, o + a, b, o + b, o + d, b, o + d, d); }
+  }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setIndex(idx); geo.computeVertexNormals();
+  const m = new THREE.Mesh(geo, mat); m.castShadow = m.receiveShadow = true; g.add(m); return m;
+}
+export function funnelBuild(p) {
+  const g = new THREE.Group(); g.position.set(p.ex, 0, p.ez); g.rotation.y = -p.a;
+  const N = 26, Lp = [], Rp = [];
+  for (let i = 0; i <= N; i++) { const s = FUNNEL_LEN * i / N, [lo, hi] = funnelBounds(s); Lp.push([s, lo]); Rp.push([s, hi]); }
+  ribbon(Lp, Rp, -1, 0, matFloor, g);
+  const edgeL = Lp.map(([s, lo]) => [s, lo + 0.35]), edgeR = Rp.map(([s, hi]) => [s, hi - 0.35]);   // guias neon nas bordas anguladas
+  ribbon(Lp.map(q => [q[0], q[1]]), edgeL.map((q, i) => [q[0], q[1]]), 0.04, 0.04, matEdgeY, g);
+  ribbon(edgeR, Rp, 0.04, 0.04, matEdge, g);
+  const P = MEGA.funnelPad;                                                  // piso turbo central na saída
+  const pl = new THREE.Mesh(new THREE.PlaneGeometry(P.s1 - P.s0, P.l1 - P.l0), M.pad1); pl.rotation.x = -Math.PI / 2;
+  pl.position.set((P.s0 + P.s1) / 2, 0.035, (P.l0 + P.l1) / 2); g.add(pl);
+  for (let k = 0; k < 4; k++) for (let s = 8; s < FUNNEL_LEN - 6; s += 10) {   // setas apontando para o centro, em cada faixa
+    const t0 = smooth(s / FUNNEL_LEN), t1 = smooth((s + 1) / FUNNEL_LEN), lv0 = MEGA.exitLv[k] * (1 - t0), lv1 = MEGA.exitLv[k] * (1 - t1);
+    const m = box(2.6, 0.05, 0.55, M.edgeY, s, 0.05, lv0, g, false); m.rotation.y = -Math.atan2(lv1 - lv0, 1);
+  }
+  for (const [s, lv] of [[0, MEGA.lvMin], [0, MEGA.lvMax], [FUNNEL_LEN, -5.5], [FUNNEL_LEN, 5.5]]) box(1.4, 30, 1.4, M.post, s, -16, lv, g);
+  return g;
+}
+export const CELL_SZ = CELL;

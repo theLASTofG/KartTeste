@@ -69,12 +69,12 @@ export function renderBuild() {
   bar.dataset.mode = mode;
   $('placeChips').innerHTML = G.players.map(p => `<span class="chip ${G.placed[p.id] === 'ok' ? 'ok' : G.placed[p.id] === 'no' ? 'no' : ''}" style="${G.placed[p.id] ? '' : 'border:1px solid ' + p.color}">${esc(p.name)}${G.placed[p.id] === 'ok' ? ' ✓' : G.placed[p.id] === 'no' ? ' ✗' : ''}</span>`).join('');
   $('placeIcon').innerHTML = d ? d.svg : '';
-  const exitMode = mode === 'piece' && megaIndex() >= 0 && freeExits().some(k => canPlace(it.type, k));
-  if (mode === 'piece') $('placeTxt').innerHTML = `<b>${d.name}</b><br>${!canPlace(it.type) ? '⚠ Não cabe agora — volte às cartas e escolha outra.' : exitMode ? 'Toque numa <span style="color:#ffd23f">saída colorida</span> da Mega Pista (ou ENCAIXAR = primeira livre)' : 'Encaixe no fim da pista antes dos outros!'}`;
+  const exitMode = mode === 'piece' && megaIndex() >= 0 && canPlace(it.type);
+  if (mode === 'piece') $('placeTxt').innerHTML = `<b>${d.name}</b><br>${!canPlace(it.type) ? '⚠ Não cabe agora — volte às cartas e escolha outra.' : exitMode ? 'Toque numa <span style="color:#ffd23f">saída colorida</span> da Mega Pista ou no <span style="color:#fff">marcador branco</span> (fim da pista). ENCAIXAR = 1ª saída livre que aceitar, senão o fim' : 'Encaixe no fim da pista antes dos outros!'}`;
   else if (mode === 'obs') $('placeTxt').innerHTML = `<b>${d.name}</b><br>Toque num <span style="color:#00e5ff">espaço brilhante</span>`;
   else if (mode === 'done') $('placeTxt').innerHTML = G.placed[G.myId] === 'ok' ? `<b>${d ? d.name : 'Peça'}</b> colocada! ✓` : '<b>Sem carta nesta rodada</b>';
   setSlotMode(mode === 'obs' || exitMode, exitMode ? 'exit' : 'slot');
-  if (exitMode) for (const g of slotGroup.children) if (g.userData.kind === 'exit') g.visible = canPlace(it.type, +g.children[0].userData.key[1]);
+  if (exitMode) for (const g of slotGroup.children) if (g.userData.kind === 'exit') { const kk = g.children[0].userData.key; g.visible = canPlace(it.type, kk === 'end' ? -2 : +kk[1]); }
 }
 const raycaster = new THREE.Raycaster(), ndc = new THREE.Vector2();
 export function tryPlaceAt(x, y) {

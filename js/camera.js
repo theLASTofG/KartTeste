@@ -4,7 +4,7 @@ import { G } from './state.js';
 import { $, clamp, lerp, rnd, TAU, wrapA } from './utils.js';
 import { CELL } from './config.js';
 import { camera, fxg, H, portrait, scene, sun, W } from './scene.js';
-import { exitPos, freeExits, slotGroup, tmpW, track } from './track.js';
+import { endPos, exitPos, freeExits, megaIndex, slotGroup, tmpW, track } from './track.js';
 import { freeSlots } from './obstacles.js';
 import { cars, myCar } from './cars.js';
 import { cmpRace } from './hud.js';
@@ -21,7 +21,7 @@ function bcManual() { if (!BC.manual) { BC.x = BC.ax; BC.z = BC.az; BC.d = BC.au
 // enquadramento inicial perto das zonas livres (começa pelas mais novas, no fim da pista)
 function focusSlots() {
   const pts = G.slotKind === 'exit'
-    ? freeExits().map(k => { exitPos(k, tmpW); return { x: tmpW.x, z: tmpW.z, pi: 0 }; })
+    ? [...freeExits().map(k => { exitPos(k, tmpW); return { x: tmpW.x, z: tmpW.z, pi: 0 }; }), ...(megaIndex() >= 0 ? [(endPos(tmpW), { x: tmpW.x, z: tmpW.z, pi: 1 })] : [])]
     : freeSlots().map(k => { const [pi, si] = k.split(':').map(Number), p = track[pi], sl = p.slots[si]; p.world(sl.s, sl.v, tmpW); return { x: tmpW.x, z: tmpW.z, pi }; });
   if (!pts.length) { BC.manual = false; return; }
   pts.sort((u, v) => v.pi - u.pi);

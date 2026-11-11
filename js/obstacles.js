@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { G, hooks } from './state.js';
 import { MEGA } from './config.js';
 import { box, disposeGroup, M } from './scene.js';
-import { addDrop, exitPos, freeExits, megaIndex, obstacles, slotGroup, tmpW, track, trackRoot } from './track.js';
+import { addDrop, endPos, exitPos, freeExits, megaIndex, obstacles, slotGroup, tmpW, track, trackRoot } from './track.js';
 
 // ---------------------------------------------------------- obstáculos
 const matBoxGlass = new THREE.MeshBasicMaterial({ color: 0x00e5ff, transparent: true, opacity: 0.32, depthWrite: false });
@@ -77,6 +77,8 @@ const slotPlate = new THREE.PlaneGeometry(4.2, 4.2), slotBeam = new THREE.Cylind
 export const beamMat = new THREE.MeshBasicMaterial({ color: 0x00e5ff, transparent: true, opacity: 0.28, blending: THREE.AdditiveBlending, depthWrite: false });
 const exitPlate = new THREE.PlaneGeometry(11, 11);
 const exitMats = MEGA.colors.map(c => { const m = M.slot.clone(); m.color.setHex(c); m.opacity = 0.95; return m; });
+const endMat = (() => { const m = M.slot.clone(); m.color.setHex(0xffffff); m.opacity = 0.95; return m; })();
+const endBeamMat = (() => { const m = beamMat.clone(); m.color.setHex(0xffffff); return m; })();
 const exitBeamMats = MEGA.colors.map(c => { const m = beamMat.clone(); m.color.setHex(c); return m; });
 export function rebuildSlots() {
   for (const g of [...slotGroup.children]) slotGroup.remove(g);
@@ -96,6 +98,15 @@ export function rebuildSlots() {
     const plate = new THREE.Mesh(exitPlate, exitMats[k]); plate.rotation.x = -Math.PI / 2; plate.rotation.z = -tmpW.a; plate.position.y = 0.09;
     const beam = new THREE.Mesh(slotBeam, exitBeamMats[k]); beam.position.y = 7; beam.scale.set(2.2, 1, 2.2);
     plate.userData.key = beam.userData.key = 'x' + k; plate.userData.plate = true;
+    grp.userData.kind = 'exit'; grp.visible = G.slotKind === 'exit';
+    grp.add(plate, beam); slotGroup.add(grp);
+  }
+  if (megaIndex() >= 0) {                                                   // fim da pista principal (antes da chegada, depois do funil)
+    endPos(tmpW);
+    const grp = new THREE.Group(); grp.position.set(tmpW.x, tmpW.y, tmpW.z);
+    const plate = new THREE.Mesh(exitPlate, endMat); plate.rotation.x = -Math.PI / 2; plate.position.y = 0.09;
+    const beam = new THREE.Mesh(slotBeam, endBeamMat); beam.position.y = 7; beam.scale.set(2.2, 1, 2.2);
+    plate.userData.key = beam.userData.key = 'end'; plate.userData.plate = true;
     grp.userData.kind = 'exit'; grp.visible = G.slotKind === 'exit';
     grp.add(plate, beam); slotGroup.add(grp);
   }

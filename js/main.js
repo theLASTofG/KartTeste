@@ -234,6 +234,6 @@ window.__game = {
   get tray() { return G.tray; }, get holds() { return G.holds; }, get placed() { return G.placed; }, get players() { return G.players; },
   get NET() { return NET; }, cars, update, act, canPlace, freeSlots, hostPick, hostPlace, toHost, myCar, keys,
   get BC() { return BC; }, PTRS, pickCard, buildMode, itemEnabled, stepCar, trackContact, tryPlaceAt, panBy, zoomBy, applyTrack, camera,
-  IT, useItem, hostUse, hostPickup, applyEffect, itemSnapshot, itemClientMsg, resetItems
+  IT, useItem, hostUse, hostPickup, applyEffect, itemSnapshot, itemClientMsg, resetItems, slotGroup, canPlaceAt: canPlace
 };
 requestAnimationFrame(frame);

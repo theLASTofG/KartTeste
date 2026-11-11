@@ -256,6 +256,14 @@ function boxPushLocal(c, Q, cs, cv, hs, hv, dt) {
   if (d < 1e-4) { if (Math.abs(ds) / hs > Math.abs(dv) / hv) { es = Math.sign(ds) || 1; ev = 0; } else { es = 0; ev = Math.sign(dv) || 1; } } else { es /= d; ev /= d; }
   pushOut(c, Q.fx * es + Q.rx * ev, Q.fz * es + Q.rz * ev, CAR_R - d, dt);
 }
+// piso turbo central na saída do funil (as 4 faixas se encontram aqui)
+function funnelContact(c, Q) {
+  const P = MEGA.funnelPad, lv = Q.v + MEGA.shift;
+  if (c.grounded && c.alive && c.padCool <= 0 && Q.s > P.s0 && Q.s < P.s1 && lv > P.l0 && lv < P.l1) {
+    giveBoost(c, PAD.pow, PAD.dur, PAD.kick); c.padCool = 0.6;
+    if (c.isLocal) { SFX.pad(); toast('BOOST!', '#a6ff3b', 0.6); G.shake = Math.max(G.shake, 0.15); }
+  }
+}
 // conteúdo fixo da Mega Pista: barreiras entre as saídas, bumpers de mola e pisos turbo (v centrado; lv = v + shift)
 function megaContact(c, Q, dt) {
   const lv = Q.v + MEGA.shift;
@@ -283,7 +291,7 @@ export function trackContact(c, dt) {
   // troca de peça só com o carro lateralmente sobre a pista: fora da borda, nenhuma outra peça "captura" o carro
   for (let k = 0; k < 3; k++) {
     if (c.voidFall || Math.abs(Q.v) > Q.hw + 0.25) break;
-    const n = Q.s > Pc.len ? succIdx(c.pi, Q.v) : Q.s < 0 ? prevIdx(c.pi) : -1;      // na Mega Pista a saída vem da posição lateral
+    const n = Q.s > Pc.len ? succIdx(c.pi, Q.v) : Q.s < 0 ? prevIdx(c.pi, Q.v) : -1;      // na Mega Pista a saída vem da posição lateral
     if (n >= 0 && n !== c.pi) { c.pi = n; Pc = track[n]; Pc.query(c.x, c.z, Q); } else break;
   }
   if (c.grounded && c.alive && !c.voidFall && c.pi > (c.checkpointIdx || 0) && !NO_CHECKPOINT.has(Pc.type)) { c.checkpointIdx = c.pi; c.checkpointS = 3; }
@@ -336,6 +344,7 @@ export function trackContact(c, dt) {
     }
   }
   if (Pc.type === 'megablock') megaContact(c, Q, dt);
+  else if (Pc.type === 'megafunnel') funnelContact(c, Q);
   if (Pc.type === 'chicane' && c.y > Q.h - 0.5 && c.y < Q.h + 1.5) for (const b of BARRIERS) boxPushLocal(c, Q, b.s, (b.v0 + b.v1) / 2, 0.6, (b.v1 - b.v0) / 2, dt);
   obstacleContact(c, dt);
   c.padCool -= dt; c.hitCool -= dt;

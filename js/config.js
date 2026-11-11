@@ -48,6 +48,7 @@ export const PT = {
   bumps: { cells: 1 }, ice: { cells: 1 }, wind: { cells: 1 }, holes: { cells: 2 }, bigjump: { cells: 3 },
   chicane: { cells: 2 }, doublejump: { cells: 3 },
   serpentina: { cells: 4, special: 'serp' },        // ocupa 2x2 células: sobe em S, retorna 180° e desce (sai ao lado, no sentido oposto)
+  megafunnel: { cells: 8, special: 'funnel' },        // automática: junta as 4 faixas da Mega Pista numa pista só (nunca vira carta)
   spiralup: { cells: 2, special: 'spiral', dh: 6 },  // meia-volta subindo +6 m: as peças seguintes (e a chegada) ficam no andar de cima
   megablock: { cells: 12, special: 'mega' }         // 3 células de comprimento x 4 de largura, com 4 saídas frontais
 };
@@ -74,8 +75,12 @@ export const MEGA = {
   pads: [{ s0: 24, s1: 32, l0: -5.5, l1: 5.5 }, { s0: 58, s1: 64, l0: -5.5, l1: 5.5 }, { s0: 58, s1: 64, l0: 20.5, l1: 31.5 }],
   bumps: [38, 52], bumpHalf: 2, bumpH: 0.5,                         // lombadas na largura toda
   bumpers: [{ s: 46, l: 13, r: 1.4 }, { s: 46, l: 39, r: 1.4 }],   // bumpers de mola fixos
-  colors: [0x00e5ff, 0xff2e88, 0xa6ff3b, 0xffd23f]
+  colors: [0x00e5ff, 0xff2e88, 0xa6ff3b, 0xffd23f],
+  branchCells: 2,                                                    // as 4 faixas paralelas têm o mesmo comprimento (2 células = 52 m)
+  funnelLen: 52, funnelPad: { s0: 34, s1: 46, l0: -5.5, l1: 5.5 }   // funil: 4 faixas -> 1 pista central, piso turbo na saída
 };
+// cartas aceitas nas 4 saídas (retas, sem curva, até 2 células; as de 1 célula ganham um trecho reto automático)
+export const EXIT_TYPES = ['straight', 'boost', 'bumps', 'ice', 'wind', 'bridge', 'holes', 'chicane', 'jump'];
 export const ITEMS = {
   straight: { kind: 'piece', name: 'Reta', w: 0.9, svg: ROAD + '<path d="M32 8 V20 M32 28 V40 M32 48 V58" stroke="#fff" stroke-width="3"/>' },
   boost: { kind: 'piece', name: 'Reta Turbo', w: 1.0, svg: ROAD + '<path d="M24 42 L32 32 L40 42 M24 28 L32 18 L40 28" stroke="#a6ff3b" stroke-width="4.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>' },

@@ -3,7 +3,7 @@ import { G, HST, hooks } from './state.js';
 import { clamp, r2, rnd, TAU } from './utils.js';
 import { ITEMS, PTS } from './config.js';
 import { themeKey } from './scene.js';
-import { applyTrack, canPlace, finishGlobal, freeExits, megaIndex, PRESETS, track, trackTypes } from './track.js';
+import { applyTrack, canPlace, finishGlobal, freeExits, layoutSigs, megaIndex, pieceSigs, PRESETS, trackTypes } from './track.js';
 import { freeSlots, obsData } from './obstacles.js';
 import { cars, playerById, plist, syncCars } from './cars.js';
 import { placeToast } from './hud.js';
@@ -103,17 +103,21 @@ export function hostPlace(pid, slotKey, auto) {
   let ok = false;
   if (ITEMS[it.type].kind === 'piece') {
     const m = megaIndex();
-    if (m < 0) {                                                  // pista linear: encaixa antes da chegada (a Mega Pista substitui a chegada)
+    if (m < 0) {                                                  // pista linear: encaixa antes da chegada
       ok = canPlace(it.type);
-      if (ok) { const t = trackTypes(); if (it.type === 'megablock') t.splice(t.length - 1, 1, 'megablock'); else t.splice(t.length - 1, 0, it.type); applyTrack(t, obsData(), true); }
-    } else {                                                      // com Mega Pista: 1 peça por saída (0..3), escolhida no mapa ou a primeira que couber
-      let k = slotKey && /^x[0-3]$/.test(slotKey) ? +slotKey[1] : -1;
-      if (k >= 0 && !canPlace(it.type, k)) k = -1;
-      if (k < 0) k = freeExits().find(e => canPlace(it.type, e)) ?? -1;
-      if (k >= 0) {
-        const at = track[m].exitIdx[k];                           // a peça entra antes da chegada da saída: índices seguintes sobem 1
-        const list = obsData().map(o => { const [pi, si] = o.key.split(':').map(Number); return pi >= at ? { ...o, key: (pi + 1) + ':' + si } : o; });
-        const t = trackTypes(); t.push('x' + k + ':' + it.type);
+      if (ok) { const t = trackTypes(); t.splice(t.length - 1, 0, it.type); applyTrack(t, obsData(), true); }
+    } else {                                                      // com Mega Pista: numa das 4 saídas livres (x0..x3) OU no fim da pista (end)
+      let onde = slotKey === 'end' ? -2 : slotKey && /^x[0-3]$/.test(slotKey) ? +slotKey[1] : null;
+      if (onde !== null && !canPlace(it.type, onde)) onde = null;
+      if (onde === null) {                                        // sem escolha válida: 1ª saída livre que aceita a carta; senão o fim da pista
+        const k = freeExits().find(e => canPlace(it.type, e));
+        onde = k !== undefined ? k : canPlace(it.type, -2) ? -2 : null;
+      }
+      if (onde !== null) {
+        const t = trackTypes();
+        if (onde === -2) t.splice(t.length - 1, 0, it.type); else t.push('x' + onde + ':' + it.type);
+        const oldSig = pieceSigs(), newSig = layoutSigs(t);       // obstáculos acompanham a peça (os índices mudam quando entra peça no meio)
+        const list = obsData().map(o => { const [pi, si] = o.key.split(':').map(Number); const ni = newSig.indexOf(oldSig[pi]); return ni < 0 ? null : { ...o, key: ni + ':' + si }; }).filter(Boolean);
         applyTrack(t, list, true); ok = true;
       }
     }
