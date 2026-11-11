@@ -1,10 +1,10 @@
 {
-  "name": "KartTeste Turbo Drift",
-  "short_name": "KartTeste",
-  "description": "Jogo de corrida arcade ultra-fluido com Drift, Turbo e Multiplayer Online para PC e Celular.",
+  "name": "BACKROOMS: Nível 0 — Found Footage 3D",
+  "short_name": "Backrooms 3D",
+  "description": "Terror de sobrevivência 3D nas Backrooms (Nível 0) com filtro VHS, labirinto procedural, entidades e Co-op Online P2P para PC e Celular.",
   "start_url": "/",
   "display": "fullscreen",
   "orientation": "landscape",
-  "background_color": "#090b10",
-  "theme_color": "#00f0ff"
+  "background_color": "#0a0905",
+  "theme_color": "#c8b560"
 }

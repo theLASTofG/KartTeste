@@ -5,21 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="theme-color" content="#090d16" />
+  <meta name="theme-color" content="#0a0905" />
   <link rel="manifest" href="/manifest.json" />
-  <title>KartTeste 3D — Monte a Pista até 1000 Pontos!</title>
+  <title>BACKROOMS: NÍVEL 0 — Found Footage 3D</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <style>
     :root {
-      --bg: #090d16;
-      --panel: rgba(13, 19, 33, 0.86);
-      --cyan: #00f0ff;
-      --green: #10b981;
-      --yellow: #facc15;
-      --orange: #ff8800;
-      --purple: #d946ef;
+      --bg: #080704;
+      --panel: rgba(14, 13, 8, 0.88);
+      --yellow: #d9c15b;
+      --amber: #f59e0b;
+      --green: #22c55e;
       --red: #ef4444;
+      --cyan: #38bdf8;
+      --border: rgba(217, 193, 91, 0.32);
     }
 
     * {
@@ -37,72 +37,179 @@
       height: 100%;
       overflow: hidden;
       background: var(--bg);
-      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-      color: #fff;
+      font-family: 'Courier New', Courier, monospace;
+      color: #f3efd8;
     }
 
     #gameContainer {
       position: fixed;
       inset: 0;
+      z-index: 1;
     }
 
-    /* HUD SUPERIOR: PLACAR ATÉ 1000 PONTOS */
-    #topBar {
+    /* EFEITO VHS / CAMCORDER 1996 */
+    #vhsOverlay {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 4;
+      background:
+        repeating-linear-gradient(
+          0deg,
+          rgba(0, 0, 0, 0.18) 0px,
+          rgba(0, 0, 0, 0.18) 1px,
+          transparent 1px,
+          transparent 3px
+        ),
+        radial-gradient(circle at center, transparent 48%, rgba(0, 0, 0, 0.72) 100%);
+      transition: box-shadow 0.2s ease;
+    }
+
+    #vhsOverlay.danger {
+      box-shadow: inset 0 0 90px rgba(220, 38, 38, 0.55);
+      animation: vhsShake 0.12s infinite;
+    }
+
+    #vhsNoiseBar {
+      position: fixed;
+      left: 0;
+      right: 0;
+      height: 18px;
+      background: linear-gradient(
+        180deg,
+        transparent,
+        rgba(255, 255, 255, 0.14),
+        rgba(217, 193, 91, 0.18),
+        transparent
+      );
+      pointer-events: none;
+      z-index: 5;
+      animation: trackingBar 7s linear infinite;
+      opacity: 0.55;
+    }
+
+    @keyframes trackingBar {
+      0% { top: -5%; }
+      100% { top: 105%; }
+    }
+
+    @keyframes vhsShake {
+      0% { transform: translate(0, 0); }
+      25% { transform: translate(-2px, 1px); }
+      50% { transform: translate(2px, -1px); }
+      75% { transform: translate(-1px, -2px); }
+      100% { transform: translate(1px, 2px); }
+    }
+
+    /* MIRA CENTRAL E PROMPT DE INTERAÇÃO */
+    #crosshair {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      width: 8px;
+      height: 8px;
+      transform: translate(-50%, -50%);
+      border: 1.5px solid rgba(255, 248, 200, 0.7);
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 8;
+      transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+    }
+
+    #crosshair.active {
+      transform: translate(-50%, -50%) scale(1.9);
+      border-color: var(--green);
+      background: rgba(34, 197, 94, 0.35);
+    }
+
+    #interactPrompt {
+      position: fixed;
+      top: calc(50% + 22px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(10, 9, 5, 0.88);
+      border: 1px solid var(--yellow);
+      color: #fff8d6;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      pointer-events: none;
+      z-index: 12;
+      display: none;
+      text-shadow: 0 0 8px rgba(217, 193, 91, 0.6);
+      white-space: nowrap;
+    }
+
+    /* HUD SUPERIOR (CAMCORDER + OBJETIVOS) */
+    #topHud {
       position: fixed;
       top: 0;
       left: 0;
       right: 0;
-      padding: 10px 14px;
+      padding: 12px 16px;
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      pointer-events: none;
       z-index: 10;
+      pointer-events: none;
       gap: 10px;
     }
 
-    #scoreboardHud {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      max-width: 68%;
-    }
-
-    .score-pill {
+    .vhs-cam-box {
       background: var(--panel);
-      border: 2px solid rgba(255, 255, 255, 0.16);
-      border-radius: 12px;
-      padding: 5px 10px;
-      min-width: 112px;
-      backdrop-filter: blur(8px);
-      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+      border: 1px solid var(--border);
+      padding: 8px 12px;
+      border-radius: 6px;
+      backdrop-filter: blur(4px);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
     }
 
-    .score-pill-top {
+    .rec-line {
       display: flex;
-      justify-content: space-between;
-      font-size: 11px;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
       font-weight: 900;
-      margin-bottom: 4px;
+      letter-spacing: 1px;
     }
 
-    .score-bar-bg {
-      width: 100%;
-      height: 7px;
-      background: rgba(255, 255, 255, 0.12);
-      border-radius: 99px;
-      overflow: hidden;
+    .rec-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #ef4444;
+      box-shadow: 0 0 10px #ef4444;
+      animation: blinkRec 1s infinite;
     }
 
-    .score-bar-fill {
-      height: 100%;
-      width: 0%;
-      border-radius: 99px;
-      transition: width 0.35s ease;
+    @keyframes blinkRec {
+      0%, 49% { opacity: 1; }
+      50%, 100% { opacity: 0.15; }
     }
 
-    .top-buttons {
+    .objective-list {
+      margin-top: 6px;
+      font-size: 12px;
+      color: #e5dec2;
+      line-height: 1.45;
+    }
+
+    .obj-highlight {
+      color: var(--yellow);
+      font-weight: 900;
+    }
+
+    .top-right-group {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 8px;
       pointer-events: auto;
+    }
+
+    .hud-btn-row {
       display: flex;
       gap: 6px;
       flex-wrap: wrap;
@@ -111,1680 +218,2216 @@
 
     .btn-hud {
       background: var(--panel);
-      color: #fff;
-      border: 1px solid rgba(255, 255, 255, 0.22);
-      border-radius: 10px;
-      padding: 7px 11px;
+      color: #f3efd8;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-family: inherit;
       font-size: 11px;
-      font-weight: 800;
+      font-weight: 700;
       cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
     }
 
-    .btn-hud.active {
-      border-color: var(--green);
-      background: rgba(16, 185, 129, 0.28);
-      color: #6ee7b7;
+    .btn-hud:hover, .btn-hud:active {
+      background: rgba(217, 193, 91, 0.2);
+      border-color: var(--yellow);
     }
 
-    /* INFO DA RODADA E VELOCIDADE */
-    #bottomHud {
-      position: fixed;
-      bottom: 14px;
-      left: 50%;
-      transform: translateX(-50%);
+    /* RADAR / MOTION TRACKER */
+    #radarBox {
+      background: rgba(8, 16, 10, 0.88);
+      border: 1.5px solid rgba(34, 197, 94, 0.45);
+      border-radius: 8px;
+      padding: 6px;
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 5px;
-      pointer-events: none;
+      box-shadow: 0 0 18px rgba(0, 0, 0, 0.7);
+      pointer-events: auto;
+    }
+
+    #radarCanvas {
+      width: 124px;
+      height: 124px;
+      border-radius: 6px;
+      background: #040b06;
+      display: block;
+    }
+
+    #radarBox.expanded #radarCanvas {
+      width: 220px;
+      height: 220px;
+    }
+
+    .radar-label {
+      font-size: 10px;
+      color: #4ade80;
+      margin-top: 4px;
+      letter-spacing: 0.8px;
+      font-weight: 700;
+    }
+
+    /* BARRAS DE STATUS (SANIDADE, BATERIA, FÔLEGO) */
+    #bottomHud {
+      position: fixed;
+      left: 16px;
+      bottom: 16px;
       z-index: 10;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      pointer-events: none;
+      width: 230px;
     }
 
-    #driftStatus {
-      font-size: 12px;
-      font-weight: 900;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      min-height: 16px;
-      text-shadow: 0 2px 8px #000;
+    .stat-row {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 5px 8px;
     }
 
-    #turboBarWrap {
-      width: 170px;
-      height: 10px;
-      background: rgba(0, 0, 0, 0.65);
-      border: 1px solid rgba(255, 255, 255, 0.25);
+    .stat-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      font-weight: 700;
+      margin-bottom: 3px;
+    }
+
+    .stat-bar-bg {
+      width: 100%;
+      height: 7px;
+      background: rgba(255, 255, 255, 0.12);
       border-radius: 99px;
       overflow: hidden;
     }
 
-    #turboBarFill {
-      width: 0%;
+    .stat-bar-fill {
       height: 100%;
-      background: var(--cyan);
+      width: 100%;
+      transition: width 0.2s ease;
     }
 
-    #speedPill {
-      background: var(--panel);
-      border: 1px solid rgba(255, 255, 255, 0.16);
-      padding: 4px 14px;
-      border-radius: 99px;
-      font-weight: 900;
-      font-size: 18px;
-      color: var(--cyan);
-    }
-
-    /* ANÚNCIO GIGANTE NO MEIO DA TELA */
-    #centerBanner {
+    /* TOAST / MENSAGENS DE FITA VHS E LORE */
+    #toastBanner {
       position: fixed;
-      top: 32%;
+      top: 84px;
       left: 50%;
-      transform: translate(-50%, -50%);
+      transform: translateX(-50%);
+      background: rgba(12, 11, 6, 0.92);
+      border: 1.5px solid var(--yellow);
+      color: #fff8d6;
+      padding: 10px 18px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 700;
+      z-index: 15;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.25s ease;
       text-align: center;
-      pointer-events: none;
-      z-index: 18;
+      max-width: 90vw;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.75);
     }
 
-    #centerMainText {
-      font-size: 54px;
-      font-weight: 900;
-      font-style: italic;
-      text-shadow: 0 6px 26px rgba(0, 0, 0, 0.9);
-    }
-
-    #centerSubText {
-      font-size: 16px;
-      font-weight: 800;
-      color: #facc15;
-      text-shadow: 0 3px 12px rgba(0, 0, 0, 0.9);
-      margin-top: 4px;
-    }
-
-    /* CONTROLES TOUCH MOBILE MULTI-TOQUE */
-    #touchControls {
+    /* INDICADOR DE ESCONDIDO NO ARMÁRIO */
+    #hidingOverlay {
       position: fixed;
       inset: 0;
       pointer-events: none;
-      z-index: 12;
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-end;
-      padding: 16px 20px;
+      z-index: 6;
+      display: none;
+      background:
+        repeating-linear-gradient(
+          90deg,
+          rgba(0, 0, 0, 0.92) 0px,
+          rgba(0, 0, 0, 0.92) 28px,
+          transparent 28px,
+          transparent 46px
+        ),
+        radial-gradient(circle, transparent 30%, rgba(0, 0, 0, 0.95) 90%);
     }
 
-    .touch-side {
-      display: flex;
-      gap: 12px;
-      align-items: flex-end;
-      pointer-events: auto;
-    }
-
-    .t-btn {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      border-radius: 20px;
-      border: 2px solid rgba(255, 255, 255, 0.3);
-      background: rgba(15, 23, 42, 0.62);
-      color: #fff;
-      font-weight: 900;
-      backdrop-filter: blur(6px);
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
-      transition: transform 0.05s, background 0.05s;
-    }
-
-    .t-btn.pressed {
-      transform: scale(0.92);
-      border-color: #fff;
-    }
-
-    .t-steer {
-      width: 82px;
-      height: 82px;
-      font-size: 32px;
-    }
-    .t-steer.pressed {
-      background: rgba(0, 240, 255, 0.38);
-      border-color: var(--cyan);
-    }
-
-    .t-brake {
-      width: 68px;
-      height: 68px;
-      font-size: 12px;
-      background: rgba(127, 29, 29, 0.5);
-      border-color: rgba(239, 68, 68, 0.6);
-    }
-    .t-brake.pressed { background: rgba(239, 68, 68, 0.8); }
-
-    .t-drift {
-      width: 84px;
-      height: 84px;
-      font-size: 14px;
-      background: rgba(112, 26, 117, 0.55);
-      border-color: rgba(217, 70, 239, 0.7);
-    }
-    .t-drift.pressed { background: rgba(217, 70, 239, 0.88); }
-
-    .t-gas {
-      width: 100px;
-      height: 100px;
-      font-size: 16px;
-      background: rgba(6, 95, 70, 0.6);
-      border-color: rgba(16, 185, 129, 0.75);
-    }
-    .t-gas.pressed { background: rgba(16, 185, 129, 0.9); }
-
-    .t-sub {
-      font-size: 9px;
-      opacity: 0.8;
-      margin-top: 2px;
-    }
-
-    /* OVERLAY DE CONSTRUÇÃO DE PISTA (ESTILO MAKE WAY / ROBLOX) */
-    .overlay-panel {
+    /* CONTROLES MOBILE / TOUCH */
+    #mobileControls {
       position: fixed;
       inset: 0;
-      background: rgba(6, 10, 19, 0.76);
-      backdrop-filter: blur(8px);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 25;
-      padding: 14px;
-    }
-
-    .overlay-panel.hidden {
+      pointer-events: none;
+      z-index: 11;
       display: none;
     }
 
-    .builder-card {
-      background: #0f172a;
-      border: 2px solid rgba(0, 240, 255, 0.35);
-      border-radius: 22px;
-      padding: 20px;
-      max-width: 640px;
-      width: 100%;
-      text-align: center;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+    @media (hover: none) and (pointer: coarse), (max-width: 900px) {
+      #mobileControls.enabled {
+        display: block;
+      }
+      #bottomHud {
+        bottom: 165px;
+        width: 185px;
+      }
     }
 
-    .builder-title {
+    #joyZone {
+      position: absolute;
+      left: 18px;
+      bottom: 20px;
+      width: 132px;
+      height: 132px;
+      border-radius: 50%;
+      background: rgba(20, 18, 10, 0.55);
+      border: 2px solid rgba(217, 193, 91, 0.45);
+      pointer-events: auto;
+    }
+
+    #joyKnob {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 52px;
+      height: 52px;
+      margin-left: -26px;
+      margin-top: -26px;
+      border-radius: 50%;
+      background: rgba(217, 193, 91, 0.75);
+      box-shadow: 0 0 14px rgba(217, 193, 91, 0.5);
+    }
+
+    #lookZone {
+      position: absolute;
+      top: 65px;
+      right: 0;
+      bottom: 0;
+      width: 58%;
+      pointer-events: auto;
+    }
+
+    .mobile-actions {
+      position: absolute;
+      right: 18px;
+      bottom: 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      pointer-events: auto;
+      z-index: 12;
+    }
+
+    .mob-btn {
+      background: rgba(18, 16, 9, 0.85);
+      border: 2px solid var(--yellow);
+      color: #fff8d6;
+      border-radius: 12px;
+      padding: 12px 16px;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 900;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.65);
+    }
+
+    .mob-btn:active, .mob-btn.active {
+      background: rgba(217, 193, 91, 0.35);
+      border-color: #fff;
+    }
+
+    /* MODAIS (MENU PRINCIPAL, CO-OP, GAME OVER, VITÓRIA) */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(circle at center, rgba(18, 16, 8, 0.84) 0%, rgba(4, 4, 2, 0.96) 100%);
+      z-index: 30;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      pointer-events: auto;
+    }
+
+    .modal-card {
+      background: rgba(14, 13, 8, 0.96);
+      border: 2px solid var(--yellow);
+      border-radius: 10px;
+      max-width: 540px;
+      width: 100%;
+      padding: 22px;
+      box-shadow: 0 0 50px rgba(0, 0, 0, 0.9), inset 0 0 24px rgba(217, 193, 91, 0.08);
+      max-height: 92vh;
+      overflow-y: auto;
+    }
+
+    .vhs-tag {
+      display: inline-block;
+      background: rgba(239, 68, 68, 0.18);
+      border: 1px solid #ef4444;
+      color: #fca5a5;
+      font-size: 11px;
+      font-weight: 900;
+      padding: 3px 8px;
+      border-radius: 4px;
+      margin-bottom: 8px;
+      letter-spacing: 1px;
+    }
+
+    .modal-title {
       font-size: 25px;
       font-weight: 900;
-      font-style: italic;
       color: var(--yellow);
-      margin-bottom: 4px;
-    }
-
-    .builder-sub {
-      font-size: 13px;
-      color: #cbd5e1;
-      margin-bottom: 14px;
-    }
-
-    .piece-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
-      gap: 10px;
-      margin-bottom: 14px;
-    }
-
-    .piece-option {
-      background: rgba(255, 255, 255, 0.05);
-      border: 2px solid rgba(255, 255, 255, 0.16);
-      border-radius: 14px;
-      padding: 12px 8px;
-      cursor: pointer;
-      transition: transform 0.12s, border-color 0.12s, background 0.12s;
-    }
-
-    .piece-option:hover, .piece-option:active {
-      transform: translateY(-3px) scale(1.02);
-      border-color: var(--cyan);
-      background: rgba(0, 240, 255, 0.15);
-    }
-
-    .piece-icon {
-      font-size: 28px;
+      letter-spacing: 1.5px;
+      text-shadow: 0 0 14px rgba(217, 193, 91, 0.45);
       margin-bottom: 6px;
     }
 
-    .piece-name {
+    .modal-sub {
       font-size: 13px;
-      font-weight: 900;
+      color: #d6cfa8;
+      line-height: 1.5;
+      margin-bottom: 14px;
+    }
+
+    .guide-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    @media (max-width: 520px) {
+      .guide-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .guide-box {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(217, 193, 91, 0.22);
+      border-radius: 6px;
+      padding: 9px 11px;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .guide-box strong {
+      color: var(--yellow);
+      display: block;
       margin-bottom: 3px;
     }
 
-    .piece-desc {
-      font-size: 10px;
-      color: #94a3b8;
-    }
-
-    .round-results {
-      background: rgba(0, 0, 0, 0.35);
-      border-radius: 12px;
-      padding: 10px;
-      margin-bottom: 14px;
-      text-align: left;
-    }
-
-    .result-row {
+    .form-row {
       display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 13px;
-      font-weight: 800;
-      padding: 4px 6px;
+      gap: 8px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
     }
 
-    .btn-big {
-      background: linear-gradient(135deg, #10b981, #059669);
-      color: #fff;
-      border: none;
-      border-radius: 14px;
-      padding: 13px 24px;
-      font-size: 17px;
-      font-weight: 900;
+    .input-vhs {
+      flex: 1;
+      min-width: 140px;
+      background: #070603;
+      border: 1.5px solid var(--border);
+      color: #fff8d6;
+      padding: 10px 12px;
+      border-radius: 6px;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .btn-primary {
       width: 100%;
+      background: linear-gradient(180deg, #e0c862 0%, #b39736 100%);
+      color: #090804;
+      border: none;
+      border-radius: 7px;
+      padding: 13px 16px;
+      font-family: inherit;
+      font-size: 15px;
+      font-weight: 900;
+      letter-spacing: 1px;
+      cursor: pointer;
+      margin-bottom: 8px;
+      box-shadow: 0 4px 18px rgba(217, 193, 91, 0.35);
+    }
+
+    .btn-primary:hover {
+      filter: brightness(1.08);
+    }
+
+    .btn-secondary {
+      flex: 1;
+      background: rgba(217, 193, 91, 0.12);
+      color: var(--yellow);
+      border: 1.5px solid var(--yellow);
+      border-radius: 7px;
+      padding: 10px 12px;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 800;
       cursor: pointer;
     }
 
-    .online-bar {
-      display: flex;
-      gap: 8px;
-      justify-content: center;
-      align-items: center;
-      flex-wrap: wrap;
-      margin-top: 10px;
-      padding-top: 10px;
-      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    .btn-secondary:hover {
+      background: rgba(217, 193, 91, 0.24);
     }
 
-    .code-input {
-      background: #1e293b;
-      border: 1px solid rgba(255, 255, 255, 0.25);
-      color: #fff;
-      padding: 7px 10px;
-      border-radius: 8px;
-      font-weight: 900;
-      width: 110px;
-      text-align: center;
-      text-transform: uppercase;
-      user-select: text;
-      -webkit-user-select: text;
-      touch-action: auto;
+    .coop-panel {
+      background: rgba(0, 0, 0, 0.45);
+      border: 1px dashed rgba(217, 193, 91, 0.38);
+      border-radius: 7px;
+      padding: 10px 12px;
+      margin-top: 8px;
     }
 
-    @media (max-width: 700px) {
-      .t-steer { width: 70px; height: 70px; font-size: 26px; }
-      .t-gas { width: 88px; height: 88px; font-size: 14px; }
-      .t-drift { width: 74px; height: 74px; font-size: 12px; }
-      .t-brake { width: 58px; height: 58px; font-size: 10px; }
-      #centerMainText { font-size: 36px; }
-      .score-pill { min-width: 92px; padding: 4px 7px; }
+    .coop-status {
+      font-size: 12px;
+      color: #4ade80;
+      margin-top: 6px;
+      font-weight: 700;
     }
   </style>
 </head>
 <body>
-
   <div id="gameContainer"></div>
+  <div id="hidingOverlay"></div>
+  <div id="vhsOverlay"></div>
+  <div id="vhsNoiseBar"></div>
+  <div id="crosshair"></div>
+  <div id="interactPrompt">[E] INTERAGIR</div>
+  <div id="toastBanner"></div>
 
-  <!-- PLACAR DE 0 A 1000 PONTOS NO TOPO -->
-  <div id="topBar">
-    <div id="scoreboardHud"></div>
-    <div class="top-buttons">
-      <button class="btn-hud" id="btnAutoGas">⚡ AUTO-GAS: OFF</button>
-      <button class="btn-hud" id="btnCamMode">🎥 CÂMERA: 3D CHASE</button>
-      <button class="btn-hud" id="btnRoomModal">🌐 SALA ONLINE</button>
+  <!-- HUD SUPERIOR -->
+  <div id="topHud">
+    <div class="vhs-cam-box">
+      <div class="rec-line">
+        <span class="rec-dot"></span>
+        <span>REC // ASYNC-CAM 04</span>
+        <span id="vhsClock" style="color:#a8a07a;font-size:11px;">1996-11-11 00:00:00</span>
+      </div>
+      <div class="objective-list">
+        <div>⚡ DISJUNTORES: <span id="hudBreakers" class="obj-highlight">0 / 4</span></div>
+        <div>🚪 SAÍDA: <span id="hudExitStatus" style="color:#f87171;">TRANCADA (ENERGIZE OS 4 DISJUNTORES)</span></div>
+        <div>📼 FITAS VHS: <span id="hudTapes" class="obj-highlight">0</span> | 👥 EXPLORADORES: <span id="hudPlayers">1</span></div>
+      </div>
+    </div>
+
+    <div class="top-right-group">
+      <div class="hud-btn-row">
+        <button class="btn-hud" id="btnToggleFlashlight" title="Atalho: F">🔦 LANTERNA (F)</button>
+        <button class="btn-hud" id="btnToggleRadar" title="Atalho: M">📡 ZOOM RADAR (M)</button>
+        <button class="btn-hud" id="btnFullscreen">⛶ TELA CHEIA</button>
+        <button class="btn-hud" id="btnOpenMenu">⏸ MENU</button>
+      </div>
+      <div id="radarBox">
+        <canvas id="radarCanvas" width="140" height="140"></canvas>
+        <div class="radar-label">DETECTOR ACÚSTICO ASYNC</div>
+      </div>
     </div>
   </div>
 
-  <!-- ANÚNCIO CENTRAL -->
-  <div id="centerBanner">
-    <div id="centerMainText"></div>
-    <div id="centerSubText"></div>
-  </div>
-
-  <!-- VELOCÍMETRO E TURBO -->
+  <!-- HUD INFERIOR: SANIDADE, BATERIA DA LANTERNA E STAMINA -->
   <div id="bottomHud">
-    <div id="driftStatus"></div>
-    <div id="turboBarWrap">
-      <div id="turboBarFill"></div>
-    </div>
-    <div id="speedPill"><span id="speedVal">0</span> <small style="font-size:10px;color:#94a3b8">KM/H</small></div>
-  </div>
-
-  <!-- CONTROLES TOUCH MULTI-TOQUE (CELULAR) -->
-  <div id="touchControls">
-    <div class="touch-side">
-      <div class="t-btn t-steer" data-action="left">◄</div>
-      <div class="t-btn t-steer" data-action="right">►</div>
-    </div>
-    <div class="touch-side">
-      <div class="t-btn t-brake" data-action="brake">FREIO<span class="t-sub">RÉ</span></div>
-      <div class="t-btn t-drift" data-action="drift">DRIFT<span class="t-sub">TURBO</span></div>
-      <div class="t-btn t-gas" data-action="gas">ACELERAR<span class="t-sub">GAS</span></div>
-    </div>
-  </div>
-
-  <!-- MODAL DE CONSTRUIR A PISTA A CADA RODADA (ESTILO ROBLOX / MAKE WAY) -->
-  <div class="overlay-panel hidden" id="buildModal">
-    <div class="builder-card">
-      <div class="builder-title" id="buildTitle">🛠️ FIM DA RODADA! AUMENTE A PISTA!</div>
-      <div class="builder-sub" id="buildSubtitle">
-        Primeiro a chegar em <b>1.000 PONTOS</b> vence! Escolha a próxima peça 3D para encaixar na pista:
+    <div class="stat-row">
+      <div class="stat-header">
+        <span>🧠 SANIDADE MENTAL</span>
+        <span id="lblSanity">100%</span>
       </div>
+      <div class="stat-bar-bg">
+        <div class="stat-bar-fill" id="barSanity" style="background: linear-gradient(90deg, #a855f7, #38bdf8);"></div>
+      </div>
+    </div>
 
-      <div class="round-results" id="roundResultsList"></div>
+    <div class="stat-row">
+      <div class="stat-header">
+        <span>🔦 BATERIA LANTERNA</span>
+        <span id="lblBattery">100%</span>
+      </div>
+      <div class="stat-bar-bg">
+        <div class="stat-bar-fill" id="barBattery" style="background: linear-gradient(90deg, #f59e0b, #fde047);"></div>
+      </div>
+    </div>
 
-      <div class="piece-grid" id="pieceChoicesGrid"></div>
+    <div class="stat-row">
+      <div class="stat-header">
+        <span>🏃 FÔLEGO (SHIFT)</span>
+        <span id="lblStamina">100%</span>
+      </div>
+      <div class="stat-bar-bg">
+        <div class="stat-bar-fill" id="barStamina" style="background: linear-gradient(90deg, #10b981, #4ade80);"></div>
+      </div>
     </div>
   </div>
 
-  <!-- MODAL DE CAMPEÃO (1000 PONTOS) OU MENU INICIAL -->
-  <div class="overlay-panel" id="startModal">
-    <div class="builder-card">
-      <div class="builder-title" id="startModalTitle">🏎️ MICRO-KARTS 3D: MONTE A PISTA!</div>
-      <div class="builder-sub" id="startModalSub">
-        Comece numa pista curta 3D! A cada rodada que acaba, vocês escolhem novas peças (Rampas, Curvas, Boosts, Pontes Sem Muro) para a pista ficar cada vez maior!<br/>
-        <b>Quem bater 1.000 PONTOS primeiro ganha!</b>
+  <!-- CONTROLES MOBILE -->
+  <div id="mobileControls">
+    <div id="joyZone">
+      <div id="joyKnob"></div>
+    </div>
+    <div id="lookZone"></div>
+    <div class="mobile-actions">
+      <button class="mob-btn" id="mobInteractBtn">✋ INTERAGIR</button>
+      <button class="mob-btn" id="mobSprintBtn">🏃 CORRER</button>
+      <button class="mob-btn" id="mobFlashBtn">🔦 LUZ</button>
+    </div>
+  </div>
+
+  <!-- MODAL MENU INICIAL / PAUSA / CO-OP -->
+  <div class="modal-backdrop" id="menuModal">
+    <div class="modal-card">
+      <div class="vhs-tag">● FITA #049 — ARQUIVO CONFIDENCIAL ASYNC</div>
+      <div class="modal-title">THE BACKROOMS: NÍVEL 0</div>
+      <div class="modal-sub">
+        Você sofreu um <em>noclip</em> para fora da realidade. O cheiro de carpete úmido e o zumbido de 60Hz das lâmpadas fluorescentes preenchem o labirinto infinito. Você não está sozinho.
       </div>
 
-      <button class="btn-big" id="btnPlayNow">🚀 COMEÇAR CORRIDA (RUMO AOS 1000 PTS)</button>
-
-      <div class="online-bar">
-        <span style="font-size:12px;font-weight:800;color:#00f0ff;">🌐 Jogar c/ Amigos:</span>
-        <button class="btn-hud" id="btnHostOnline">Criar Sala</button>
-        <input class="code-input" id="inputRoomCode" placeholder="CÓDIGO" maxlength="6" />
-        <button class="btn-hud" id="btnJoinOnline">Entrar</button>
-        <div id="netStatusLabel" style="width:100%;font-size:11px;color:#94a3b8;margin-top:4px;"></div>
+      <div class="guide-grid">
+        <div class="guide-box">
+          <strong>🎯 COMO ESCAPAR</strong>
+          1. Ative os <b>4 Disjuntores</b> (<span style="color:#4ade80">pontos verdes</span> no radar).<br/>
+          2. Beba <b>Água de Amêndoa</b> e pegue <b>Baterias 9V</b>.<br/>
+          3. Corra para o <b>Elevador de Saída</b> quando destrancar!
+        </div>
+        <div class="guide-box">
+          <strong>🕹️ CONTROLES (PC & CELULAR)</strong>
+          • <b>WASD / Analógico:</b> Andar<br/>
+          • <b>Shift:</b> Correr | <b>F:</b> Lanterna<br/>
+          • <b>E:</b> Ativar / Pegar / <b>Esconder no Armário</b><br/>
+          • <b>M:</b> Ampliar Detector Acústico
+        </div>
       </div>
+
+      <div class="form-row">
+        <input class="input-vhs" id="inpPlayerName" maxlength="14" value="Explorador" placeholder="Seu Nome / Callsign" />
+        <select class="input-vhs" id="selDifficulty">
+          <option value="normal">Dificuldade: Exploração (Normal)</option>
+          <option value="nightmare">Dificuldade: Pesadelo (Entidade Rápida)</option>
+        </select>
+      </div>
+
+      <button class="btn-primary" id="btnStartGame">▶ INICIAR GRAVAÇÃO (ENTRAR NO NÍVEL 0)</button>
+
+      <div class="coop-panel">
+        <div style="font-size:12px;font-weight:900;color:var(--yellow);margin-bottom:6px;">
+          🌐 CO-OP ONLINE P2P (EXPLORAR COM AMIGOS)
+        </div>
+        <div class="form-row" style="margin-bottom:6px;">
+          <button class="btn-secondary" id="btnHostRoom">CRIAR SALA CO-OP</button>
+          <input class="input-vhs" id="inpRoomCode" maxlength="6" placeholder="CÓDIGO (ex: BK42)" style="text-transform:uppercase;max-width:145px;" />
+          <button class="btn-secondary" id="btnJoinRoom">ENTRAR</button>
+        </div>
+        <div class="coop-status" id="coopStatusText">Modo Solo (ou crie uma sala para jogar em equipe)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE FIM DE JOGO (VITÓRIA OU CAPTURADO) -->
+  <div class="modal-backdrop" id="endModal" style="display:none;">
+    <div class="modal-card" style="text-align:center;">
+      <div class="vhs-tag" id="endTag">FIM DA GRAVAÇÃO</div>
+      <div class="modal-title" id="endTitle">VOCÊ ESCAPOU DO NÍVEL 0!</div>
+      <div class="modal-sub" id="endDesc"></div>
+      <button class="btn-primary" id="btnRestartGame">↻ NOVA GRAVAÇÃO (NOVO LABIRINTO)</button>
     </div>
   </div>
 
   <script>
-    /********************************************************************
-     * 1. SINTETIZADOR DE ÁUDIO (MOTOR, DRIFT, TURBO, QUEDA E VITÓRIA)
-     ********************************************************************/
-    class SoundFX {
+    // =========================================================================
+    // 1. GERADOR RANDOM DETERMINÍSTICO (SEEDED RNG PARA SOLO + CO-OP P2P)
+    // =========================================================================
+    let worldSeed = Math.floor(Math.random() * 899999 + 100000);
+    function mulberry32(a) {
+      return function() {
+        let t = a += 0x6D2B79F5;
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+
+    // =========================================================================
+    // 2. MOTOR DE ÁUDIO PROCEDURAL WEBAUDIO (ZUMBIDO 60HZ, PASSOS, ENTIDADE)
+    // =========================================================================
+    class BackroomsAudio {
       constructor() {
         this.ctx = null;
-        this.engineOsc = null;
-        this.engineGain = null;
-        this.ready = false;
+        this.humGain = null;
+        this.heartGain = null;
+        this.initialized = false;
       }
 
       init() {
-        if (this.ready) return;
-        const AC = window.AudioContext || window.webkitAudioContext;
-        if (!AC) return;
-        this.ctx = new AC();
+        if (this.initialized) {
+          if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+          return;
+        }
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        this.ctx = new AudioCtx();
+        this.initialized = true;
 
-        this.engineOsc = this.ctx.createOscillator();
-        this.engineOsc.type = 'sawtooth';
-        this.engineOsc.frequency.value = 60;
+        // Zumbido contínuo de lâmpada fluorescente (60Hz + 120Hz + harmônicos)
+        const osc60 = this.ctx.createOscillator();
+        const osc120 = this.ctx.createOscillator();
+        const filter = this.ctx.createBiquadFilter();
+        this.humGain = this.ctx.createGain();
+
+        osc60.type = 'sawtooth';
+        osc60.frequency.value = 60;
+        osc120.type = 'sine';
+        osc120.frequency.value = 120;
+
+        filter.type = 'lowpass';
+        filter.frequency.value = 340;
+
+        this.humGain.gain.value = 0.045;
+
+        osc60.connect(filter);
+        osc120.connect(filter);
+        filter.connect(this.humGain);
+        this.humGain.connect(this.ctx.destination);
+
+        osc60.start();
+        osc120.start();
+      }
+
+      setHumIntensity(val) {
+        if (!this.initialized || !this.humGain) return;
+        this.humGain.gain.setTargetAtTime(Math.max(0.01, Math.min(0.11, val)), this.ctx.currentTime, 0.1);
+      }
+
+      playFootstep(sprinting = false) {
+        if (!this.initialized) return;
+        const now = this.ctx.currentTime;
+        // Ruído abafado de carpete úmido
+        const bufferSize = this.ctx.sampleRate * 0.09;
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.35));
+        }
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = buffer;
 
         const filter = this.ctx.createBiquadFilter();
-        filter.type = 'lowpass';
-        filter.frequency.value = 360;
+        filter.type = 'bandpass';
+        filter.frequency.value = sprinting ? 260 + Math.random() * 60 : 180 + Math.random() * 40;
+        filter.Q.value = 1.6;
 
-        this.engineGain = this.ctx.createGain();
-        this.engineGain.gain.value = 0.04;
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(sprinting ? 0.18 : 0.09, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.085);
 
-        this.engineOsc.connect(filter);
-        filter.connect(this.engineGain);
-        this.engineGain.connect(this.ctx.destination);
-        this.engineOsc.start();
-        this.ready = true;
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.ctx.destination);
+        noise.start(now);
       }
 
-      updateEngine(speedRatio, boostActive) {
-        if (!this.ready || !this.ctx) return;
-        if (this.ctx.state === 'suspended') this.ctx.resume();
-        const freq = 58 + Math.min(1.3, Math.abs(speedRatio)) * 155 + (boostActive ? 55 : 0);
-        this.engineOsc.frequency.setTargetAtTime(freq, this.ctx.currentTime, 0.04);
-      }
-
-      tone(freq, dur = 0.14, type = 'sine', vol = 0.12) {
-        if (!this.ready || !this.ctx) return;
+      playClick() {
+        if (!this.initialized) return;
         const now = this.ctx.currentTime;
         const osc = this.ctx.createOscillator();
-        const g = this.ctx.createGain();
-        osc.type = type;
-        osc.frequency.setValueAtTime(freq, now);
-        g.gain.setValueAtTime(vol, now);
-        g.gain.exponentialRampToValueAtTime(0.001, now + dur);
-        osc.connect(g);
-        g.connect(this.ctx.destination);
-        osc.start();
-        osc.stop(now + dur);
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(1400, now);
+        osc.frequency.exponentialRampToValueAtTime(280, now + 0.035);
+        gain.gain.setValueAtTime(0.16, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.035);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.04);
       }
 
-      boostSound(level = 1) {
-        if (!this.ready || !this.ctx) return;
+      playBreakerActivate() {
+        if (!this.initialized) return;
         const now = this.ctx.currentTime;
         const osc = this.ctx.createOscillator();
-        const g = this.ctx.createGain();
+        const gain = this.ctx.createGain();
         osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(190 + level * 80, now);
-        osc.frequency.exponentialRampToValueAtTime(580 + level * 130, now + 0.28);
-        g.gain.setValueAtTime(0.14, now);
-        g.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
-        osc.connect(g);
-        g.connect(this.ctx.destination);
-        osc.start();
-        osc.stop(now + 0.3);
+        osc.frequency.setValueAtTime(140, now);
+        osc.frequency.linearRampToValueAtTime(420, now + 0.18);
+        osc.frequency.linearRampToValueAtTime(580, now + 0.42);
+        gain.gain.setValueAtTime(0.22, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.46);
+      }
+
+      playItemPickup() {
+        if (!this.initialized) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(520, now);
+        osc.frequency.exponentialRampToValueAtTime(880, now + 0.16);
+        gain.gain.setValueAtTime(0.15, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.19);
+      }
+
+      playHeartbeat() {
+        if (!this.initialized) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(65, now);
+        osc.frequency.exponentialRampToValueAtTime(32, now + 0.16);
+        gain.gain.setValueAtTime(0.26, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.17);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.18);
+      }
+
+      playMonsterRoar(volume = 0.35) {
+        if (!this.initialized) return;
+        const now = this.ctx.currentTime;
+        const osc1 = this.ctx.createOscillator();
+        const osc2 = this.ctx.createOscillator();
+        const filter = this.ctx.createBiquadFilter();
+        const gain = this.ctx.createGain();
+
+        osc1.type = 'sawtooth';
+        osc2.type = 'square';
+        osc1.frequency.setValueAtTime(95, now);
+        osc1.frequency.linearRampToValueAtTime(210, now + 0.2);
+        osc1.frequency.exponentialRampToValueAtTime(58, now + 0.85);
+
+        osc2.frequency.setValueAtTime(103, now);
+        osc2.frequency.linearRampToValueAtTime(235, now + 0.25);
+        osc2.frequency.exponentialRampToValueAtTime(62, now + 0.85);
+
+        filter.type = 'bandpass';
+        filter.frequency.value = 420;
+        filter.Q.value = 2.5;
+
+        gain.gain.setValueAtTime(volume, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
+
+        osc1.connect(filter);
+        osc2.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc1.start(now);
+        osc2.start(now);
+        osc1.stop(now + 0.92);
+        osc2.stop(now + 0.92);
       }
     }
 
-    const sfx = new SoundFX();
+    const audio = new BackroomsAudio();
 
-    /********************************************************************
-     * 2. CONTROLES HÍBRIDOS (PC + MOBILE MULTI-TOUCH REAL)
-     ********************************************************************/
-    class Controls {
-      constructor() {
-        this.keys = {};
-        this.touch = { left: false, right: false, gas: false, brake: false, drift: false };
-        this.autoGas = false;
-        this._prevDrift = false;
+    // =========================================================================
+    // 3. TEXTURAS PROCEDURAIS DO NÍVEL 0 (PAPEL DE PAREDE AMARELO, CARPETE, TETO)
+    // =========================================================================
+    function createWallpaperTexture() {
+      const c = document.createElement('canvas');
+      c.width = 256;
+      c.height = 256;
+      const ctx = c.getContext('2d');
 
-        window.addEventListener('keydown', (e) => {
-          this.keys[e.code] = true;
-          if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) {
-            e.preventDefault();
-          }
-          if (e.code === 'KeyC') game.toggleCamera();
-        });
-        window.addEventListener('keyup', (e) => {
-          this.keys[e.code] = false;
-        });
+      // Base amarela envelhecida icônica das Backrooms
+      ctx.fillStyle = '#c7b252';
+      ctx.fillRect(0, 0, 256, 256);
 
-        this.bindTouch();
+      // Listras verticais sutis e padrão damasco geométrico
+      for (let x = 0; x < 256; x += 16) {
+        ctx.fillStyle = (x % 32 === 0) ? 'rgba(165, 142, 48, 0.36)' : 'rgba(215, 196, 98, 0.22)';
+        ctx.fillRect(x, 0, 8, 256);
+
+        for (let y = 0; y < 256; y += 32) {
+          ctx.fillStyle = 'rgba(138, 117, 34, 0.28)';
+          ctx.fillRect(x + 2, y + 6, 4, 14);
+          ctx.fillRect(x, y + 10, 8, 6);
+        }
       }
 
-      bindTouch() {
-        const btns = Array.from(document.querySelectorAll('.t-btn'));
-        const container = document.getElementById('touchControls');
+      // Manchas de umidade perto da base
+      const grad = ctx.createLinearGradient(0, 180, 0, 256);
+      grad.addColorStop(0, 'rgba(70, 58, 18, 0)');
+      grad.addColorStop(1, 'rgba(62, 50, 15, 0.55)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 180, 256, 76);
 
-        const handleTouches = (e) => {
-          sfx.init();
-          const next = { left: false, right: false, gas: false, brake: false, drift: false };
-          for (let i = 0; i < e.touches.length; i++) {
-            const t = e.touches[i];
-            const el = document.elementFromPoint(t.clientX, t.clientY);
-            const btn = el ? el.closest('.t-btn') : null;
-            if (btn && btn.dataset.action) {
-              next[btn.dataset.action] = true;
+      // Rodapé escuro
+      ctx.fillStyle = '#4a3d1c';
+      ctx.fillRect(0, 242, 256, 14);
+      ctx.fillStyle = '#332910';
+      ctx.fillRect(0, 240, 256, 2);
+
+      const tex = new THREE.CanvasTexture(c);
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.ClampToEdgeWrapping;
+      return tex;
+    }
+
+    function createCarpetTexture() {
+      const c = document.createElement('canvas');
+      c.width = 256;
+      c.height = 256;
+      const ctx = c.getContext('2d');
+
+      ctx.fillStyle = '#7e6c34';
+      ctx.fillRect(0, 0, 256, 256);
+
+      // Fibra do carpete úmido
+      for (let i = 0; i < 4500; i++) {
+        const x = Math.random() * 256;
+        const y = Math.random() * 256;
+        ctx.fillStyle = Math.random() > 0.5 ? 'rgba(58, 48, 18, 0.35)' : 'rgba(156, 138, 70, 0.28)';
+        ctx.fillRect(x, y, 2, 2);
+      }
+
+      const tex = new THREE.CanvasTexture(c);
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(24, 24);
+      return tex;
+    }
+
+    function createCeilingTexture() {
+      const c = document.createElement('canvas');
+      c.width = 256;
+      c.height = 256;
+      const ctx = c.getContext('2d');
+
+      ctx.fillStyle = '#b8b296';
+      ctx.fillRect(0, 0, 256, 256);
+
+      // Placas acústicas de escritório
+      ctx.strokeStyle = '#6e6952';
+      ctx.lineWidth = 4;
+      for (let x = 0; x <= 256; x += 64) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, 256); ctx.stroke();
+      }
+      for (let y = 0; y <= 256; y += 64) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(256, y); ctx.stroke();
+      }
+
+      for (let i = 0; i < 1800; i++) {
+        ctx.fillStyle = 'rgba(70, 66, 50, 0.25)';
+        ctx.fillRect(Math.random() * 256, Math.random() * 256, 2, 2);
+      }
+
+      const tex = new THREE.CanvasTexture(c);
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(24, 24);
+      return tex;
+    }
+
+    // =========================================================================
+    // 4. CENA THREE.JS, LABIRINTO PROCEDURAL E OBJETOS INTERATIVOS
+    // =========================================================================
+    const GRID_SIZE = 21; // 21x21 células
+    const CELL_SIZE = 4.4; // Largura dos corredores das Backrooms
+    const WALL_HEIGHT = 3.7;
+
+    const container = document.getElementById('gameContainer');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x090804);
+    scene.fog = new THREE.FogExp2(0x121006, 0.088);
+
+    const camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.1, 48);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+    container.appendChild(renderer.domElement);
+
+    // Iluminação base + Lanterna do jogador
+    const ambientLight = new THREE.AmbientLight(0xd6c778, 0.34);
+    scene.add(ambientLight);
+
+    const hemiLight = new THREE.HemisphereLight(0xfff2b2, 0x3b3114, 0.28);
+    scene.add(hemiLight);
+
+    const flashLight = new THREE.SpotLight(0xfff9d6, 2.4, 24, Math.PI / 4.2, 0.48, 1.3);
+    flashLight.position.set(0, 0, 0);
+    const flashTarget = new THREE.Object3D();
+    scene.add(flashTarget);
+    flashLight.target = flashTarget;
+    scene.add(flashLight);
+
+    // Luz suave ao redor do jogador para nunca ficar 100% cego
+    const playerAuraLight = new THREE.PointLight(0xd9c15b, 0.45, 6.5);
+    scene.add(playerAuraLight);
+
+    // Materiais compartilhados
+    const wallTex = createWallpaperTexture();
+    const carpetTex = createCarpetTexture();
+    const ceilingTex = createCeilingTexture();
+
+    const wallMat = new THREE.MeshLambertMaterial({ map: wallTex });
+    const floorMat = new THREE.MeshLambertMaterial({ map: carpetTex });
+    const ceilingMat = new THREE.MeshLambertMaterial({ map: ceilingTex });
+    const panelOnMat = new THREE.MeshBasicMaterial({ color: 0xfff8cc });
+    const panelOffMat = new THREE.MeshBasicMaterial({ color: 0x3a3728 });
+
+    // Estado do Mundo
+    let worldGroup = new THREE.Group();
+    scene.add(worldGroup);
+
+    let mazeGrid = []; // 0 = corredor/sala, 1 = parede
+    let wallBoxes = []; // Bounding boxes 2D para colisão rápida
+    let ceilingPanels = [];
+    let breakers = []; // Disjuntores
+    let items = []; // Água de amêndoa, baterias, fitas VHS
+    let lockers = []; // Armários para esconder
+    let exitElevator = null;
+    let monster = null;
+
+    // Estado do Jogador
+    const player = {
+      x: 0,
+      z: 0,
+      yaw: 0,
+      pitch: 0,
+      sanity: 100,
+      battery: 100,
+      stamina: 100,
+      flashlightOn: true,
+      sprinting: false,
+      hiding: false,
+      hidingLocker: null,
+      tapesCollected: 0,
+      alive: true,
+      bobPhase: 0,
+      lastStepSin: 0
+    };
+
+    let gameActive = false;
+    let difficulty = 'normal';
+    let totalBreakersNeeded = 4;
+    let breakersActivated = 0;
+    let exitUnlocked = false;
+
+    function gridToWorld(gx, gz) {
+      const half = (GRID_SIZE - 1) / 2;
+      return {
+        x: (gx - half) * CELL_SIZE,
+        z: (gz - half) * CELL_SIZE
+      };
+    }
+
+    function worldToGrid(wx, wz) {
+      const half = (GRID_SIZE - 1) / 2;
+      return {
+        gx: Math.round(wx / CELL_SIZE + half),
+        gz: Math.round(wz / CELL_SIZE + half)
+      };
+    }
+
+    // Cria o Modelo 3D da Entidade ("Bactéria / Howler")
+    function createMonsterMesh() {
+      const group = new THREE.Group();
+      const darkWireMat = new THREE.MeshLambertMaterial({ color: 0x090909, emissive: 0x050000 });
+      const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff2222 });
+
+      // Tronco retorcido e assimétrico
+      const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.09, 1.65, 7), darkWireMat);
+      torso.position.y = 1.65;
+      torso.rotation.z = 0.08;
+      group.add(torso);
+
+      // Cabeça bizarra de fios retorcidos
+      const head = new THREE.Mesh(new THREE.OctahedronGeometry(0.28, 1), darkWireMat);
+      head.position.set(0.05, 2.65, 0.08);
+      group.add(head);
+
+      const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.045, 6, 6), eyeMat);
+      eyeL.position.set(-0.08, 2.68, 0.28);
+      const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.035, 6, 6), eyeMat);
+      eyeR.position.set(0.13, 2.62, 0.27);
+      group.add(eyeL, eyeR);
+
+      // Membros longos articulados
+      const legL = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.04, 1.0, 6), darkWireMat);
+      legL.position.set(-0.18, 0.5, 0);
+      const legR = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.04, 1.0, 6), darkWireMat);
+      legR.position.set(0.18, 0.5, 0);
+
+      const armL = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.03, 1.45, 6), darkWireMat);
+      armL.position.set(-0.36, 1.7, 0.15);
+      armL.rotation.z = 0.25;
+      const armR = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.03, 1.45, 6), darkWireMat);
+      armR.position.set(0.36, 1.7, 0.15);
+      armR.rotation.z = -0.25;
+
+      group.add(legL, legR, armL, armR);
+
+      // Luz vermelha sinistra fraca na entidade
+      const monsterLight = new THREE.PointLight(0xff1111, 0.8, 7);
+      monsterLight.position.set(0, 2.2, 0);
+      group.add(monsterLight);
+
+      group.userData = { legL, legR, armL, armR, head };
+      return group;
+    }
+
+    // Constrói o Labirinto Nível 0 com Salas, Pilares, Disjuntores, Armários e Itens
+    function buildLevel(seed) {
+      const rng = mulberry32(seed);
+
+      // Limpa mundo anterior
+      scene.remove(worldGroup);
+      worldGroup = new THREE.Group();
+      scene.add(worldGroup);
+
+      mazeGrid = [];
+      wallBoxes = [];
+      ceilingPanels = [];
+      breakers = [];
+      items = [];
+      lockers = [];
+      breakersActivated = 0;
+      exitUnlocked = false;
+      totalBreakersNeeded = (difficulty === 'nightmare') ? 5 : 4;
+
+      for (let z = 0; z < GRID_SIZE; z++) {
+        mazeGrid[z] = [];
+        for (let x = 0; x < GRID_SIZE; x++) {
+          mazeGrid[z][x] = 1;
+        }
+      }
+
+      // 1. Recursive Backtracker Maze Generation
+      const stack = [];
+      const startGX = 10, startGZ = 10;
+      mazeGrid[startGZ][startGX] = 0;
+      stack.push({ x: startGX, z: startGZ });
+
+      const dirs = [
+        { dx: 0, dz: -2 },
+        { dx: 2, dz: 0 },
+        { dx: 0, dz: 2 },
+        { dx: -2, dz: 0 }
+      ];
+
+      while (stack.length > 0) {
+        const cur = stack[stack.length - 1];
+        const shuffled = dirs.slice().sort(() => rng() - 0.5);
+        let carved = false;
+
+        for (const d of shuffled) {
+          const nx = cur.x + d.dx;
+          const nz = cur.z + d.dz;
+          if (nx > 0 && nx < GRID_SIZE - 1 && nz > 0 && nz < GRID_SIZE - 1 && mazeGrid[nz][nx] === 1) {
+            mazeGrid[cur.z + d.dz / 2][cur.x + d.dx / 2] = 0;
+            mazeGrid[nz][nx] = 0;
+            stack.push({ x: nx, z: nz });
+            carved = true;
+            break;
+          }
+        }
+        if (!carved) stack.pop();
+      }
+
+      // 2. Abre salas amplas típicas das Backrooms (com pilares) e conexões extras
+      for (let z = 2; z < GRID_SIZE - 2; z++) {
+        for (let x = 2; x < GRID_SIZE - 2; x++) {
+          if (mazeGrid[z][x] === 1 && rng() < 0.34) {
+            mazeGrid[z][x] = 0;
+          }
+        }
+      }
+      // Garante área central aberta (Spawn seguro)
+      for (let dz = -1; dz <= 1; dz++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          mazeGrid[startGZ + dz][startGX + dx] = 0;
+        }
+      }
+
+      // 3. Piso e Teto
+      const totalSpan = GRID_SIZE * CELL_SIZE;
+      const floorMesh = new THREE.Mesh(new THREE.PlaneGeometry(totalSpan, totalSpan), floorMat);
+      floorMesh.rotation.x = -Math.PI / 2;
+      worldGroup.add(floorMesh);
+
+      const ceilMesh = new THREE.Mesh(new THREE.PlaneGeometry(totalSpan, totalSpan), ceilingMat);
+      ceilMesh.rotation.x = Math.PI / 2;
+      ceilMesh.position.y = WALL_HEIGHT;
+      worldGroup.add(ceilMesh);
+
+      // 4. Paredes, Pilares e Luminárias Fluorescentes
+      const wallGeo = new THREE.BoxGeometry(CELL_SIZE, WALL_HEIGHT, CELL_SIZE);
+      const pillarGeo = new THREE.BoxGeometry(0.85, WALL_HEIGHT, 0.85);
+      const lightGeo = new THREE.PlaneGeometry(1.3, 0.45);
+
+      const openCells = [];
+
+      for (let gz = 0; gz < GRID_SIZE; gz++) {
+        for (let gx = 0; gx < GRID_SIZE; gx++) {
+          const pos = gridToWorld(gx, gz);
+          if (mazeGrid[gz][gx] === 1) {
+            const wMesh = new THREE.Mesh(wallGeo, wallMat);
+            wMesh.position.set(pos.x, WALL_HEIGHT / 2, pos.z);
+            worldGroup.add(wMesh);
+            wallBoxes.push({
+              minX: pos.x - CELL_SIZE / 2,
+              maxX: pos.x + CELL_SIZE / 2,
+              minZ: pos.z - CELL_SIZE / 2,
+              maxZ: pos.z + CELL_SIZE / 2
+            });
+          } else {
+            if (Math.abs(gx - startGX) > 1 || Math.abs(gz - startGZ) > 1) {
+              openCells.push({ gx, gz, x: pos.x, z: pos.z });
+            }
+
+            // Painel de luz fluorescente no teto
+            if ((gx + gz) % 2 === 0) {
+              const pMesh = new THREE.Mesh(lightGeo, panelOnMat);
+              pMesh.rotation.x = Math.PI / 2;
+              pMesh.position.set(pos.x, WALL_HEIGHT - 0.02, pos.z);
+              worldGroup.add(pMesh);
+              ceilingPanels.push({
+                mesh: pMesh,
+                flickerRate: rng() < 0.25 ? 0.06 : 0.005
+              });
+            }
+
+            // Alguns pilares estruturais no meio de salas abertas
+            if (
+              gx > 2 && gx < GRID_SIZE - 3 &&
+              gz > 2 && gz < GRID_SIZE - 3 &&
+              mazeGrid[gz - 1][gx] === 0 &&
+              mazeGrid[gz + 1][gx] === 0 &&
+              mazeGrid[gz][gx - 1] === 0 &&
+              mazeGrid[gz][gx + 1] === 0 &&
+              rng() < 0.28
+            ) {
+              const pillar = new THREE.Mesh(pillarGeo, wallMat);
+              pillar.position.set(pos.x, WALL_HEIGHT / 2, pos.z);
+              worldGroup.add(pillar);
+              wallBoxes.push({
+                minX: pos.x - 0.45,
+                maxX: pos.x + 0.45,
+                minZ: pos.z - 0.45,
+                maxZ: pos.z + 0.45
+              });
             }
           }
-          this.touch = next;
-          btns.forEach((b) => b.classList.toggle('pressed', !!this.touch[b.dataset.action]));
-        };
+        }
+      }
 
-        ['touchstart', 'touchmove', 'touchend', 'touchcancel'].forEach((ev) => {
-          container.addEventListener(ev, (e) => {
-            e.preventDefault();
-            handleTouches(e);
-          }, { passive: false });
-        });
+      // Embaralha células abertas distantes para posicionar objetivos
+      openCells.sort(() => rng() - 0.5);
+      const farCells = openCells.filter(c => Math.hypot(c.gx - startGX, c.gz - startGZ) >= 5);
 
-        btns.forEach((btn) => {
-          const act = btn.dataset.action;
-          btn.addEventListener('mousedown', () => {
-            sfx.init();
-            this.touch[act] = true;
-            btn.classList.add('pressed');
-          });
-          window.addEventListener('mouseup', () => {
-            this.touch[act] = false;
-            btn.classList.remove('pressed');
-          });
+      // 5. Posiciona os Disjuntores (Fuse Boxes)
+      for (let i = 0; i < totalBreakersNeeded; i++) {
+        const cell = farCells[i] || openCells[i];
+        const bGroup = new THREE.Group();
+        bGroup.position.set(cell.x, 0, cell.z);
+
+        const pedestal = new THREE.Mesh(
+          new THREE.BoxGeometry(0.65, 1.55, 0.45),
+          new THREE.MeshLambertMaterial({ color: 0x374151 })
+        );
+        pedestal.position.y = 0.775;
+        bGroup.add(pedestal);
+
+        const indicator = new THREE.Mesh(
+          new THREE.SphereGeometry(0.11, 8, 8),
+          new THREE.MeshBasicMaterial({ color: 0xff3333 })
+        );
+        indicator.position.set(0, 1.38, 0.25);
+        bGroup.add(indicator);
+
+        const bLight = new THREE.PointLight(0xff3333, 0.9, 6);
+        bLight.position.set(0, 1.6, 0.4);
+        bGroup.add(bLight);
+
+        worldGroup.add(bGroup);
+        breakers.push({
+          id: i,
+          x: cell.x,
+          z: cell.z,
+          activated: false,
+          indicator,
+          light: bLight
         });
       }
 
-      poll() {
-        const left = this.keys['ArrowLeft'] || this.keys['KeyA'] || this.touch.left;
-        const right = this.keys['ArrowRight'] || this.keys['KeyD'] || this.touch.right;
-        const gas = this.autoGas || this.keys['ArrowUp'] || this.keys['KeyW'] || this.touch.gas;
-        const brake = this.keys['ArrowDown'] || this.keys['KeyS'] || this.touch.brake;
-        const drift = this.keys['Space'] || this.keys['ShiftLeft'] || this.keys['ShiftRight'] || this.touch.drift;
+      // 6. Posiciona o Elevador de Saída (Exit Elevator)
+      const exitCell = farCells[totalBreakersNeeded] || openCells[totalBreakersNeeded];
+      const elevGroup = new THREE.Group();
+      elevGroup.position.set(exitCell.x, 0, exitCell.z);
 
-        const justDrift = drift && !this._prevDrift;
-        this._prevDrift = drift;
+      const frameMesh = new THREE.Mesh(
+        new THREE.BoxGeometry(1.9, 2.9, 1.2),
+        new THREE.MeshLambertMaterial({ color: 0x1f2937 })
+      );
+      frameMesh.position.y = 1.45;
+      elevGroup.add(frameMesh);
 
-        return {
-          steer: (right ? 1 : 0) - (left ? 1 : 0),
-          gas,
-          brake,
-          drift,
-          justDrift
-        };
+      const doorMesh = new THREE.Mesh(
+        new THREE.BoxGeometry(1.4, 2.4, 1.26),
+        new THREE.MeshBasicMaterial({ color: 0x7f1d1d })
+      );
+      doorMesh.position.y = 1.25;
+      elevGroup.add(doorMesh);
+
+      const signLight = new THREE.PointLight(0xef4444, 1.4, 9);
+      signLight.position.set(0, 2.7, 0);
+      elevGroup.add(signLight);
+
+      worldGroup.add(elevGroup);
+      exitElevator = {
+        x: exitCell.x,
+        z: exitCell.z,
+        doorMesh,
+        signLight
+      };
+
+      // 7. Posiciona Armários Metálicos para Esconder (Lockers)
+      let cursorIdx = totalBreakersNeeded + 1;
+      for (let i = 0; i < 7 && cursorIdx < openCells.length; i++, cursorIdx++) {
+        const c = openCells[cursorIdx];
+        const lGroup = new THREE.Group();
+        lGroup.position.set(c.x, 0, c.z);
+
+        const body = new THREE.Mesh(
+          new THREE.BoxGeometry(0.95, 2.35, 0.85),
+          new THREE.MeshLambertMaterial({ color: 0x293548 })
+        );
+        body.position.y = 1.175;
+        lGroup.add(body);
+
+        const stripe = new THREE.Mesh(
+          new THREE.BoxGeometry(0.97, 0.14, 0.87),
+          new THREE.MeshBasicMaterial({ color: 0x38bdf8 })
+        );
+        stripe.position.y = 2.05;
+        lGroup.add(stripe);
+
+        worldGroup.add(lGroup);
+        lockers.push({ x: c.x, z: c.z });
+      }
+
+      // 8. Posiciona Suprimentos (Água de Amêndoa, Baterias 9V, Fitas VHS)
+      const itemTypes = [
+        'almond', 'almond', 'almond', 'almond',
+        'battery', 'battery', 'battery', 'battery',
+        'tape', 'tape', 'tape'
+      ];
+
+      for (let i = 0; i < itemTypes.length && cursorIdx < openCells.length; i++, cursorIdx++) {
+        const c = openCells[cursorIdx];
+        const type = itemTypes[i];
+        let mesh;
+        if (type === 'almond') {
+          mesh = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.14, 0.14, 0.42, 10),
+            new THREE.MeshBasicMaterial({ color: 0x38bdf8 })
+          );
+        } else if (type === 'battery') {
+          mesh = new THREE.Mesh(
+            new THREE.BoxGeometry(0.28, 0.34, 0.2),
+            new THREE.MeshBasicMaterial({ color: 0xfacc15 })
+          );
+        } else {
+          mesh = new THREE.Mesh(
+            new THREE.BoxGeometry(0.36, 0.12, 0.24),
+            new THREE.MeshBasicMaterial({ color: 0xf43f5e })
+          );
+        }
+        mesh.position.set(c.x, 0.45, c.z);
+        worldGroup.add(mesh);
+        items.push({ id: i, type, x: c.x, z: c.z, mesh, collected: false });
+      }
+
+      // 9. Posiciona a Entidade (Bactéria) longe do Spawn
+      const monsterStart = farCells[farCells.length - 1] || { x: gridToWorld(1, 1).x, z: gridToWorld(1, 1).z };
+      const mMesh = createMonsterMesh();
+      mMesh.position.set(monsterStart.x, 0, monsterStart.z);
+      worldGroup.add(mMesh);
+
+      monster = {
+        x: monsterStart.x,
+        z: monsterStart.z,
+        yaw: 0,
+        state: 'PATROL', // PATROL | CHASE
+        targetX: monsterStart.x,
+        targetZ: monsterStart.z,
+        mesh: mMesh,
+        roarCooldown: 0,
+        animPhase: 0
+      };
+
+      // Posiciona o Jogador no centro
+      const spawnPos = gridToWorld(startGX, startGZ);
+      player.x = spawnPos.x;
+      player.z = spawnPos.z;
+      player.yaw = 0;
+      player.pitch = 0;
+      player.sanity = 100;
+      player.battery = 100;
+      player.stamina = 100;
+      player.flashlightOn = true;
+      player.hiding = false;
+      player.tapesCollected = 0;
+      player.alive = true;
+      document.getElementById('hidingOverlay').style.display = 'none';
+
+      updateObjectiveHUD();
+    }
+
+    // =========================================================================
+    // 5. COLISÃO E FÍSICA DO JOGADOR
+    // =========================================================================
+    function collidesWithWall(wx, wz, radius = 0.42) {
+      const halfSpan = (GRID_SIZE * CELL_SIZE) / 2 - 0.5;
+      if (wx < -halfSpan || wx > halfSpan || wz < -halfSpan || wz > halfSpan) return true;
+
+      for (let i = 0; i < wallBoxes.length; i++) {
+        const b = wallBoxes[i];
+        const closestX = Math.max(b.minX, Math.min(wx, b.maxX));
+        const closestZ = Math.max(b.minZ, Math.min(wz, b.maxZ));
+        const dx = wx - closestX;
+        const dz = wz - closestZ;
+        if (dx * dx + dz * dz < radius * radius) return true;
+      }
+      return false;
+    }
+
+    function hasLineOfSight(x1, z1, x2, z2) {
+      const dist = Math.hypot(x2 - x1, z2 - z1);
+      if (dist > 22) return false;
+      const steps = Math.ceil(dist / 0.7);
+      for (let i = 1; i < steps; i++) {
+        const t = i / steps;
+        const cx = x1 + (x2 - x1) * t;
+        const cz = z1 + (z2 - z1) * t;
+        const g = worldToGrid(cx, cz);
+        if (
+          g.gz >= 0 && g.gz < GRID_SIZE &&
+          g.gx >= 0 && g.gx < GRID_SIZE &&
+          mazeGrid[g.gz][g.gx] === 1
+        ) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    // =========================================================================
+    // 6. CONTROLES PC (TECLADO + POINTER LOCK) E MOBILE (JOYSTICK + TOUCH)
+    // =========================================================================
+    const keys = {};
+    let joyVec = { x: 0, y: 0 };
+    let mobileSprint = false;
+
+    window.addEventListener('keydown', (e) => {
+      keys[e.code] = true;
+      if (!gameActive) return;
+      if (e.code === 'KeyF') toggleFlashlight();
+      if (e.code === 'KeyE') tryInteract();
+      if (e.code === 'KeyM' || e.code === 'Tab') {
+        e.preventDefault();
+        document.getElementById('radarBox').classList.toggle('expanded');
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      keys[e.code] = false;
+    });
+
+    // Pointer Lock para PC
+    renderer.domElement.addEventListener('click', () => {
+      if (!gameActive) return;
+      audio.init();
+      const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+      if (!isTouch && document.pointerLockElement !== renderer.domElement) {
+        renderer.domElement.requestPointerLock?.();
+      }
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!gameActive || document.pointerLockElement !== renderer.domElement) return;
+      player.yaw -= e.movementX * 0.0023;
+      player.pitch = Math.max(-1.25, Math.min(1.25, player.pitch - e.movementY * 0.0021));
+    });
+
+    // Mobile Touch Detection & Handlers
+    function setupMobileControls() {
+      const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0 || window.innerWidth <= 900;
+      if (isTouch) {
+        document.getElementById('mobileControls').classList.add('enabled');
+      }
+
+      const joyZone = document.getElementById('joyZone');
+      const joyKnob = document.getElementById('joyKnob');
+      let joyTouchId = null;
+
+      joyZone.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        audio.init();
+        const t = e.changedTouches[0];
+        joyTouchId = t.identifier;
+        updateJoystick(t);
+      }, { passive: false });
+
+      joyZone.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        for (const t of e.changedTouches) {
+          if (t.identifier === joyTouchId) updateJoystick(t);
+        }
+      }, { passive: false });
+
+      const resetJoy = (e) => {
+        for (const t of e.changedTouches) {
+          if (t.identifier === joyTouchId) {
+            joyTouchId = null;
+            joyVec.x = 0;
+            joyVec.y = 0;
+            joyKnob.style.transform = `translate(0px, 0px)`;
+          }
+        }
+      };
+      joyZone.addEventListener('touchend', resetJoy);
+      joyZone.addEventListener('touchcancel', resetJoy);
+
+      function updateJoystick(touch) {
+        const rect = joyZone.getBoundingClientRect();
+        const cx = rect.left + rect.width / 2;
+        const cy = rect.top + rect.height / 2;
+        let dx = touch.clientX - cx;
+        let dy = touch.clientY - cy;
+        const maxR = rect.width / 2 - 16;
+        const dist = Math.hypot(dx, dy);
+        if (dist > maxR) {
+          dx = (dx / dist) * maxR;
+          dy = (dy / dist) * maxR;
+        }
+        joyKnob.style.transform = `translate(${dx}px, ${dy}px)`;
+        joyVec.x = dx / maxR;
+        joyVec.y = dy / maxR;
+      }
+
+      // Zona de olhar (direita)
+      const lookZone = document.getElementById('lookZone');
+      let lookTouchId = null;
+      let lastLookX = 0;
+      let lastLookY = 0;
+
+      lookZone.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        audio.init();
+        const t = e.changedTouches[0];
+        lookTouchId = t.identifier;
+        lastLookX = t.clientX;
+        lastLookY = t.clientY;
+      }, { passive: false });
+
+      lookZone.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        for (const t of e.changedTouches) {
+          if (t.identifier === lookTouchId) {
+            const dx = t.clientX - lastLookX;
+            const dy = t.clientY - lastLookY;
+            lastLookX = t.clientX;
+            lastLookY = t.clientY;
+            player.yaw -= dx * 0.0055;
+            player.pitch = Math.max(-1.2, Math.min(1.2, player.pitch - dy * 0.0048));
+          }
+        }
+      }, { passive: false });
+
+      const endLook = (e) => {
+        for (const t of e.changedTouches) {
+          if (t.identifier === lookTouchId) lookTouchId = null;
+        }
+      };
+      lookZone.addEventListener('touchend', endLook);
+      lookZone.addEventListener('touchcancel', endLook);
+
+      // Botões Mobile
+      document.getElementById('mobInteractBtn').addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        tryInteract();
+      });
+      const sprintBtn = document.getElementById('mobSprintBtn');
+      sprintBtn.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        mobileSprint = !mobileSprint;
+        sprintBtn.classList.toggle('active', mobileSprint);
+      });
+      document.getElementById('mobFlashBtn').addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        toggleFlashlight();
+      });
+    }
+    setupMobileControls();
+
+    // =========================================================================
+    // 7. INTERAÇÕES, OBJETIVOS E MENSAGENS VHS
+    // =========================================================================
+    let toastTimer = null;
+    function showToast(msg, duration = 3400) {
+      const el = document.getElementById('toastBanner');
+      el.textContent = msg;
+      el.style.opacity = '1';
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        el.style.opacity = '0';
+      }, duration);
+    }
+
+    function toggleFlashlight() {
+      audio.init();
+      audio.playClick();
+      if (player.battery <= 0) {
+        player.flashlightOn = false;
+        showToast('🔋 BATERIA ESGOTADA! Encontre uma Bateria 9V pelo labirinto.');
+        return;
+      }
+      player.flashlightOn = !player.flashlightOn;
+    }
+
+    function updateObjectiveHUD() {
+      document.getElementById('hudBreakers').textContent = `${breakersActivated} / ${totalBreakersNeeded}`;
+      document.getElementById('hudTapes').textContent = `${player.tapesCollected}`;
+      const exitEl = document.getElementById('hudExitStatus');
+      if (exitUnlocked) {
+        exitEl.textContent = 'ABERTA! CORRA PARA O ELEVADOR (PONTO AZUL NO RADAR)';
+        exitEl.style.color = '#4ade80';
+      } else {
+        exitEl.textContent = `TRANCADA (FALTAM ${totalBreakersNeeded - breakersActivated} DISJUNTORES)`;
+        exitEl.style.color = '#f87171';
       }
     }
 
-    /********************************************************************
-     * 3. CATÁLOGO DE PEÇAS 3D PARA MONTAR A PISTA A CADA RODADA!
-     ********************************************************************/
-    const TRACK_PIECE_CATALOG = [
-      {
-        type: 'straight',
-        name: 'Reta Clássica',
-        icon: '🛣️',
-        desc: 'Reta segura com muretas laterais',
-        length: 34,
-        turnSteps: 0,
-        width: 16,
-        walled: true
-      },
-      {
-        type: 'boost_straight',
-        name: 'Reta Turbo Boost',
-        icon: '⚡',
-        desc: 'Tapete luminoso de alta velocidade!',
-        length: 36,
-        turnSteps: 0,
-        width: 16,
-        walled: true,
-        hasBoost: true
-      },
-      {
-        type: 'turn_left',
-        name: 'Curva p/ Esquerda',
-        icon: '↩️',
-        desc: 'Curva 45° ideal para carregar Drift!',
-        length: 30,
-        turnSteps: -1,
-        width: 17,
-        walled: true
-      },
-      {
-        type: 'turn_right',
-        name: 'Curva p/ Direita',
-        icon: '↪️',
-        desc: 'Curva 45° rápida com zebra neon!',
-        length: 30,
-        turnSteps: 1,
-        width: 17,
-        walled: true
-      },
-      {
-        type: 'ramp_gap',
-        name: 'Rampa com Salto!',
-        icon: '🚀',
-        desc: 'Salto sobre o abismo! Passe rápido!',
-        length: 38,
-        turnSteps: 0,
-        width: 16,
-        walled: false,
-        hasRamp: true,
-        hasGap: true,
-        hasBoost: true
-      },
-      {
-        type: 'narrow_bridge',
-        name: 'Ponte Sem Muro!',
-        icon: '⚠️',
-        desc: 'Pista estreita sobre o abismo! Cuidado!',
-        length: 34,
-        turnSteps: 0,
-        width: 10.5,
-        walled: false
-      },
-      {
-        type: 'obstacles',
-        name: 'Corredor de Pilares',
-        icon: '🔨',
-        desc: 'Blocos neon no meio da pista para desviar!',
-        length: 36,
-        turnSteps: 0,
-        width: 17,
-        walled: true,
-        hasPillars: true
+    function activateBreakerById(id, fromNetwork = false) {
+      const b = breakers.find(x => x.id === id);
+      if (!b || b.activated) return;
+      b.activated = true;
+      b.indicator.material.color.setHex(0x22c55e);
+      b.light.color.setHex(0x22c55e);
+      breakersActivated++;
+      audio.playBreakerActivate();
+
+      if (breakersActivated >= totalBreakersNeeded && !exitUnlocked) {
+        exitUnlocked = true;
+        if (exitElevator) {
+          exitElevator.doorMesh.material.color.setHex(0x10b981);
+          exitElevator.signLight.color.setHex(0x10b981);
+        }
+        showToast('🚨 TODOS OS DISJUNTORES ATIVADOS! O Elevador de Saída (Azul no Radar) foi destrancado!', 5000);
+      } else {
+        showToast(`⚡ Disjuntor ${breakersActivated}/${totalBreakersNeeded} energizado!`);
       }
+      updateObjectiveHUD();
+
+      if (!fromNetwork) {
+        broadcastNet({ type: 'breaker', id });
+      }
+    }
+
+    function findNearestInteractable() {
+      if (player.hiding) {
+        return { kind: 'unhide', label: '[E] SAIR DO ARMÁRIO' };
+      }
+
+      // 1. Disjuntores
+      for (const b of breakers) {
+        if (!b.activated && Math.hypot(player.x - b.x, player.z - b.z) < 2.2) {
+          return { kind: 'breaker', target: b, label: '[E] LIGAR DISJUNTOR DE ENERGIA' };
+        }
+      }
+
+      // 2. Elevador de Saída
+      if (exitElevator && Math.hypot(player.x - exitElevator.x, player.z - exitElevator.z) < 2.5) {
+        if (exitUnlocked) {
+          return { kind: 'exit', label: '[E] ENTRAR NO ELEVADOR E ESCAPAR!' };
+        } else {
+          return { kind: 'locked_exit', label: `🔒 ELEVADOR SEM ENERGIA (${breakersActivated}/${totalBreakersNeeded} DISJUNTORES)` };
+        }
+      }
+
+      // 3. Suprimentos (Água de Amêndoa, Bateria, Fita VHS)
+      for (const it of items) {
+        if (!it.collected && Math.hypot(player.x - it.x, player.z - it.z) < 2.0) {
+          const names = {
+            almond: '[E] BEBER ÁGUA DE AMÊNDOA (+SANIDADE / +FÔLEGO)',
+            battery: '[E] PEGAR BATERIA 9V (+55% LANTERNA)',
+            tape: '[E] RECOLHER FITA VHS DA ASYNC'
+          };
+          return { kind: 'item', target: it, label: names[it.type] };
+        }
+      }
+
+      // 4. Armários para esconder
+      for (const lk of lockers) {
+        if (Math.hypot(player.x - lk.x, player.z - lk.z) < 2.1) {
+          return { kind: 'locker', target: lk, label: '[E] ESCONDER NO ARMÁRIO METÁLICO' };
+        }
+      }
+
+      return null;
+    }
+
+    const vhsLoreQuotes = [
+      '📼 FITA #12: "Se você ouvir passos molhados atrás de você, apague a lanterna e procure um armário azul..."',
+      '📼 FITA #27: "A Água de Amêndoa mantém a mente sã. Não deixe sua sanidade cair ou a câmera falhará."',
+      '📼 FITA #39: "O Instituto ASYNC instalou 4 disjuntores de emergência conectados ao elevador de carga."'
     ];
 
-    /********************************************************************
-     * 4. CONSTRUTOR MODULAR DA PISTA 3D (THREE.JS)
-     ********************************************************************/
-    class ModularTrack3D {
-      constructor(scene) {
-        this.scene = scene;
-        this.group = new THREE.Group();
-        this.scene.add(this.group);
+    function tryInteract() {
+      audio.init();
+      const inter = findNearestInteractable();
+      if (!inter) return;
 
-        // Lista de tipos de peças que formam a pista atual (vai crescendo a cada rodada!)
-        this.pieceSequence = [];
-        this.segments = [];
+      if (inter.kind === 'unhide') {
+        player.hiding = false;
+        document.getElementById('hidingOverlay').style.display = 'none';
+        audio.playClick();
+        showToast('Você saiu do armário.');
+        return;
       }
 
-      resetToStarterTrack() {
-        // Começa com uma pista pequena (3 peças iniciais) igual no Roblox/Make Way!
-        this.pieceSequence = ['straight', 'boost_straight', 'turn_left'];
-        this.rebuildMesh();
+      if (inter.kind === 'breaker') {
+        activateBreakerById(inter.target.id, false);
+        return;
       }
 
-      addPiece(pieceType) {
-        this.pieceSequence.push(pieceType);
-        this.rebuildMesh();
+      if (inter.kind === 'locked_exit') {
+        audio.playClick();
+        showToast(`🔒 Energize todos os ${totalBreakersNeeded} disjuntores verdes primeiro!`);
+        return;
       }
 
-      rebuildMesh() {
-        while (this.group.children.length > 0) {
-          const obj = this.group.children[0];
-          this.group.remove(obj);
-        }
-        this.segments = [];
-
-        let cursorX = 0;
-        let cursorZ = 0;
-        let cursorAngle = 0; // 0 = apontando para +Z
-
-        // Adiciona todas as peças da sequência + 1 peça final de Linha de Chegada
-        const fullList = [...this.pieceSequence, 'finish_line'];
-
-        fullList.forEach((type, index) => {
-          const def = type === 'finish_line'
-            ? { type: 'finish_line', length: 28, turnSteps: 0, width: 18, walled: true, isFinish: true }
-            : (TRACK_PIECE_CATALOG.find((p) => p.type === type) || TRACK_PIECE_CATALOG[0]);
-
-          const deltaAngle = (def.turnSteps || 0) * (Math.PI / 4); // passos de 45 graus
-          const segAngle = cursorAngle + deltaAngle * 0.5;
-          const dirX = Math.sin(segAngle);
-          const dirZ = Math.cos(segAngle);
-          const rightX = Math.cos(segAngle);
-          const rightZ = -Math.sin(segAngle);
-
-          const len = def.length;
-          const startX = cursorX;
-          const startZ = cursorZ;
-          const centerX = startX + dirX * (len * 0.5);
-          const centerZ = startZ + dirZ * (len * 0.5);
-          const endX = startX + dirX * len;
-          const endZ = startZ + dirZ * len;
-
-          const seg = {
-            index,
-            type: def.type,
-            startX,
-            startZ,
-            centerX,
-            centerZ,
-            endX,
-            endZ,
-            angle: segAngle,
-            dirX,
-            dirZ,
-            rightX,
-            rightZ,
-            length: len,
-            width: def.width,
-            walled: def.walled,
-            hasBoost: !!def.hasBoost,
-            hasRamp: !!def.hasRamp,
-            hasGap: !!def.hasGap,
-            hasPillars: !!def.hasPillars,
-            isFinish: !!def.isFinish,
-            pillars: []
-          };
-
-          this.buildSegment3D(seg);
-          this.segments.push(seg);
-
-          // Avança cursor com leve sobreposição para não haver frestas nas curvas
-          cursorX = endX - dirX * 1.5;
-          cursorZ = endZ - dirZ * 1.5;
-          cursorAngle += deltaAngle;
-        });
+      if (inter.kind === 'exit') {
+        triggerGameEnd(true);
+        return;
       }
 
-      buildSegment3D(seg) {
-        const segGroup = new THREE.Group();
-        segGroup.position.set(seg.centerX, 0, seg.centerZ);
-        segGroup.rotation.y = seg.angle;
+      if (inter.kind === 'item') {
+        const it = inter.target;
+        it.collected = true;
+        it.mesh.visible = false;
+        audio.playItemPickup();
 
-        const roadColor = seg.isFinish ? 0x1e293b : (seg.index % 2 === 0 ? 0x1e2638 : 0x252f45);
-        const roadMat = new THREE.MeshStandardMaterial({ color: roadColor, roughness: 0.7 });
-
-        if (seg.hasGap) {
-          // Peça dividida com buraco de abismo no meio + rampa!
-          const partLen = seg.length * 0.36;
-          const geoA = new THREE.BoxGeometry(seg.width, 1.2, partLen);
-          const meshA = new THREE.Mesh(geoA, roadMat);
-          meshA.position.set(0, -0.6, -seg.length * 0.32);
-          segGroup.add(meshA);
-
-          const meshB = new THREE.Mesh(geoA, roadMat);
-          meshB.position.set(0, -0.6, seg.length * 0.32);
-          segGroup.add(meshB);
-
-          // Rampa de lançamento antes do buraco
-          const rampGeo = new THREE.BoxGeometry(seg.width * 0.85, 0.8, 7.5);
-          const rampMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, emissive: 0x443300 });
-          const rampMesh = new THREE.Mesh(rampGeo, rampMat);
-          rampMesh.position.set(0, 0.45, -seg.length * 0.16);
-          rampMesh.rotation.x = -0.22;
-          segGroup.add(rampMesh);
-        } else {
-          // Asfalto contínuo
-          const roadGeo = new THREE.BoxGeometry(seg.width, 1.2, seg.length + 2.2);
-          const roadMesh = new THREE.Mesh(roadGeo, roadMat);
-          roadMesh.position.y = -0.6;
-          roadMesh.receiveShadow = true;
-          segGroup.add(roadMesh);
+        if (it.type === 'almond') {
+          player.sanity = Math.min(100, player.sanity + 45);
+          player.stamina = 100;
+          showToast('🥤 Água de Amêndoa consumida! Sanidade e Fôlego restaurados.');
+        } else if (it.type === 'battery') {
+          player.battery = Math.min(100, player.battery + 55);
+          player.flashlightOn = true;
+          showToast('🔋 Bateria 9V recarregada (+55%)!');
+        } else if (it.type === 'tape') {
+          player.tapesCollected++;
+          const lore = vhsLoreQuotes[(player.tapesCollected - 1) % vhsLoreQuotes.length];
+          showToast(lore, 5200);
+          updateObjectiveHUD();
         }
-
-        // Muretas / Zebras laterais (se a peça tiver proteção)
-        if (seg.walled) {
-          const wallColor = seg.index % 2 === 0 ? 0x00f0ff : 0xd946ef;
-          const wallMat = new THREE.MeshStandardMaterial({
-            color: wallColor,
-            emissive: wallColor,
-            emissiveIntensity: 0.25
-          });
-          const wallGeo = new THREE.BoxGeometry(0.9, 1.3, seg.length + 1.5);
-
-          const leftWall = new THREE.Mesh(wallGeo, wallMat);
-          leftWall.position.set(seg.width * 0.5, 0.5, 0);
-          segGroup.add(leftWall);
-
-          const rightWall = new THREE.Mesh(wallGeo, wallMat);
-          rightWall.position.set(-seg.width * 0.5, 0.5, 0);
-          segGroup.add(rightWall);
-        } else {
-          // Listras de alerta amarelas nas bordas sem muro!
-          const warnMat = new THREE.MeshBasicMaterial({ color: 0xfacc15 });
-          const warnGeo = new THREE.BoxGeometry(0.45, 0.1, seg.length);
-          const wL = new THREE.Mesh(warnGeo, warnMat);
-          wL.position.set(seg.width * 0.5 - 0.3, 0.05, 0);
-          const wR = new THREE.Mesh(warnGeo, warnMat);
-          wR.position.set(-seg.width * 0.5 + 0.3, 0.05, 0);
-          segGroup.add(wL, wR);
-        }
-
-        // Tapete de Boost Pad 3D
-        if (seg.hasBoost) {
-          const boostGeo = new THREE.BoxGeometry(seg.width * 0.55, 0.14, 7.5);
-          const boostMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff });
-          const boostMesh = new THREE.Mesh(boostGeo, boostMat);
-          boostMesh.position.set(0, 0.08, -seg.length * 0.2);
-          segGroup.add(boostMesh);
-        }
-
-        // Pilares de Obstáculo no meio da pista
-        if (seg.hasPillars) {
-          const pillarGeo = new THREE.CylinderGeometry(1.35, 1.35, 3.6, 16);
-          const pillarMat = new THREE.MeshStandardMaterial({
-            color: 0xef4444,
-            emissive: 0x7f1d1d
-          });
-          const offsets = [
-            { lx: -3.6, lz: -6 },
-            { lx: 3.6, lz: 0 },
-            { lx: -3.2, lz: 7 }
-          ];
-          offsets.forEach((o) => {
-            const pMesh = new THREE.Mesh(pillarGeo, pillarMat);
-            pMesh.position.set(o.lx, 1.8, o.lz);
-            segGroup.add(pMesh);
-
-            // Salva posição global do pilar para colisão física
-            const wx = seg.centerX + seg.rightX * o.lx + seg.dirX * o.lz;
-            const wz = seg.centerZ + seg.rightZ * o.lx + seg.dirZ * o.lz;
-            seg.pillars.push({ x: wx, z: wz, r: 1.55 });
-          });
-        }
-
-        // Pórtico da Linha de Chegada 3D
-        if (seg.isFinish) {
-          const postGeo = new THREE.BoxGeometry(1.1, 8, 1.1);
-          const postMat = new THREE.MeshStandardMaterial({ color: 0xfacc15 });
-          const pL = new THREE.Mesh(postGeo, postMat);
-          pL.position.set(seg.width * 0.5, 4, 2);
-          const pR = new THREE.Mesh(postGeo, postMat);
-          pR.position.set(-seg.width * 0.5, 4, 2);
-
-          const bannerGeo = new THREE.BoxGeometry(seg.width + 1.5, 2.0, 1.2);
-          const bannerMat = new THREE.MeshStandardMaterial({
-            color: 0x10b981,
-            emissive: 0x065f46
-          });
-          const banner = new THREE.Mesh(bannerGeo, bannerMat);
-          banner.position.set(0, 7.5, 2);
-
-          // Faixa quadriculada no chão
-          const stripGeo = new THREE.BoxGeometry(seg.width - 1, 0.12, 3.2);
-          const stripMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-          const strip = new THREE.Mesh(stripGeo, stripMat);
-          strip.position.set(0, 0.06, 2);
-
-          segGroup.add(pL, pR, banner, strip);
-        }
-
-        this.group.add(segGroup);
+        return;
       }
 
-      findClosestSegment(x, z) {
-        let bestSeg = this.segments[0];
-        let bestLocalZ = 0;
-        let bestLocalX = 0;
-        let bestDist = Infinity;
-
-        for (const seg of this.segments) {
-          const dx = x - seg.centerX;
-          const dz = z - seg.centerZ;
-          const localZ = dx * seg.dirX + dz * seg.dirZ;
-          const localX = dx * seg.rightX + dz * seg.rightZ;
-
-          const clampedZ = Math.max(-seg.length * 0.55, Math.min(seg.length * 0.55, localZ));
-          const distZ = localZ - clampedZ;
-          const dist = Math.hypot(localX, distZ);
-
-          if (dist < bestDist) {
-            bestDist = dist;
-            bestSeg = seg;
-            bestLocalZ = localZ;
-            bestLocalX = localX;
-          }
-        }
-        return { seg: bestSeg, localX: bestLocalX, localZ: bestLocalZ, dist: bestDist };
+      if (inter.kind === 'locker') {
+        player.hiding = true;
+        player.flashlightOn = false;
+        player.x = inter.target.x;
+        player.z = inter.target.z;
+        document.getElementById('hidingOverlay').style.display = 'block';
+        audio.playClick();
+        showToast('🙈 Escondido no armário! A Entidade não pode te ver aqui. Pressione [E] para sair.');
       }
     }
 
-    /********************************************************************
-     * 5. MICRO-KART 3D (CARRINHO PEQUENO 3D + FÍSICA DE SALTO E DRIFT)
-     ********************************************************************/
-    class MicroKart3D {
-      constructor(scene, opts) {
-        this.scene = scene;
-        this.id = opts.id;
-        this.name = opts.name;
-        this.colorHex = opts.colorHex;
-        this.colorCss = opts.colorCss;
-        this.isAI = !!opts.isAI;
-        this.isRemote = !!opts.isRemote;
-        this.aiSkill = opts.aiSkill || 0.95;
-        this.laneBias = opts.laneBias || 0;
+    // =========================================================================
+    // 8. MULTIPLAYER CO-OP P2P (PEERJS) + AVATARES HAZMAT 3D
+    // =========================================================================
+    let peer = null;
+    let connections = [];
+    let isHost = false;
+    let remotePlayers = {}; // id -> { x, z, yaw, name, mesh }
 
-        // Pontuação rumo aos 1.000 pontos!
-        this.score = 0;
-        this.roundPointsEarned = 0;
+    function createHazmatAvatar(name) {
+      const group = new THREE.Group();
+      const suitMat = new THREE.MeshLambertMaterial({ color: 0xeab308 });
+      const visorMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
 
-        this.mesh = this.createToyCarMesh(this.colorHex);
-        this.scene.add(this.mesh);
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.3, 1.25, 10), suitMat);
+      body.position.y = 0.85;
+      group.add(body);
 
-        this.resetForRound(0, 0, 0);
-      }
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.24, 10, 10), suitMat);
+      head.position.y = 1.66;
+      group.add(head);
 
-      createToyCarMesh(colorHex) {
-        const root = new THREE.Group();
+      const visor = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.16, 0.14), visorMat);
+      visor.position.set(0, 1.66, -0.2);
+      group.add(visor);
 
-        // Corpo compacto (Micro-Kart / Toy Car 3D)
-        const bodyMat = new THREE.MeshStandardMaterial({
-          color: colorHex,
-          roughness: 0.35,
-          metalness: 0.2
-        });
-        const chassis = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.62, 2.75), bodyMat);
-        chassis.position.y = 0.52;
-        chassis.castShadow = true;
-        root.add(chassis);
+      const pLight = new THREE.PointLight(0xfff5c0, 0.8, 8);
+      pLight.position.set(0, 1.5, 0);
+      group.add(pLight);
 
-        // Cabine / Capota fofa de carrinho pequeno
-        const cabinMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.2 });
-        const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.38, 0.52, 1.35), cabinMat);
-        cabin.position.set(0, 0.98, -0.15);
-        root.add(cabin);
+      scene.add(group);
+      return group;
+    }
 
-        // Aerofólio traseiro esportivo
-        const wing = new THREE.Mesh(new THREE.BoxGeometry(1.85, 0.14, 0.45), bodyMat);
-        wing.position.set(0, 1.05, -1.25);
-        root.add(wing);
-
-        // Faróis dianteiros brilhantes
-        const lampMat = new THREE.MeshBasicMaterial({ color: 0xfef08a });
-        const lampGeo = new THREE.BoxGeometry(0.32, 0.2, 0.1);
-        const l1 = new THREE.Mesh(lampGeo, lampMat);
-        l1.position.set(0.55, 0.56, 1.38);
-        const l2 = new THREE.Mesh(lampGeo, lampMat);
-        l2.position.set(-0.55, 0.56, 1.38);
-        root.add(l1, l2);
-
-        // Chama de Turbo atrás do escapamento
-        const flameGeo = new THREE.ConeGeometry(0.42, 1.5, 10);
-        const flameMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff });
-        this.flameMesh = new THREE.Mesh(flameGeo, flameMat);
-        this.flameMesh.rotation.x = -Math.PI * 0.5;
-        this.flameMesh.position.set(0, 0.48, -2.0);
-        this.flameMesh.visible = false;
-        root.add(this.flameMesh);
-
-        // 4 Rodinhas robustas
-        this.wheels = [];
-        const wheelGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.38, 14);
-        wheelGeo.rotateZ(Math.PI * 0.5);
-        const wheelMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.8 });
-
-        const positions = [
-          { x: 0.96, y: 0.42, z: 0.88, front: true },
-          { x: -0.96, y: 0.42, z: 0.88, front: true },
-          { x: 0.96, y: 0.42, z: -0.88, front: false },
-          { x: -0.96, y: 0.42, z: -0.88, front: false }
-        ];
-        positions.forEach((p) => {
-          const wMesh = new THREE.Mesh(wheelGeo, wheelMat);
-          wMesh.position.set(p.x, p.y, p.z);
-          root.add(wMesh);
-          this.wheels.push({ mesh: wMesh, front: p.front });
-        });
-
-        this.bodyGroup = chassis;
-        return root;
-      }
-
-      resetForRound(x, z, angle) {
-        this.x = x;
-        this.y = 0;
-        this.z = z;
-        this.vx = 0;
-        this.vy = 0;
-        this.vz = 0;
-        this.angle = angle;
-        this.speed = 0;
-
-        this.isDrifting = false;
-        this.driftDir = 0;
-        this.driftCharge = 0;
-        this.driftLevel = 0;
-        this.boostTimer = 0;
-        this.boostPower = 0;
-
-        this.finishedRound = false;
-        this.eliminated = false;
-        this.finishOrder = 99;
-        this.maxSegmentReached = 0;
-        this.progressMetric = 0;
-
-        this.mesh.position.set(this.x, this.y, this.z);
-        this.mesh.rotation.set(0, this.angle, 0);
-      }
-
-      update(dt, ctrl, track, allKarts, canDrive) {
-        if (this.isRemote) return;
-        if (this.finishedRound || this.eliminated) {
-          this.vx *= 0.92;
-          this.vz *= 0.92;
-          this.x += this.vx * dt;
-          this.z += this.vz * dt;
-          if (this.eliminated) {
-            this.y -= 24 * dt;
-            this.mesh.rotation.x += 5 * dt;
-          }
-          this.mesh.position.set(this.x, this.y, this.z);
-          return;
-        }
-
-        if (!canDrive) return;
-
-        if (this.isAI) {
-          ctrl = this.computeAIControls(track);
-        }
-
-        const maxSpd = 38 * (this.isAI ? this.aiSkill : 1.0) + this.boostPower;
-        const accel = 46;
-        const turnSpeed = 2.95;
-
-        // Mecânica de Drift + 3 Níveis de Mini-Turbo
-        if (ctrl.justDrift && this.speed > 12 && !this.isDrifting && this.y <= 0.1) {
-          this.vy = 4.2; // Pulinho (hop) do kart
-          if (ctrl.steer !== 0) {
-            this.isDrifting = true;
-            this.driftDir = ctrl.steer;
-            this.driftCharge = 0;
-            this.driftLevel = 0;
-          }
-        }
-
-        if (this.isDrifting) {
-          if (!ctrl.drift || this.speed < 9) {
-            if (this.driftLevel > 0) {
-              const bTimes = [0, 0.75, 1.25, 1.8];
-              const bPowers = [0, 14, 20, 27];
-              this.boostTimer = bTimes[this.driftLevel];
-              this.boostPower = bPowers[this.driftLevel];
-              if (!this.isAI) sfx.boostSound(this.driftLevel);
-            }
-            this.isDrifting = false;
-            this.driftDir = 0;
-            this.driftCharge = 0;
-            this.driftLevel = 0;
-          } else {
-            this.driftCharge += dt * (ctrl.steer === this.driftDir ? 1.35 : 0.8);
-            const oldLvl = this.driftLevel;
-            if (this.driftCharge >= 1.9) this.driftLevel = 3;
-            else if (this.driftCharge >= 1.0) this.driftLevel = 2;
-            else if (this.driftCharge >= 0.4) this.driftLevel = 1;
-            if (!this.isAI && this.driftLevel > oldLvl) {
-              sfx.tone(380 + this.driftLevel * 170, 0.08, 'triangle', 0.1);
-            }
-          }
-        }
-
-        if (this.boostTimer > 0) {
-          this.boostTimer = Math.max(0, this.boostTimer - dt);
-        } else {
-          this.boostPower = 0;
-        }
-
-        // Rotação (no sistema Three.js: angle=0 aponta para +Z, virar à direita diminui angle)
-        const turnSign = -ctrl.steer;
-        if (this.isDrifting) {
-          const driftSteer = (-this.driftDir * 0.65) + (turnSign * 0.55);
-          this.angle += driftSteer * turnSpeed * dt;
-        } else {
-          const spdFactor = Math.min(1, Math.abs(this.speed) / 8);
-          const revSign = this.speed < -1 ? -1 : 1;
-          this.angle += turnSign * turnSpeed * spdFactor * revSign * dt;
-        }
-
-        const fx = Math.sin(this.angle);
-        const fz = Math.cos(this.angle);
-        const rx = Math.cos(this.angle);
-        const rz = -Math.sin(this.angle);
-
-        let fVel = this.vx * fx + this.vz * fz;
-        let lVel = this.vx * rx + this.vz * rz;
-
-        if (ctrl.gas) {
-          fVel += (accel + (this.boostTimer > 0 ? 30 : 0)) * dt;
-        } else if (ctrl.brake) {
-          fVel -= accel * 1.15 * dt;
-        } else {
-          fVel *= Math.pow(0.4, dt);
-        }
-
-        if (fVel > maxSpd) fVel += (maxSpd - fVel) * Math.min(1, dt * 6);
-        if (fVel < -16) fVel = -16;
-
-        const grip = this.isDrifting ? 3.2 : 11.0;
-        lVel *= Math.exp(-grip * dt);
-
-        this.vx = fx * fVel + rx * lVel;
-        this.vz = fz * fVel + rz * lVel;
-        this.speed = fVel;
-
-        this.x += this.vx * dt;
-        this.z += this.vz * dt;
-
-        // Física vertical (Rampas, Gravidade e Queda no Abismo!)
-        const info = track.findClosestSegment(this.x, this.z);
-        const seg = info.seg;
-        this.maxSegmentReached = Math.max(this.maxSegmentReached, seg.index);
-        this.progressMetric = seg.index * 100 + (info.localZ + seg.length * 0.5);
-
-        // Rampa de lançamento
-        if (seg.hasRamp && info.localZ > -seg.length * 0.28 && info.localZ < -seg.length * 0.04 && this.y <= 0.6) {
-          this.vy = Math.max(this.vy, 11.5 + Math.max(0, this.speed * 0.16));
-          if (!this.isAI) sfx.tone(520, 0.12, 'sine', 0.1);
-        }
-
-        // Boost Pad
-        if (seg.hasBoost && Math.abs(info.localZ + seg.length * 0.2) < 4.5 && Math.abs(info.localX) < seg.width * 0.35) {
-          if (this.boostTimer < 0.3 && !this.isAI) sfx.boostSound(2);
-          this.boostTimer = Math.max(this.boostTimer, 0.95);
-          this.boostPower = Math.max(this.boostPower, 22);
-        }
-
-        // Pilares de Obstáculo
-        if (seg.hasPillars) {
-          for (const pil of seg.pillars) {
-            const dx = this.x - pil.x;
-            const dz = this.z - pil.z;
-            const d = Math.hypot(dx, dz);
-            if (d < pil.r + 1.0) {
-              const nx = dx / (d || 1);
-              const nz = dz / (d || 1);
-              this.x = pil.x + nx * (pil.r + 1.05);
-              this.z = pil.z + nz * (pil.r + 1.05);
-              this.vx = nx * 14;
-              this.vz = nz * 14;
-              if (!this.isAI) sfx.tone(140, 0.12, 'sawtooth', 0.15);
-            }
-          }
-        }
-
-        // Verifica se está sobre o buraco da rampa ou fora da largura da pista sem muro
-        const inGapHole = seg.hasGap && Math.abs(info.localZ) < seg.length * 0.13;
-        const halfW = seg.width * 0.5 - 0.85;
-
-        if (seg.walled && Math.abs(info.localX) > halfW && this.y <= 0.6) {
-          // Desliza suavemente na mureta lateral!
-          const clampedX = Math.sign(info.localX) * halfW;
-          const correction = clampedX - info.localX;
-          this.x += seg.rightX * correction;
-          this.z += seg.rightZ * correction;
-
-          const sideDot = this.vx * seg.rightX + this.vz * seg.rightZ;
-          this.vx -= seg.rightX * sideDot * 1.1;
-          this.vz -= seg.rightZ * sideDot * 1.1;
-        } else if (!seg.walled && Math.abs(info.localX) > halfW + 0.7 && this.y <= 0.2) {
-          // Saiu da ponte sem muro! Cai no abismo!
-          this.eliminated = true;
-          if (!this.isAI) {
-            sfx.tone(160, 0.35, 'sawtooth', 0.16);
-            game.banner('CAIU NO ABISMO!', 'Aguarde o fim da rodada...', '#ef4444', 1.8);
-          }
-        }
-
-        if (this.y > 0 || inGapHole) {
-          this.vy -= 26 * dt;
-          this.y += this.vy * dt;
-          if (this.y <= 0) {
-            if (inGapHole) {
-              this.eliminated = true;
-              if (!this.isAI) {
-                sfx.tone(150, 0.35, 'sawtooth', 0.16);
-                game.banner('CAIU NO SALTO!', 'Passou devagar demais na rampa!', '#ef4444', 1.8);
-              }
-            } else {
-              this.y = 0;
-              this.vy = 0;
-            }
-          }
-        }
-
-        // Chegou na Linha de Chegada (último segmento)!
-        if (seg.isFinish && info.localZ > -1.0 && !this.finishedRound) {
-          this.finishedRound = true;
-          game.onKartCrossedFinish(this);
-        }
-
-        // Atualiza visual 3D do Micro-Kart
-        this.mesh.position.set(this.x, this.y, this.z);
-        this.mesh.rotation.set(0, this.angle, 0);
-
-        // Inclinação de carroceria (Body Roll) e chama de turbo
-        this.mesh.rotation.z = ctrl.steer * 0.09;
-        this.flameMesh.visible = this.boostTimer > 0 || this.driftLevel > 0;
-        if (this.flameMesh.visible) {
-          const colors = [0x00f0ff, 0x00f0ff, 0xff8800, 0xd946ef];
-          this.flameMesh.material.color.setHex(this.boostTimer > 0 ? 0x00f0ff : colors[this.driftLevel]);
-        }
-
-        // Gira e esterça as rodinhas 3D
-        this.wheels.forEach((w) => {
-          w.mesh.rotation.x += this.speed * dt * 1.4;
-          if (w.front) {
-            w.mesh.rotation.y = -ctrl.steer * 0.42;
-          }
-        });
-      }
-
-      computeAIControls(track) {
-        const info = track.findClosestSegment(this.x, this.z);
-        const nextIdx = Math.min(track.segments.length - 1, info.seg.index + 1);
-        const targetSeg = track.segments[nextIdx];
-
-        const safeBias = targetSeg.walled ? this.laneBias : this.laneBias * 0.25;
-        const tx = targetSeg.centerX + targetSeg.rightX * safeBias;
-        const tz = targetSeg.centerZ + targetSeg.rightZ * safeBias;
-
-        const desiredAngle = Math.atan2(tx - this.x, tz - this.z);
-        let diff = desiredAngle - this.angle;
-        while (diff > Math.PI) diff -= Math.PI * 2;
-        while (diff < -Math.PI) diff += Math.PI * 2;
-
-        // Como angle positivo gira p/ direita do eixo +Z via sin(angle), ajustamos o steer:
-        const steer = diff < -0.07 ? 1 : (diff > 0.07 ? -1 : 0);
-        const wantDrift = targetSeg.walled && Math.abs(diff) > 0.38 && this.speed > 24;
-
-        return {
-          steer,
-          gas: true,
-          brake: false,
-          drift: wantDrift,
-          justDrift: wantDrift && !this.isDrifting
-        };
+    function broadcastNet(payload) {
+      for (const conn of connections) {
+        if (conn.open) conn.send(payload);
       }
     }
 
-    /********************************************************************
-     * 6. GERENCIADOR DO JOGO 3D (ROBLOX / MAKE WAY LOOP ATÉ 1000 PTS)
-     ********************************************************************/
-    class Game3D {
-      constructor() {
-        this.container = document.getElementById('gameContainer');
-        this.controls = new Controls();
-
-        this.targetWinScore = 1000;
-        this.roundNumber = 1;
-        this.state = 'MENU'; // MENU, COUNTDOWN, RACING, BUILD_PHASE, GAME_OVER
-        this.countdownTimer = 0;
-        this.roundTimer = 0;
-        this.finishCounter = 0;
-        this.camMode = 0; // 0 = 3D Chase Proxima, 1 = 3D Panorâmica
-
-        this.initThree();
-        this.track = new ModularTrack3D(this.scene);
-        this.karts = [];
-        this.player = null;
-        this.createRacers();
-        this.bindUI();
-        this.setupNetworking();
-
-        this.lastTime = performance.now();
-        requestAnimationFrame((t) => this.loop(t));
-      }
-
-      initThree() {
-        this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0x090d16);
-        this.scene.fog = new THREE.FogExp2(0x090d16, 0.0045);
-
-        this.camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.5, 450);
-
-        this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-        this.renderer.setSize(window.innerWidth, window.innerHeight);
-        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-        this.container.appendChild(this.renderer.domElement);
-
-        const hemi = new THREE.HemisphereLight(0xa5f3fc, 0x0f172a, 0.95);
-        this.scene.add(hemi);
-
-        const dir = new THREE.DirectionalLight(0xffffff, 0.9);
-        dir.position.set(45, 90, 40);
-        this.scene.add(dir);
-
-        // Grade estilizada lá embaixo no abismo (Void) para dar sensação de altura 3D!
-        const grid = new THREE.GridHelper(900, 90, 0x00f0ff, 0x1e293b);
-        grid.position.y = -18;
-        this.scene.add(grid);
-
-        window.addEventListener('resize', () => {
-          this.camera.aspect = window.innerWidth / window.innerHeight;
-          this.camera.updateProjectionMatrix();
-          this.renderer.setSize(window.innerWidth, window.innerHeight);
-        });
-      }
-
-      createRacers() {
-        const roster = [
-          { id: 'player', name: 'VOCÊ', colorHex: 0x00f0ff, colorCss: '#00f0ff', isAI: false, skill: 1.0, lane: 0 },
-          { id: 'bot1', name: 'TURBO-X', colorHex: 0xef4444, colorCss: '#ef4444', isAI: true, skill: 0.97, lane: -3.2 },
-          { id: 'bot2', name: 'SPARK', colorHex: 0xfacc15, colorCss: '#facc15', isAI: true, skill: 0.94, lane: 3.2 },
-          { id: 'bot3', name: 'NEON', colorHex: 0xd946ef, colorCss: '#d946ef', isAI: true, skill: 0.91, lane: -1.8 }
-        ];
-
-        this.karts = roster.map((r) => new MicroKart3D(this.scene, r));
-        this.player = this.karts[0];
-        this.renderScoreboardHUD();
-      }
-
-      bindUI() {
-        const btnAuto = document.getElementById('btnAutoGas');
-        btnAuto.addEventListener('click', () => {
-          this.controls.autoGas = !this.controls.autoGas;
-          btnAuto.textContent = `⚡ AUTO-GAS: ${this.controls.autoGas ? 'ON' : 'OFF'}`;
-          btnAuto.classList.toggle('active', this.controls.autoGas);
-        });
-
-        document.getElementById('btnCamMode').addEventListener('click', () => this.toggleCamera());
-
-        document.getElementById('btnRoomModal').addEventListener('click', () => {
-          document.getElementById('startModal').classList.remove('hidden');
-        });
-
-        document.getElementById('btnPlayNow').addEventListener('click', () => {
-          sfx.init();
-          document.getElementById('startModal').classList.add('hidden');
-          if (this.state === 'MENU' || this.state === 'GAME_OVER') {
-            this.startNewMatch();
-          }
-        });
-      }
-
-      toggleCamera() {
-        this.camMode = (this.camMode + 1) % 2;
-        document.getElementById('btnCamMode').textContent =
-          this.camMode === 0 ? '🎥 CÂMERA: 3D CHASE' : '🎥 CÂMERA: 3D ALTA';
-      }
-
-      startNewMatch() {
-        this.roundNumber = 1;
-        this.karts.forEach((k) => { k.score = 0; });
-        this.track.resetToStarterTrack();
-        this.renderScoreboardHUD();
-        this.startRound();
-      }
-
-      startRound() {
-        this.finishCounter = 0;
-        this.roundTimer = 0;
-
-        // Posiciona os micro-karts lado a lado no segmento 0
-        const seg0 = this.track.segments[0];
-        this.karts.forEach((k, i) => {
-          const lateral = (i - (this.karts.length - 1) * 0.5) * 2.8;
-          const sx = seg0.startX + seg0.rightX * lateral + seg0.dirX * 3;
-          const sz = seg0.startZ + seg0.rightZ * lateral + seg0.dirZ * 3;
-          k.resetForRound(sx, sz, seg0.angle);
-        });
-
-        this.state = 'COUNTDOWN';
-        this.countdownTimer = 2.6;
-        this._lastBeepSec = 4;
-        this.banner(`RODADA ${this.roundNumber}`, `Pista com ${this.track.pieceSequence.length} peças • Meta: 1000 PTS`, '#00f0ff', 1.5);
-      }
-
-      onKartCrossedFinish(kart) {
-        this.finishCounter++;
-        kart.finishOrder = this.finishCounter;
-
-        // Tabela de pontos estilo Make Way (1º ganha 300, 2º 220, 3º 150, 4º 100)
-        const rewards = [0, 300, 220, 150, 100];
-        const pts = rewards[this.finishCounter] || 80;
-        kart.roundPointsEarned = pts;
-        kart.score = Math.min(this.targetWinScore, kart.score + pts);
-
-        if (kart === this.player) {
-          sfx.tone(880, 0.25, 'triangle', 0.16);
-          this.banner(`${this.finishCounter}º LUGAR! +${pts} PTS`, 'Aguardando fim da rodada...', '#10b981', 1.8);
-        }
-        this.renderScoreboardHUD();
-      }
-
-      checkRoundEnd(dt) {
-        this.roundTimer += dt;
-        const allDone = this.karts.every((k) => k.finishedRound || k.eliminated);
-        const playerDoneWait = (this.player.finishedRound || this.player.eliminated) && this.roundTimer > 6.5;
-        const timeout = this.roundTimer > 22;
-
-        if (allDone || playerDoneWait || timeout) {
-          this.endRoundAndOpenBuilder();
-        }
-      }
-
-      endRoundAndOpenBuilder() {
-        // Quem não terminou ganha pontos proporcionais até onde chegou na pista!
-        this.karts.forEach((k) => {
-          if (!k.finishedRound) {
-            const bonus = Math.min(90, Math.round((k.maxSegmentReached / this.track.segments.length) * 90));
-            k.roundPointsEarned = bonus;
-            k.score = Math.min(this.targetWinScore, k.score + bonus);
-          }
-        });
-
-        this.renderScoreboardHUD();
-
-        // Verifica se alguém bateu 1.000 PONTOS!
-        const sorted = [...this.karts].sort((a, b) => b.score - a.score);
-        if (sorted[0].score >= this.targetWinScore) {
-          this.state = 'GAME_OVER';
-          const modal = document.getElementById('startModal');
-          document.getElementById('startModalTitle').textContent = `🏆 ${sorted[0].name} BATEU 1.000 PONTOS E VENCEU!`;
-          document.getElementById('startModalSub').innerHTML =
-            `Partida épica após <b>${this.roundNumber} rodadas</b> e uma pista gigante de <b>${this.track.pieceSequence.length} peças</b>!<br/>Quer começar uma nova corrida do zero?`;
-          document.getElementById('btnPlayNow').textContent = '🔄 JOGAR NOVA PARTIDA (0 A 1000 PTS)';
-          modal.classList.remove('hidden');
-          sfx.tone(660, 0.4, 'triangle', 0.18);
-          return;
-        }
-
-        // Abre a Fase de Construção (Montar a próxima parte da pista!)
-        this.state = 'BUILD_PHASE';
-        const buildModal = document.getElementById('buildModal');
-        const resultsEl = document.getElementById('roundResultsList');
-
-        resultsEl.innerHTML = sorted.map((k, idx) => `
-          <div class="result-row" style="color:${k.colorCss}">
-            <span>${idx + 1}º ${k.name} ${k.eliminated ? '💀 (Caiu)' : '🏁'}</span>
-            <span>+${k.roundPointsEarned} pts ➔ <b>${k.score} / 1000 PTS</b></span>
-          </div>
-        `).join('');
-
-        // Sorteia 4 peças variadas para o jogador escolher e acoplar no final da pista!
-        const shuffled = [...TRACK_PIECE_CATALOG].sort(() => Math.random() - 0.5).slice(0, 4);
-        const gridEl = document.getElementById('pieceChoicesGrid');
-        gridEl.innerHTML = '';
-
-        shuffled.forEach((piece) => {
-          const card = document.createElement('div');
-          card.className = 'piece-option';
-          card.innerHTML = `
-            <div class="piece-icon">${piece.icon}</div>
-            <div class="piece-name">${piece.name}</div>
-            <div class="piece-desc">${piece.desc}</div>
-          `;
-          card.addEventListener('click', () => {
-            this.selectPieceForNextRound(piece.type);
+    function setupConnectionHandlers(conn) {
+      conn.on('open', () => {
+        connections.push(conn);
+        document.getElementById('hudPlayers').textContent = `${connections.length + 1}`;
+        if (isHost) {
+          conn.send({
+            type: 'init_world',
+            seed: worldSeed,
+            difficulty,
+            breakers: breakers.filter(b => b.activated).map(b => b.id)
           });
-          gridEl.appendChild(card);
-        });
-
-        buildModal.classList.remove('hidden');
-      }
-
-      selectPieceForNextRound(pieceType) {
-        sfx.tone(580, 0.14, 'sine', 0.14);
-        document.getElementById('buildModal').classList.add('hidden');
-
-        // Adiciona a peça escolhida pelo jogador + 1 peça escolhida pelos outros corredores para a pista crescer rápido!
-        this.track.addPiece(pieceType);
-        const randomExtra = TRACK_PIECE_CATALOG[Math.floor(Math.random() * TRACK_PIECE_CATALOG.length)].type;
-        this.track.addPiece(randomExtra);
-
-        if (this.netConn && this.netConn.open) {
-          this.netConn.send({ type: 'addPieces', p1: pieceType, p2: randomExtra });
         }
+      });
 
-        this.roundNumber++;
-        this.startRound();
+      conn.on('data', (data) => {
+        if (!data || !data.type) return;
+        if (data.type === 'init_world') {
+          worldSeed = data.seed;
+          difficulty = data.difficulty || 'normal';
+          buildLevel(worldSeed);
+          if (Array.isArray(data.breakers)) {
+            data.breakers.forEach(id => activateBreakerById(id, true));
+          }
+          showToast('🌐 Sincronizado com o labirinto do Host!');
+        } else if (data.type === 'pos') {
+          let rp = remotePlayers[conn.peer];
+          if (!rp) {
+            rp = {
+              mesh: createHazmatAvatar(data.name || 'Amigo'),
+              x: data.x,
+              z: data.z,
+              yaw: data.yaw
+            };
+            remotePlayers[conn.peer] = rp;
+          }
+          rp.x = data.x;
+          rp.z = data.z;
+          rp.yaw = data.yaw;
+          rp.mesh.position.set(data.x, 0, data.z);
+          rp.mesh.rotation.y = data.yaw;
+        } else if (data.type === 'breaker') {
+          activateBreakerById(data.id, true);
+        }
+      });
+
+      conn.on('close', () => {
+        connections = connections.filter(c => c !== conn);
+        if (remotePlayers[conn.peer]) {
+          scene.remove(remotePlayers[conn.peer].mesh);
+          delete remotePlayers[conn.peer];
+        }
+        document.getElementById('hudPlayers').textContent = `${connections.length + 1}`;
+      });
+    }
+
+    document.getElementById('btnHostRoom').addEventListener('click', () => {
+      if (typeof Peer === 'undefined') {
+        document.getElementById('coopStatusText').textContent = 'PeerJS indisponível no momento.';
+        return;
+      }
+      const code = 'BK' + Math.floor(100 + Math.random() * 900);
+      document.getElementById('coopStatusText').textContent = 'Criando sala Co-op...';
+      if (peer) peer.destroy();
+      peer = new Peer('backrooms-v1-' + code);
+      peer.on('open', () => {
+        isHost = true;
+        document.getElementById('inpRoomCode').value = code;
+        document.getElementById('coopStatusText').textContent = `✅ SALA CRIADA! Passe o código [${code}] para seu amigo.`;
+      });
+      peer.on('connection', (conn) => {
+        setupConnectionHandlers(conn);
+        showToast('👥 Um novo explorador entrou na gravação Co-op!');
+      });
+    });
+
+    document.getElementById('btnJoinRoom').addEventListener('click', () => {
+      const code = document.getElementById('inpRoomCode').value.trim().toUpperCase();
+      if (!code) return;
+      document.getElementById('coopStatusText').textContent = `Conectando à sala ${code}...`;
+      if (peer) peer.destroy();
+      peer = new Peer();
+      peer.on('open', () => {
+        isHost = false;
+        const conn = peer.connect('backrooms-v1-' + code);
+        setupConnectionHandlers(conn);
+        document.getElementById('coopStatusText').textContent = `✅ Conectado à sala [${code}]!`;
+      });
+    });
+
+    // =========================================================================
+    // 9. RADAR / DETECTOR ACÚSTICO ASYNC
+    // =========================================================================
+    const radarCanvas = document.getElementById('radarCanvas');
+    const rCtx = radarCanvas.getContext('2d');
+    let radarSweepAngle = 0;
+
+    function drawRadar(dt) {
+      const w = radarCanvas.width;
+      const h = radarCanvas.height;
+      const cx = w / 2;
+      const cy = h / 2;
+      const scale = 2.15;
+
+      rCtx.fillStyle = 'rgba(4, 12, 6, 0.35)';
+      rCtx.fillRect(0, 0, w, h);
+
+      // Grade circular do detector
+      rCtx.strokeStyle = 'rgba(34, 197, 94, 0.25)';
+      rCtx.lineWidth = 1;
+      [22, 44, 64].forEach(r => {
+        rCtx.beginPath();
+        rCtx.arc(cx, cy, r, 0, Math.PI * 2);
+        rCtx.stroke();
+      });
+
+      // Linha de varredura (Sweep)
+      radarSweepAngle = (radarSweepAngle + dt * 3.4) % (Math.PI * 2);
+      rCtx.strokeStyle = 'rgba(74, 222, 128, 0.65)';
+      rCtx.beginPath();
+      rCtx.moveTo(cx, cy);
+      rCtx.lineTo(cx + Math.cos(radarSweepAngle) * 66, cy + Math.sin(radarSweepAngle) * 66);
+      rCtx.stroke();
+
+      // Função auxiliar para converter coordenadas mundo -> radar rotacionado com a visão do jogador
+      function toRadarXY(wx, wz) {
+        const dx = (wx - player.x) * scale;
+        const dz = (wz - player.z) * scale;
+        const cos = Math.cos(player.yaw);
+        const sin = Math.sin(player.yaw);
+        const rx = dx * cos - dz * sin;
+        const rz = dx * sin + dz * cos;
+        return { x: cx + rx, y: cy + rz, dist: Math.hypot(rx, rz) };
       }
 
-      renderScoreboardHUD() {
-        const container = document.getElementById('scoreboardHud');
-        container.innerHTML = this.karts.map((k) => {
-          const pct = Math.min(100, (k.score / this.targetWinScore) * 100);
-          return `
-            <div class="score-pill">
-              <div class="score-pill-top">
-                <span style="color:${k.colorCss}">${k.name}</span>
-                <span>${k.score}/1000</span>
-              </div>
-              <div class="score-bar-bg">
-                <div class="score-bar-fill" style="width:${pct}%;background:${k.colorCss}"></div>
-              </div>
-            </div>
-          `;
-        }).join('');
-      }
-
-      banner(main, sub = '', color = '#fff', duration = 1.2) {
-        const m = document.getElementById('centerMainText');
-        const s = document.getElementById('centerSubText');
-        m.textContent = main;
-        m.style.color = color;
-        s.textContent = sub;
-        clearTimeout(this._bannerTimeout);
-        this._bannerTimeout = setTimeout(() => {
-          m.textContent = '';
-          s.textContent = '';
-        }, duration * 1000);
-      }
-
-      resolveKartBumps() {
-        const minDist = 2.05;
-        for (let i = 0; i < this.karts.length; i++) {
-          for (let j = i + 1; j < this.karts.length; j++) {
-            const a = this.karts[i];
-            const b = this.karts[j];
-            if (a.eliminated || b.eliminated) continue;
-            const dx = b.x - a.x;
-            const dz = b.z - a.z;
-            const d = Math.hypot(dx, dz);
-            if (d > 0 && d < minDist) {
-              const overlap = (minDist - d) * 0.5;
-              const nx = dx / d;
-              const nz = dz / d;
-              a.x -= nx * overlap;
-              a.z -= nz * overlap;
-              b.x += nx * overlap;
-              b.z += nz * overlap;
-
-              const push = 6.5;
-              a.vx -= nx * push;
-              a.vz -= nz * push;
-              b.vx += nx * push;
-              b.vz += nz * push;
+      // Paredes próximas no radar
+      const pg = worldToGrid(player.x, player.z);
+      rCtx.fillStyle = 'rgba(217, 193, 91, 0.22)';
+      for (let gz = Math.max(0, pg.gz - 5); gz <= Math.min(GRID_SIZE - 1, pg.gz + 5); gz++) {
+        for (let gx = Math.max(0, pg.gx - 5); gx <= Math.min(GRID_SIZE - 1, pg.gx + 5); gx++) {
+          if (mazeGrid[gz] && mazeGrid[gz][gx] === 1) {
+            const wp = gridToWorld(gx, gz);
+            const pt = toRadarXY(wp.x, wp.z);
+            if (pt.dist < 62) {
+              rCtx.fillRect(pt.x - 2, pt.y - 2, 4, 4);
             }
           }
         }
       }
 
-      setupNetworking() {
-        this.peer = null;
-        this.netConn = null;
-        const statusEl = document.getElementById('netStatusLabel');
-
-        document.getElementById('btnHostOnline').addEventListener('click', () => {
-          const code = Math.random().toString(36).substring(2, 6).toUpperCase();
-          statusEl.textContent = `Criando sala ${code}...`;
-          this.peer = new Peer('KART3D-' + code);
-          this.peer.on('open', () => {
-            document.getElementById('inputRoomCode').value = code;
-            statusEl.innerHTML = `✅ Sala criada! Passe o código <b style="color:#facc15">${code}</b> para seu amigo!`;
-          });
-          this.peer.on('connection', (conn) => {
-            this.netConn = conn;
-            statusEl.innerHTML = `🟢 Amigo conectado na sala <b>${code}</b>!`;
-            this.bindConnEvents(conn);
-          });
-        });
-
-        document.getElementById('btnJoinOnline').addEventListener('click', () => {
-          const code = document.getElementById('inputRoomCode').value.trim().toUpperCase();
-          if (!code) return;
-          statusEl.textContent = `Entrando na sala ${code}...`;
-          this.peer = new Peer();
-          this.peer.on('open', () => {
-            const conn = this.peer.connect('KART3D-' + code);
-            this.netConn = conn;
-            this.bindConnEvents(conn);
-          });
-        });
+      // Disjuntores (Pontos Verdes)
+      for (const b of breakers) {
+        if (b.activated) continue;
+        const pt = toRadarXY(b.x, b.z);
+        const clampedX = cx + ((pt.x - cx) / Math.max(1, pt.dist / 60));
+        const clampedY = cy + ((pt.y - cy) / Math.max(1, pt.dist / 60));
+        rCtx.fillStyle = '#22c55e';
+        rCtx.beginPath();
+        rCtx.arc(pt.dist > 60 ? clampedX : pt.x, pt.dist > 60 ? clampedY : pt.y, 4, 0, Math.PI * 2);
+        rCtx.fill();
       }
 
-      bindConnEvents(conn) {
-        conn.on('open', () => {
-          document.getElementById('netStatusLabel').innerHTML = `🟢 Conectado no Multiplayer Online!`;
-        });
-        conn.on('data', (data) => {
-          if (data && data.type === 'addPieces') {
-            this.track.addPiece(data.p1);
-            this.track.addPiece(data.p2);
-            document.getElementById('buildModal').classList.add('hidden');
-            this.roundNumber++;
-            this.startRound();
-          }
-        });
+      // Elevador de Saída (Ponto Azul Ciano)
+      if (exitElevator) {
+        const pt = toRadarXY(exitElevator.x, exitElevator.z);
+        const clampedX = cx + ((pt.x - cx) / Math.max(1, pt.dist / 60));
+        const clampedY = cy + ((pt.y - cy) / Math.max(1, pt.dist / 60));
+        rCtx.fillStyle = exitUnlocked ? '#38bdf8' : '#64748b';
+        rCtx.beginPath();
+        rCtx.arc(pt.dist > 60 ? clampedX : pt.x, pt.dist > 60 ? clampedY : pt.y, 4.5, 0, Math.PI * 2);
+        rCtx.fill();
       }
 
-      updateCamera(dt) {
-        if (this.state === 'BUILD_PHASE') {
-          // Na fase de construção, foca lá na ponta da pista onde a nova peça vai entrar!
-          const lastSeg = this.track.segments[this.track.segments.length - 1];
-          const targetPos = new THREE.Vector3(lastSeg.centerX - 28, 34, lastSeg.centerZ - 28);
-          this.camera.position.lerp(targetPos, Math.min(1, dt * 4));
-          this.camera.lookAt(lastSeg.centerX, 0, lastSeg.centerZ);
-          return;
-        }
-
-        if (!this.player) return;
-        const backDist = this.camMode === 0 ? 11.5 : 18.5;
-        const upHeight = this.camMode === 0 ? 6.2 : 12.5;
-
-        const targetX = this.player.x - Math.sin(this.player.angle) * backDist;
-        const targetY = Math.max(2, this.player.y + upHeight);
-        const targetZ = this.player.z - Math.cos(this.player.angle) * backDist;
-
-        this.camera.position.x += (targetX - this.camera.position.x) * Math.min(1, dt * 10);
-        this.camera.position.y += (targetY - this.camera.position.y) * Math.min(1, dt * 8);
-        this.camera.position.z += (targetZ - this.camera.position.z) * Math.min(1, dt * 10);
-
-        const lookX = this.player.x + Math.sin(this.player.angle) * 8;
-        const lookZ = this.player.z + Math.cos(this.player.angle) * 8;
-        this.camera.lookAt(lookX, Math.max(-2, this.player.y + 1.2), lookZ);
-      }
-
-      updateBottomHUD() {
-        if (!this.player) return;
-        const kmh = Math.round(Math.abs(this.player.speed) * 3.2);
-        document.getElementById('speedVal').textContent = String(kmh);
-
-        const bar = document.getElementById('turboBarFill');
-        const status = document.getElementById('driftStatus');
-
-        if (this.player.boostTimer > 0) {
-          bar.style.width = '100%';
-          bar.style.background = '#00f0ff';
-          status.textContent = '🔥 TURBO BOOST!';
-          status.style.color = '#00f0ff';
-        } else if (this.player.isDrifting) {
-          bar.style.width = `${Math.min(100, (this.player.driftCharge / 1.9) * 100)}%`;
-          const cols = ['#64748b', '#00f0ff', '#ff8800', '#d946ef'];
-          const txts = ['DRIFT...', '⚡ MINI-TURBO (SOLTE!)', '🔥 SUPER-TURBO!', '💜 ULTRA-TURBO MÁXIMO!'];
-          bar.style.background = cols[this.player.driftLevel];
-          status.textContent = txts[this.player.driftLevel];
-          status.style.color = cols[this.player.driftLevel];
-        } else {
-          bar.style.width = '0%';
-          status.textContent = '';
+      // Outros jogadores Co-op (Amarelo)
+      for (const id in remotePlayers) {
+        const rp = remotePlayers[id];
+        const pt = toRadarXY(rp.x, rp.z);
+        if (pt.dist < 62) {
+          rCtx.fillStyle = '#fde047';
+          rCtx.beginPath();
+          rCtx.arc(pt.x, pt.y, 3.5, 0, Math.PI * 2);
+          rCtx.fill();
         }
       }
 
-      loop(now) {
-        const dt = Math.min(0.05, (now - this.lastTime) / 1000);
-        this.lastTime = now;
+      // Entidade / Bactéria (Ponto Vermelho Pulsante)
+      if (monster) {
+        const pt = toRadarXY(monster.x, monster.z);
+        if (pt.dist < 64) {
+          rCtx.fillStyle = '#ef4444';
+          rCtx.beginPath();
+          rCtx.arc(pt.x, pt.y, 4.5, 0, Math.PI * 2);
+          rCtx.fill();
+        }
+      }
 
-        if (this.state === 'COUNTDOWN') {
-          this.countdownTimer -= dt;
-          const sec = Math.ceil(this.countdownTimer);
-          if (sec !== this._lastBeepSec && sec >= 1 && sec <= 3) {
-            this._lastBeepSec = sec;
-            this.banner(String(sec), 'Prepare-se!', '#facc15', 0.8);
-            sfx.tone(440, 0.12, 'square', 0.12);
-          }
-          if (this.countdownTimer <= 0) {
-            this.state = 'RACING';
-            this.banner('VAI!!', 'Chegue na linha verde sem cair!', '#10b981', 0.9);
-            sfx.tone(880, 0.25, 'sawtooth', 0.16);
+      // Jogador no centro + cone de visão
+      rCtx.fillStyle = '#ffffff';
+      rCtx.beginPath();
+      rCtx.arc(cx, cy, 3, 0, Math.PI * 2);
+      rCtx.fill();
+    }
+
+    // =========================================================================
+    // 10. LOOP PRINCIPAL (IA DA ENTIDADE, MOVIMENTO, LUZES, HUD)
+    // =========================================================================
+    let lastTime = performance.now();
+    let netSyncAccum = 0;
+    let heartAccum = 0;
+
+    function pickRandomPatrolTarget() {
+      for (let tries = 0; tries < 20; tries++) {
+        const gx = Math.floor(1 + Math.random() * (GRID_SIZE - 2));
+        const gz = Math.floor(1 + Math.random() * (GRID_SIZE - 2));
+        if (mazeGrid[gz] && mazeGrid[gz][gx] === 0) {
+          return gridToWorld(gx, gz);
+        }
+      }
+      return { x: 0, z: 0 };
+    }
+
+    function triggerGameEnd(escaped) {
+      gameActive = false;
+      player.alive = escaped;
+      if (document.pointerLockElement) document.exitPointerLock?.();
+
+      const modal = document.getElementById('endModal');
+      const tag = document.getElementById('endTag');
+      const title = document.getElementById('endTitle');
+      const desc = document.getElementById('endDesc');
+
+      if (escaped) {
+        audio.playBreakerActivate();
+        tag.textContent = '● GRAVAÇÃO RECUPERADA — SUCESSO';
+        title.textContent = 'VOCÊ ESCAPOU DO NÍVEL 0!';
+        title.style.color = '#4ade80';
+        desc.innerHTML = `Você energizou os <b>${totalBreakersNeeded} disjuntores</b>, recuperou <b>${player.tapesCollected} fitas VHS</b> e alcançou o elevador de carga da ASYNC com <b>${Math.round(player.sanity)}%</b> de sanidade restante!`;
+      } else {
+        audio.playMonsterRoar(0.65);
+        tag.textContent = '● FITA CORROMPIDA — SINAL PERDIDO';
+        title.textContent = 'CAPTURADO PELA ENTIDADE';
+        title.style.color = '#ef4444';
+        desc.innerHTML = `A entidade do Nível 0 encontrou você nos corredores amarelos.<br/><br/>Dica: Desligue a lanterna (<b>F</b>) ou esconda-se dentro dos <b>Armários Metálicos</b> (<b>E</b>) quando o Detector Acústico apitar!`;
+      }
+      modal.style.display = 'flex';
+    }
+
+    function updateMonsterAI(dt) {
+      if (!monster) return;
+
+      const distToPlayer = Math.hypot(player.x - monster.x, player.z - monster.z);
+      const canSee = !player.hiding && hasLineOfSight(monster.x, monster.z, player.x, player.z);
+      const detectRadius = player.flashlightOn ? 16.5 : (player.sprinting ? 13.0 : 8.5);
+
+      if (canSee && distToPlayer < detectRadius) {
+        if (monster.state !== 'CHASE') {
+          monster.state = 'CHASE';
+          if (monster.roarCooldown <= 0) {
+            audio.playMonsterRoar(0.42);
+            monster.roarCooldown = 5.0;
+            showToast('⚠️ A ENTIDADE VIU VOCÊ! Corra ou esconda-se em um armário!');
           }
         }
+        monster.targetX = player.x;
+        monster.targetZ = player.z;
+      } else if (monster.state === 'CHASE' && distToPlayer > 18) {
+        monster.state = 'PATROL';
+        const pt = pickRandomPatrolTarget();
+        monster.targetX = pt.x;
+        monster.targetZ = pt.z;
+      }
 
-        const ctrl = this.controls.poll();
-        const canDrive = this.state === 'RACING';
+      if (monster.roarCooldown > 0) monster.roarCooldown -= dt;
 
-        this.karts.forEach((k) => {
-          k.update(dt, k === this.player ? ctrl : null, this.track, this.karts, canDrive);
-        });
+      // Velocidade da Entidade
+      const baseSpeed = (difficulty === 'nightmare') ? 3.85 : 3.05;
+      const speed = (monster.state === 'CHASE') ? baseSpeed * 1.32 : baseSpeed * 0.72;
 
-        if (this.state === 'RACING') {
-          this.resolveKartBumps();
-          this.checkRoundEnd(dt);
+      const dx = monster.targetX - monster.x;
+      const dz = monster.targetZ - monster.z;
+      const distTarget = Math.hypot(dx, dz);
+
+      if (distTarget < 1.0) {
+        const pt = pickRandomPatrolTarget();
+        monster.targetX = pt.x;
+        monster.targetZ = pt.z;
+      } else {
+        const vx = (dx / distTarget) * speed * dt;
+        const vz = (dz / distTarget) * speed * dt;
+
+        if (!collidesWithWall(monster.x + vx, monster.z, 0.36)) {
+          monster.x += vx;
+        } else if (monster.state === 'PATROL') {
+          const pt = pickRandomPatrolTarget();
+          monster.targetX = pt.x;
+          monster.targetZ = pt.z;
         }
 
-        this.updateCamera(dt);
-        this.updateBottomHUD();
-        sfx.updateEngine(this.player.speed / 38, this.player.boostTimer > 0);
+        if (!collidesWithWall(monster.x, monster.z + vz, 0.36)) {
+          monster.z += vz;
+        }
+        monster.yaw = Math.atan2(dx, dz);
+      }
 
-        this.renderer.render(this.scene, this.camera);
-        requestAnimationFrame((t) => this.loop(t));
+      // Animação sinistra dos membros da Entidade
+      monster.animPhase += dt * (monster.state === 'CHASE' ? 12 : 6);
+      monster.mesh.position.set(monster.x, 0, monster.z);
+      monster.mesh.rotation.y = monster.yaw;
+      const { legL, legR, armL, armR, head } = monster.mesh.userData;
+      legL.rotation.x = Math.sin(monster.animPhase) * 0.55;
+      legR.rotation.x = -Math.sin(monster.animPhase) * 0.55;
+      armL.rotation.x = -Math.cos(monster.animPhase) * 0.45;
+      armR.rotation.x = Math.cos(monster.animPhase) * 0.45;
+      head.rotation.z = Math.sin(monster.animPhase * 1.7) * 0.18;
+
+      // Efeitos de proximidade (Batimento cardíaco, interferência VHS e captura)
+      const vhsEl = document.getElementById('vhsOverlay');
+      if (distToPlayer < 11 && !player.hiding) {
+        vhsEl.classList.add('danger');
+        heartAccum += dt;
+        if (heartAccum > Math.max(0.28, distToPlayer / 16)) {
+          heartAccum = 0;
+          audio.playHeartbeat();
+        }
+      } else {
+        vhsEl.classList.remove('danger');
+      }
+
+      // Captura do jogador
+      if (!player.hiding && distToPlayer < 1.15) {
+        triggerGameEnd(false);
       }
     }
 
-    const game = new Game3D();
+    function animate(now) {
+      requestAnimationFrame(animate);
+      const dt = Math.min(0.05, (now - lastTime) / 1000);
+      lastTime = now;
+
+      // Relógio VHS 1996
+      const d = new Date();
+      const pad = (n) => String(n).padStart(2, '0');
+      document.getElementById('vhsClock').textContent =
+        `1996-11-11 ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+
+      // Piscar das lâmpadas fluorescentes no teto
+      for (let i = 0; i < ceilingPanels.length; i++) {
+        const cp = ceilingPanels[i];
+        if (Math.random() < cp.flickerRate) {
+          cp.mesh.material = (cp.mesh.material === panelOnMat) ? panelOffMat : panelOnMat;
+        }
+      }
+
+      // Rotação suave dos itens no chão
+      for (const it of items) {
+        if (!it.collected) {
+          it.mesh.rotation.y += dt * 1.8;
+        }
+      }
+
+      if (gameActive && player.alive) {
+        // Movimento do jogador (se não estiver escondido no armário)
+        let moveForward = 0;
+        let moveRight = 0;
+
+        if (!player.hiding) {
+          if (keys['KeyW'] || keys['ArrowUp']) moveForward += 1;
+          if (keys['KeyS'] || keys['ArrowDown']) moveForward -= 1;
+          if (keys['KeyD'] || keys['ArrowRight']) moveRight += 1;
+          if (keys['KeyA'] || keys['ArrowLeft']) moveRight -= 1;
+
+          if (Math.abs(joyVec.y) > 0.08) moveForward -= joyVec.y;
+          if (Math.abs(joyVec.x) > 0.08) moveRight += joyVec.x;
+        }
+
+        const isMoving = Math.hypot(moveForward, moveRight) > 0.05;
+        const wantsSprint = (keys['ShiftLeft'] || keys['ShiftRight'] || mobileSprint) && isMoving && player.stamina > 5;
+        player.sprinting = wantsSprint;
+
+        if (wantsSprint) {
+          player.stamina = Math.max(0, player.stamina - dt * 22);
+          if (player.stamina <= 1) mobileSprint = false;
+        } else {
+          player.stamina = Math.min(100, player.stamina + dt * 14);
+        }
+
+        // Bateria da lanterna e Sanidade
+        if (player.flashlightOn) {
+          player.battery = Math.max(0, player.battery - dt * 1.45);
+          if (player.battery <= 0) {
+            player.flashlightOn = false;
+            showToast('🔦 Sua lanterna apagou! Encontre uma Bateria 9V.');
+          }
+        }
+
+        const sanityDrain = player.flashlightOn ? 0.35 : 1.15;
+        player.sanity = Math.max(5, player.sanity - dt * sanityDrain);
+
+        // Deslocamento com deslizamento suave nas paredes
+        if (isMoving && !player.hiding) {
+          const norm = Math.hypot(moveForward, moveRight);
+          const f = moveForward / norm;
+          const r = moveRight / norm;
+          const speed = player.sprinting ? 5.15 : 3.25;
+
+          const sinY = Math.sin(player.yaw);
+          const cosY = Math.cos(player.yaw);
+
+          const dx = (-sinY * f + cosY * r) * speed * dt;
+          const dz = (-cosY * f - sinY * r) * speed * dt;
+
+          if (!collidesWithWall(player.x + dx, player.z)) player.x += dx;
+          if (!collidesWithWall(player.x, player.z + dz)) player.z += dz;
+
+          // Head-bobbing realista + som de passos no carpete úmido
+          player.bobPhase += dt * (player.sprinting ? 13.5 : 8.8);
+          const curSin = Math.sin(player.bobPhase);
+          if (player.lastStepSin >= 0 && curSin < 0) {
+            audio.playFootstep(player.sprinting);
+          }
+          player.lastStepSin = curSin;
+        } else {
+          player.bobPhase = 0;
+        }
+
+        // Atualiza câmera e lanterna
+        const bobY = isMoving ? Math.sin(player.bobPhase) * 0.065 : 0;
+        camera.position.set(player.x, 1.68 + bobY, player.z);
+        camera.rotation.order = 'YXZ';
+        camera.rotation.y = player.yaw;
+        camera.rotation.x = player.pitch;
+
+        flashLight.intensity = player.flashlightOn ? 2.4 : 0;
+        flashLight.position.copy(camera.position);
+        const dir = new THREE.Vector3(0, 0, -1).applyEuler(camera.rotation);
+        flashTarget.position.copy(camera.position).add(dir.multiplyScalar(6));
+        playerAuraLight.position.set(player.x, 1.8, player.z);
+
+        // Verifica objeto interagível próximo
+        const inter = findNearestInteractable();
+        const promptEl = document.getElementById('interactPrompt');
+        const crossEl = document.getElementById('crosshair');
+        if (inter) {
+          promptEl.style.display = 'block';
+          promptEl.textContent = inter.label;
+          crossEl.classList.add('active');
+        } else {
+          promptEl.style.display = 'none';
+          crossEl.classList.remove('active');
+        }
+
+        // Atualiza IA da Entidade
+        updateMonsterAI(dt);
+
+        // Atualiza barras do HUD
+        document.getElementById('lblSanity').textContent = `${Math.round(player.sanity)}%`;
+        document.getElementById('barSanity').style.width = `${player.sanity}%`;
+        document.getElementById('lblBattery').textContent = `${Math.round(player.battery)}%`;
+        document.getElementById('barBattery').style.width = `${player.battery}%`;
+        document.getElementById('lblStamina').textContent = `${Math.round(player.stamina)}%`;
+        document.getElementById('barStamina').style.width = `${player.stamina}%`;
+
+        // Sincroniza posição no Co-op P2P
+        netSyncAccum += dt;
+        if (netSyncAccum > 0.08 && connections.length > 0) {
+          netSyncAccum = 0;
+          broadcastNet({
+            type: 'pos',
+            x: player.x,
+            z: player.z,
+            yaw: player.yaw,
+            name: document.getElementById('inpPlayerName').value || 'Explorador'
+          });
+        }
+      }
+
+      drawRadar(dt);
+      renderer.render(scene, camera);
+    }
+
+    // =========================================================================
+    // 11. EVENTOS DE UI E INICIALIZAÇÃO
+    // =========================================================================
+    document.getElementById('btnStartGame').addEventListener('click', () => {
+      audio.init();
+      difficulty = document.getElementById('selDifficulty').value;
+      if (!connections.length || isHost) {
+        buildLevel(worldSeed);
+      }
+      document.getElementById('menuModal').style.display = 'none';
+      document.getElementById('endModal').style.display = 'none';
+      gameActive = true;
+      showToast('📼 GRAVAÇÃO INICIADA — Ative os 4 Disjuntores Verdes no Radar para destrancar o Elevador!', 4800);
+
+      const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+      if (!isTouch) {
+        renderer.domElement.requestPointerLock?.();
+      }
+    });
+
+    document.getElementById('btnRestartGame').addEventListener('click', () => {
+      audio.init();
+      worldSeed = Math.floor(Math.random() * 899999 + 100000);
+      buildLevel(worldSeed);
+      if (isHost) {
+        broadcastNet({ type: 'init_world', seed: worldSeed, difficulty, breakers: [] });
+      }
+      document.getElementById('endModal').style.display = 'none';
+      gameActive = true;
+      const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+      if (!isTouch) {
+        renderer.domElement.requestPointerLock?.();
+      }
+    });
+
+    document.getElementById('btnOpenMenu').addEventListener('click', () => {
+      gameActive = false;
+      if (document.pointerLockElement) document.exitPointerLock?.();
+      document.getElementById('menuModal').style.display = 'flex';
+    });
+
+    document.getElementById('btnToggleFlashlight').addEventListener('click', () => {
+      toggleFlashlight();
+    });
+
+    document.getElementById('btnToggleRadar').addEventListener('click', () => {
+      document.getElementById('radarBox').classList.toggle('expanded');
+    });
+
+    document.getElementById('btnFullscreen').addEventListener('click', () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen?.();
+      } else {
+        document.exitFullscreen?.();
+      }
+    });
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // Constrói labirinto inicial para o fundo 3D já aparecer vivo no menu
+    buildLevel(worldSeed);
+    requestAnimationFrame(animate);
   </script>
 </body>
 </html>
