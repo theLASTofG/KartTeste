@@ -151,13 +151,24 @@ kbd{background:rgba(255,255,255,.14);border-radius:5px;padding:1px 6px;font-fami
 #phaseHdr{position:fixed;top:calc(10px + var(--safeT));left:50%;transform:translateX(-50%);z-index:16;display:none;text-align:center;pointer-events:none;
   font-weight:900;font-style:italic;text-shadow:0 3px 0 rgba(0,0,0,.6);width:min(520px,56vw)}
 #phaseHdr.show{display:block}
-#phaseHdr .t{font-size:clamp(20px,4.4vh,36px);color:var(--gold)}
+#phaseHdr .t{font-size:clamp(14px,min(3.2vh,4.4vw),30px);color:var(--gold)}
+body.portrait #phaseHdr{width:94vw}
+body.portrait.building #board{display:none}
+@media (max-aspect-ratio:1/1){#tray{top:calc(64px + var(--safeT))!important}}
 #phaseHdr .tm{height:8px;background:rgba(0,0,0,.5);border-radius:4px;overflow:hidden;margin-top:4px}
 #phaseHdr .tm i{display:block;height:100%;background:var(--lime);width:100%}
-#tray{position:fixed;inset:0;z-index:15;display:none;pointer-events:none}
-#tray.show{display:block}
-.item{position:absolute;transform:translate(-50%,-50%) rotate(var(--r));pointer-events:auto;border:0;background:none;padding:0;color:#fff}
-.item .in{width:clamp(88px,12.5vw,132px);background:rgba(14,10,40,.88);border:3px solid rgba(255,255,255,.25);border-radius:16px;padding:8px 6px 8px;
+#tray{position:fixed;left:0;right:0;top:calc(62px + var(--safeT));bottom:calc(8px + var(--safeB));z-index:15;display:none;pointer-events:none;
+  grid-template-columns:repeat(5,minmax(0,150px));grid-auto-rows:min-content;gap:clamp(6px,2vh,16px) clamp(6px,1.5vw,16px);
+  justify-content:center;align-content:center;padding:0 8px;overflow:auto}
+#tray.show{display:grid}
+@media (max-aspect-ratio:1/1){#tray{grid-template-columns:repeat(2,minmax(0,170px));top:calc(96px + var(--safeT))}}
+@media (max-height:480px){.item svg{width:30px!important;height:30px!important}.item .tg{display:none}.item .nm{font-size:10px!important}}
+.item{position:relative;transform:rotate(var(--r));pointer-events:auto;border:0;background:none;padding:0;color:#fff;width:100%}
+.item .key{position:absolute;top:5px;left:9px;font-size:11px;font-weight:900;opacity:.6;z-index:2}
+.item.off{pointer-events:none}
+.item.off .in{opacity:.32;filter:grayscale(1);animation:none}
+.item.off::after{content:'SEM ESPAÇO';position:absolute;left:0;right:0;top:44%;font-size:11px;font-weight:900;color:#ff2e55;text-shadow:0 2px 0 #000}
+.item .in{width:100%;background:rgba(14,10,40,.88);border:3px solid rgba(255,255,255,.25);border-radius:16px;padding:8px 6px 8px;
   animation:bob 1.6s ease-in-out infinite alternate;animation-delay:var(--dl);box-shadow:0 10px 26px rgba(0,0,0,.5);transition:transform .1s,border-color .1s}
 .item:hover .in{border-color:var(--cyan);transform:scale(1.07)}
 .item:active .in{transform:scale(.95)}
@@ -183,6 +194,25 @@ kbd{background:rgba(255,255,255,.14);border-radius:5px;padding:1px 6px;font-fami
 #placebar .chip.ok{background:var(--lime);color:#111}
 #placebar .chip.no{background:var(--pink)}
 #placeBtn{padding:12px 16px;font-size:15px}
+#placebar{flex-wrap:wrap}
+#placebar .chips{max-height:44px;overflow:auto}
+#placebar .pbtns{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+#placebar .pb{border:2px solid rgba(255,255,255,.3);background:rgba(255,255,255,.08);color:#fff;font-weight:900;font-size:12px;padding:10px 12px;border-radius:12px}
+#placebar .pb:active{background:rgba(255,255,255,.25)}
+#placebar .pb-piece,#placebar .pb-obs,#placebar .pb-back{display:none}
+#placebar[data-mode="piece"] .pb-piece,#placebar[data-mode="obs"] .pb-obs,
+#placebar[data-mode="piece"] .pb-back,#placebar[data-mode="obs"] .pb-back{display:inline-flex}
+#camHint{position:fixed;left:50%;top:calc(62px + var(--safeT));transform:translateX(-50%);z-index:16;display:none;font-size:12px;font-weight:800;
+  background:rgba(10,8,30,.7);padding:5px 12px;border-radius:999px;pointer-events:none;max-width:94vw;text-align:center}
+#camHint.show{display:block}
+@media (max-height:480px){
+  #placebar{padding:6px 8px;gap:8px;bottom:calc(6px + var(--safeB))}
+  #placebar svg{width:34px;height:34px}
+  #placebar .chips{display:none}
+  #placebar .tx{font-size:12px}
+  #placebar .pb{padding:7px 9px;font-size:11px}
+  #camHint{top:calc(48px + var(--safeT));font-size:11px}
+}
 
 /* ---------- campeão ---------- */
 #confetti{position:fixed;inset:0;pointer-events:none;z-index:21;overflow:hidden;display:none}
@@ -229,8 +259,15 @@ kbd{background:rgba(255,255,255,.14);border-radius:5px;padding:1px 6px;font-fami
 <div id="placebar">
   <svg id="placeIcon" viewBox="0 0 64 64"></svg>
   <div class="tx"><div id="placeTxt"></div><div class="chips" id="placeChips"></div></div>
-  <button class="big lime" id="placeBtn" data-act="placepiece">ENCAIXAR ➜</button>
+  <div class="pbtns">
+    <button class="big lime pb-piece" id="placeBtn" data-act="placepiece">ENCAIXAR ➜</button>
+    <button class="pb pb-obs" data-cam="in">ZOOM +</button>
+    <button class="pb pb-obs" data-cam="out">ZOOM −</button>
+    <button class="pb pb-obs" data-cam="all">VER TUDO</button>
+    <button class="pb pb-back" data-act="backcards">VOLTAR ÀS CARTAS</button>
+  </div>
 </div>
+<div id="camHint">Arraste = mover · Pinça / roda = zoom · Toque curto num espaço brilhante = posicionar</div>
 
 <!-- TÍTULO -->
 <div id="title" class="screen">
@@ -361,8 +398,16 @@ const DRIFT = {
   name: ['MINI TURBO', 'SUPER TURBO', 'ULTRA TURBO!']
 };
 const PAD = { pow: 0.42, dur: 1.0, kick: 4, s0: 8, s1: 18, hv: 3.6 };
-const JUMP = { rampEnd: 18, landStart: 29, h: 3 };
-const JUMPS = { jump: JUMP, bigjump: { rampEnd: 24, landStart: 44, h: 5, pad: [2, 12] } };   // Mega Salto tem turbo embutido na rampa
+// perfis de rampa/buraco por peça: [s0, s1, tipo, h0, h1] (data-driven: rampa, buraco e trecho plano)
+const PROFILES = {
+  jump: [[0, 18, 'ramp', 0, 3], [18, 29, 'gap'], [29, 52, 'flat']],
+  bigjump: [[0, 24, 'ramp', 0, 5], [24, 44, 'gap'], [44, 78, 'flat']],
+  doublejump: [[0, 12, 'ramp', 0, 2.4], [12, 21, 'gap'], [21, 40, 'flat'], [40, 52, 'ramp', 0, 2.4], [52, 61, 'gap'], [61, 78, 'flat']]
+};
+const RAMP_PADS = { bigjump: [2, 12] };                // Mega Salto tem turbo embutido na rampa
+const profileSeg = (t, s) => { const p = PROFILES[t]; if (!p) return null; for (const g of p) if (s < g[1]) return g; return p[p.length - 1]; };
+// chicane: barreiras alternadas (s, faixa lateral v0..v1) que obrigam o zigue-zague
+const BARRIERS = [{ s: 12, v0: -HW, v1: -1.2 }, { s: 26, v0: 1.2, v1: HW }, { s: 40, v0: -HW, v1: -1.2 }];
 const HOLES = [{ s0: 10, s1: 16, v0: -5.6, v1: -0.8 }, { s0: 24, s1: 30, v0: 0.8, v1: 5.6 }, { s0: 38, s1: 44, v0: -2.2, v1: 2.2 }];
 const WIND_ACC = 8;                       // empurrão lateral do vento (m/s²)
 const bumpH = s => (s > 2 && s < 24) ? 0.55 * Math.pow(Math.sin(Math.PI * (s - 2) / 5.5), 2) : 0;
@@ -374,14 +419,15 @@ const GRID_SLOTS = [[20, -3.4], [20, 0], [20, 3.4], [15, -3.4], [15, 0], [15, 3.
 const PT = {
   start: { cells: 1 }, straight: { cells: 1 }, finish: { cells: 1 }, boost: { cells: 1 },
   curveL: { cells: 1, curve: -1 }, curveR: { cells: 1, curve: 1 }, jump: { cells: 2 }, bridge: { cells: 2 },
-  bumps: { cells: 1 }, ice: { cells: 1 }, wind: { cells: 1 }, holes: { cells: 2 }, bigjump: { cells: 3 }
+  bumps: { cells: 1 }, ice: { cells: 1 }, wind: { cells: 1 }, holes: { cells: 2 }, bigjump: { cells: 3 },
+  chicane: { cells: 2 }, doublejump: { cells: 3 }
 };
 // espaços delimitados onde obstáculos podem ser posicionados (s ao longo, v lateral)
 const SLOTS = {
   straight: [[8, -2.6], [8, 2.6], [18, 0]], boost: [[22.5, -2.6], [22.5, 2.6]],
   curveL: [[RC * Math.PI / 4, 0]], curveR: [[RC * Math.PI / 4, 0]], jump: [[40, -2.4], [40, 2.4]],
-  ice: [[8, -2.6], [8, 2.6], [18, 0]], wind: [[13, 0]], bigjump: [[66, -2.4], [66, 2.4]],
-  start: [], finish: [], bridge: [], bumps: [], holes: []
+  ice: [[8, -2.6], [8, 2.6], [18, 0]], wind: [[13, 0]], bigjump: [[66, -2.4], [66, 2.4]], doublejump: [[30, -2.4], [30, 2.4], [70, 0]],
+  start: [], finish: [], bridge: [], bumps: [], holes: [], chicane: []
 };
 const ROAD = '<rect x="18" y="2" width="28" height="60" rx="3" fill="#2b3048" stroke="#00e5ff" stroke-width="2"/>';
 const ITEMS = {
@@ -396,6 +442,8 @@ const ITEMS = {
   wind: { kind: 'piece', name: 'Vento Lateral', w: 0.8, svg: ROAD + '<path d="M4 20 H40 M4 32 H48 M4 44 H40" stroke="#bdf3ff" stroke-width="4" stroke-linecap="round"/><path d="M40 14 L50 20 L40 26 M48 26 L58 32 L48 38" stroke="#bdf3ff" stroke-width="3" fill="none"/>' },
   holes: { kind: 'piece', name: 'Ponte Quebrada', w: 0.7, svg: '<rect x="18" y="2" width="28" height="60" fill="#3b3f5c" stroke="#ffd23f" stroke-width="2"/><rect x="18" y="12" width="12" height="9" fill="#07031a"/><rect x="34" y="29" width="12" height="9" fill="#07031a"/><rect x="26" y="46" width="12" height="9" fill="#07031a"/>' },
   bigjump: { kind: 'piece', name: 'Mega Salto', w: 0.6, svg: '<path d="M2 54 L24 32 L24 56 L2 56Z" fill="#ff2e88"/><path d="M6 50 L12 44" stroke="#a6ff3b" stroke-width="4"/><rect x="46" y="48" width="18" height="8" fill="#2b3048" stroke="#00e5ff" stroke-width="1.5"/><path d="M24 30 Q38 0 50 44" stroke="#fff" stroke-width="2.5" stroke-dasharray="4 4" fill="none"/>' },
+  chicane: { kind: 'piece', name: 'Chicane', w: 0.9, svg: ROAD + '<path d="M18 16 H38 M26 32 H46 M18 48 H38" stroke="#ff2e88" stroke-width="5"/><path d="M42 58 L42 44 L22 40 L22 24 L42 20 L42 6" stroke="#a6ff3b" stroke-width="2" stroke-dasharray="3 3" fill="none"/>' },
+  doublejump: { kind: 'piece', name: 'Salto Duplo', w: 0.7, svg: '<path d="M0 52 L12 44 L12 56 L0 56Z M32 52 L44 44 L44 56 L32 56Z" fill="#ff9a1f"/><rect x="20" y="50" width="10" height="6" fill="#2b3048"/><rect x="52" y="50" width="12" height="6" fill="#2b3048"/><path d="M12 42 Q18 26 22 48 M44 42 Q50 26 54 48" stroke="#fff" stroke-width="2" stroke-dasharray="3 3" fill="none"/>' },
   kicker: { kind: 'obs', name: 'Rampinha', w: 0.9, svg: '<path d="M8 50 L56 50 L56 24 Z" fill="#ff9a1f"/><path d="M14 46 L50 46" stroke="#fff" stroke-width="3"/><path d="M50 18 Q56 6 62 14" stroke="#fff" stroke-width="2.5" fill="none"/>' },
   piston: { kind: 'obs', name: 'Pistão', w: 0.8, svg: '<rect x="20" y="10" width="24" height="30" fill="#ff2020"/><rect x="16" y="44" width="32" height="10" fill="#e8ecff"/><path d="M32 4 V10 M24 2 L32 8 L40 2" stroke="#fff" stroke-width="2.5" fill="none"/>' },
   block: { kind: 'obs', name: 'Bloco', w: 1.1, svg: '<rect x="14" y="14" width="36" height="36" rx="3" fill="#ff2020"/><rect x="14" y="25" width="36" height="6" fill="#fff"/>' },
@@ -780,10 +828,10 @@ class Piece {
     const s = o.s, t = this.type;
     if (this.turn) { wl = this.turn > 0; wr = this.turn < 0; }
     else if (t === 'bridge') { hw = bridgeHW(s); wl = wr = false; }
-    else if (t === 'jump' || t === 'bigjump') {
-      const J = JUMPS[t];
-      if (s < J.rampEnd) { h = Math.max(0, s) * J.h / J.rampEnd; slope = J.h / J.rampEnd; }
-      else if (s < J.landStart) { floor = false; wl = wr = false; }
+    else if (PROFILES[t]) {
+      const g = profileSeg(t, s);
+      if (g[2] === 'gap') { floor = false; wl = wr = false; }
+      else if (g[2] === 'ramp') { const k = clamp((s - g[0]) / (g[1] - g[0]), 0, 1); h = lerp(g[3], g[4], k); slope = (g[4] - g[3]) / (g[1] - g[0]); }
     }
     else if (t === 'bumps') { h = bumpH(s); slope = bumpSlope(s); }
     else if (t === 'ice') ice = true;
@@ -814,32 +862,34 @@ class Piece {
         const m = box(2.8, 0.02, 0.32, M.white, Math.cos(ang) * RC, 0.015, cz + Math.sin(ang) * RC, g, false);
         m.rotation.y = -(th * tn);
       }
-    } else if (t === 'jump' || t === 'bigjump') {
-      const JUMP = JUMPS[t];
-      const rs = new THREE.Shape();
-      rs.moveTo(0, -1); rs.lineTo(0, 0); rs.lineTo(JUMP.rampEnd, JUMP.h); rs.lineTo(JUMP.rampEnd, JUMP.h - 1);
-      const rg = new THREE.ExtrudeGeometry(rs, { depth: 2 * HW, bevelEnabled: false }); rg.translate(0, 0, -HW);
-      const rm = new THREE.Mesh(rg, M.ramp); rm.castShadow = rm.receiveShadow = true; g.add(rm);
-      for (const sd of [-1, 1]) {
-        const ws = new THREE.Shape();
-        ws.moveTo(0, 0); ws.lineTo(JUMP.rampEnd, JUMP.h); ws.lineTo(JUMP.rampEnd, JUMP.h + WALL_H); ws.lineTo(0, WALL_H);
-        const wg = new THREE.ExtrudeGeometry(ws, { depth: 0.5, bevelEnabled: false }); wg.translate(0, 0, sd > 0 ? HW : -HW - 0.5);
-        const wm = new THREE.Mesh(wg, M.wall); wm.castShadow = true; g.add(wm);
+    } else if (PROFILES[t]) {                          // rampas/buracos montados a partir do perfil
+      let lastH = 3;
+      for (const [s0, s1, kind, h0, h1] of PROFILES[t]) {
+        if (kind === 'flat') straightBase(g, s0, s1, true);
+        else if (kind === 'ramp') {
+          const rs = new THREE.Shape(); rs.moveTo(s0, h0 - 1); rs.lineTo(s0, h0); rs.lineTo(s1, h1); rs.lineTo(s1, h1 - 1);
+          const rg = new THREE.ExtrudeGeometry(rs, { depth: 2 * HW, bevelEnabled: false }); rg.translate(0, 0, -HW);
+          const rm = new THREE.Mesh(rg, M.ramp); rm.castShadow = rm.receiveShadow = true; g.add(rm);
+          for (const sd of [-1, 1]) {
+            const ws = new THREE.Shape(); ws.moveTo(s0, h0); ws.lineTo(s1, h1); ws.lineTo(s1, h1 + WALL_H); ws.lineTo(s0, h0 + WALL_H);
+            const wg = new THREE.ExtrudeGeometry(ws, { depth: 0.5, bevelEnabled: false }); wg.translate(0, 0, sd > 0 ? HW : -HW - 0.5);
+            const wm = new THREE.Mesh(wg, M.wall); wm.castShadow = true; g.add(wm);
+          }
+          box(0.9, 0.08, 2 * HW, M.hazard, s1 - 0.5, h1 - 0.05, 0, g, false).rotation.z = Math.atan((h1 - h0) / (s1 - s0));
+          lastH = h1;
+        } else {                                       // buraco: setas flutuando + faixa de perigo no pouso
+          for (let k = 0; k < 3; k++) {
+            const x = s0 + (s1 - s0) * (k + 0.7) / 3.5;
+            for (const sd of [-1, 1]) strip(x - 1, sd * 1.4, x + 0.4, 0, lastH + 2.4, 0.3, 0.3, M.edgeY, g);
+          }
+          box(1.2, 0.05, 2 * HW, M.hazard, s1 + 0.6, 0.03, 0, g, false);
+        }
       }
-      const hz = box(0.9, 0.08, 2 * HW, M.hazard, JUMP.rampEnd - 0.5, JUMP.h - 0.05, 0, g, false);
-      hz.rotation.z = Math.atan(JUMP.h / JUMP.rampEnd);
-      straightBase(g, JUMP.landStart, L, true);
-      box(1.2, 0.05, 2 * HW, M.hazard, JUMP.landStart + 0.6, 0.03, 0, g, false);
-      const gapL = JUMP.landStart - JUMP.rampEnd;
-      for (let k = 0; k < 3; k++) {
-        const x = JUMP.rampEnd + gapL * (k + 0.7) / 3.5;
-        strip(x - 1, -1.4, x + 0.4, 0, JUMP.h + 2.4, 0.3, 0.3, M.edgeY, g);
-        strip(x - 1, 1.4, x + 0.4, 0, JUMP.h + 2.4, 0.3, 0.3, M.edgeY, g);
-      }
-      if (JUMP.pad) {                                   // turbo embutido na rampa do Mega Salto
-        const pg = new THREE.Group(), mid = (JUMP.pad[0] + JUMP.pad[1]) / 2;
-        pg.position.set(mid, mid * JUMP.h / JUMP.rampEnd + 0.04, 0); pg.rotation.z = Math.atan(JUMP.h / JUMP.rampEnd);
-        const pd = new THREE.Mesh(new THREE.PlaneGeometry(JUMP.pad[1] - JUMP.pad[0], 2 * PAD.hv), M.pad);
+      const rp = RAMP_PADS[t], r0 = PROFILES[t][0];
+      if (rp) {                                        // turbo inclinado na rampa (Mega Salto)
+        const pg = new THREE.Group(), mid = (rp[0] + rp[1]) / 2, k = r0[4] / r0[1];
+        pg.position.set(mid, mid * k + 0.04, 0); pg.rotation.z = Math.atan(k);
+        const pd = new THREE.Mesh(new THREE.PlaneGeometry(rp[1] - rp[0], 2 * PAD.hv), M.pad);
         pd.rotation.x = -Math.PI / 2; pg.add(pd); g.add(pg);
       }
     } else if (t === 'holes') {
@@ -889,6 +939,13 @@ class Piece {
           box(1.25, 1.8, 0.1, M.edge, s, 1.4, zf + this.windDir * 0.82, g, false);
         }
         for (let k = 0; k < 6; k++) box(1.4, 0.05, 0.25, M.edgeY, 3 + k * 4, 0.04, this.windDir * (HW - 0.2), g, false);
+      } else if (t === 'chicane') {                    // barreiras alternadas com faixa de perigo
+        for (const b of BARRIERS) {
+          const w = b.v1 - b.v0, vc = (b.v0 + b.v1) / 2;
+          box(1.2, 1.4, w, M.wall, b.s, 0.7, vc, g);
+          box(1.24, 0.1, w, M.wallCap, b.s, 1.45, vc, g, false);
+          box(1.26, 0.45, w + 0.02, M.hazard, b.s, 0.75, vc, g, false);
+        }
       }
       if (t === 'boost') {
         const pd = new THREE.Mesh(new THREE.PlaneGeometry(PAD.s1 - PAD.s0, 2 * PAD.hv), M.pad);
@@ -1041,17 +1098,21 @@ function freeSlots() {
   track.forEach((p, pi) => p.slots.forEach((s, si) => { const k = pi + ':' + si; if (!used.has(k)) res.push(k); }));
   return res;
 }
+// marcadores 3D de TODAS as zonas livres: placa + feixe vertical (fácil de achar e tocar de longe)
+const slotPlate = new THREE.PlaneGeometry(4.2, 4.2), slotBeam = new THREE.CylinderGeometry(0.45, 0.45, 14, 10, 1, true);
+const beamMat = new THREE.MeshBasicMaterial({ color: 0x00e5ff, transparent: true, opacity: 0.28, blending: THREE.AdditiveBlending, depthWrite: false });
 function rebuildSlots() {
-  while (slotGroup.children.length) { const m = slotGroup.children.pop(); m.geometry.dispose(); }
+  for (const g of [...slotGroup.children]) slotGroup.remove(g);
   for (const k of freeSlots()) {
     const [pi, si] = k.split(':').map(Number), p = track[pi], sl = p.slots[si];
     p.world(sl.s, sl.v, tmpW);
-    const h = p.query(tmpW.x, tmpW.z, {}).h;
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 3.4), M.slot);
-    m.rotation.x = -Math.PI / 2; m.rotation.z = -tmpW.a; m.position.set(tmpW.x, h + 0.06, tmpW.z); m.userData.key = k;
-    slotGroup.add(m);
+    const grp = new THREE.Group(); grp.position.set(tmpW.x, p.query(tmpW.x, tmpW.z, {}).h, tmpW.z);
+    const plate = new THREE.Mesh(slotPlate, M.slot); plate.rotation.x = -Math.PI / 2; plate.rotation.z = -tmpW.a; plate.position.y = 0.07;
+    const beam = new THREE.Mesh(slotBeam, beamMat); beam.position.y = 7;
+    plate.userData.key = beam.userData.key = k; plate.userData.plate = true;
+    grp.add(plate, beam); slotGroup.add(grp);
   }
-  slotGroup.visible = state === 'place' && !!myItem() && ITEMS[myItem().type].kind === 'obs' && !placed[myId];
+  slotGroup.visible = BC.active;
 }
 
 // --------------------------------------------------------------- carros
@@ -1258,7 +1319,7 @@ function hostRejoin(conn, p) {
   conn.send({ t: 'lobby', players: plist(), target: TARGET, theme: themeKey, preset: presetKey });
   const L = HST.last;
   if (L && !racing) {
-    conn.send({ t: 'phase', ph: L.ph, d: Object.assign({}, L.d, { players: plist(), tray: state === 'pick' || state === 'place' ? tray : L.d.tray }) });
+    conn.send({ t: 'phase', ph: L.ph, d: Object.assign({}, L.d, { players: plist(), tray: state === 'pick' ? tray : L.d.tray }) });
   }
   conn.send({ t: 'track', types: trackTypes(), obs: obsData(), placed });
   hostLobbyChanged();
@@ -1343,7 +1404,7 @@ function onClientMsg(msg) {
       if (msg.rejoin) {
         const lw = $('lobbyWait'); lw.dataset.rejoin = '1'; lw.textContent = 'Reconectado! Você volta a correr na próxima rodada.';
         toast('RECONECTADO!', '#a6ff3b', 1.4);
-        if (state !== 'results' && state !== 'pick' && state !== 'place' && state !== 'champion') enterPhase('lobby', {});
+        if (state !== 'results' && state !== 'pick' && state !== 'champion') enterPhase('lobby', {});
       } else enterPhase('lobby', {});
       break;
     case 'wait': break;
@@ -1365,7 +1426,7 @@ function onClientMsg(msg) {
       }
       break;
     case 'tray': applyTray(msg.tray); break;
-    case 'track': applyTrack(msg.types, msg.obs, true); placed = msg.placed || {}; renderPlace(); break;
+    case 'track': applyTrack(msg.types, msg.obs, true); placed = msg.placed || {}; renderBuild(); break;
     case 'msg': toast(msg.text, msg.color || '#fff', 1.6); if (msg.deny) SFX.deny(); break;
     case 'full':
       clearTimeout(NET.joinTimer);
@@ -1380,6 +1441,7 @@ function hostHandle(pid, msg) {
     case 'ping': sendTo(pid, { t: 'pong', c: msg.c }); break;
     case 'pick': hostPick(pid, msg.id); break;
     case 'place': hostPlace(pid, msg.key); break;
+    case 'unpick': hostUnpick(pid); break;
   }
 }
 // ---- estado de carro na rede
@@ -1523,6 +1585,11 @@ window.addEventListener('keydown', e => {
   if (GAME_KEYS.includes(e.code)) e.preventDefault();
   if (e.repeat) return;
   keys[e.code] = true;
+  if (state === 'pick') {
+    const dg = /^(Digit|Numpad)([0-9])$/.exec(e.code);
+    if (dg) { const n = +dg[2]; pickCard(n === 0 ? 9 : n - 1); return; }
+    if (e.code === 'Escape' || e.code === 'Backspace') { act('backcards'); return; }
+  }
   if (e.code === 'KeyR') doTap('reset');
   else if (e.code === 'KeyP' || e.code === 'Escape') doTap('pause');
   else if (e.code === 'KeyM') doTap('mute');
@@ -1530,7 +1597,7 @@ window.addEventListener('keydown', e => {
   else if (e.code === 'KeyF') doTap('fs');
   else if (e.code === 'Enter') {
     if (state === 'results' && isHost()) act('continue');
-    else if (state === 'place') act('placepiece');
+    else if (state === 'pick') act('placepiece');
   }
 }, { passive: false });
 window.addEventListener('keyup', e => { keys[e.code] = false; });
@@ -1594,7 +1661,6 @@ document.addEventListener('gesturestart', e => e.preventDefault());
 document.addEventListener('contextmenu', e => e.preventDefault());
 document.addEventListener('pointerdown', e => {
   SFX.init();
-  if (state === 'place') tryPlaceAt(e.clientX, e.clientY);
   if (e.pointerType !== 'mouse' || !uiActive()) return;
   const b = e.target.closest && e.target.closest('[data-btn]');
   if (b) { tmap.set('mouse', b.dataset.btn); syncTouch(); }
@@ -1690,13 +1756,13 @@ const HST = { round: 0, pickEnd: -1, placeEnd: -1, botAt: {}, champ: null };
 function setState(s) {
   state = s;
   document.body.classList.toggle('racing', s === 'countdown' || s === 'race');
-  document.body.classList.toggle('building', s === 'pick' || s === 'place' || s === 'results');
-  document.body.classList.toggle('showhud', ['countdown', 'race', 'results', 'pick', 'place', 'paused'].includes(s));
+  document.body.classList.toggle('building', s === 'pick' || s === 'results');
+  document.body.classList.toggle('showhud', ['countdown', 'race', 'results', 'pick', 'paused'].includes(s));
 }
 function showScreen(id) { for (const s of document.querySelectorAll('.screen')) s.classList.toggle('show', s.id === id); }
 function hidePhaseUI() {
   $('tray').classList.remove('show'); $('placebar').classList.remove('show'); $('phaseHdr').classList.remove('show');
-  slotGroup.visible = false; menuOpen = false;
+  setSlotMode(false); menuOpen = false;
 }
 // executada em TODOS os peers com os dados enviados pelo host
 function enterPhase(ph, d) {
@@ -1726,18 +1792,13 @@ function enterPhase(ph, d) {
       centerText('3', '#ff2e55'); SFX.beep(false); R.lastBeep = 3;
       break;
     case 'results': showResults(d); setState('results'); break;
-    case 'pick':
-      tray = d.tray; holds = {}; placed = {};
+    case 'pick':                                     // montagem: pegar carta + posicionar (ou voltar às cartas)
       for (const c of cars) c.mesh.root.visible = false;
-      setState('pick'); showScreen(null); renderTray();
+      placed = d.placed || {};
+      setState('pick'); showScreen(null);
       $('phaseHdr').classList.add('show');
+      applyTray(d.tray);
       SFX.warn();
-      break;
-    case 'place':
-      applyTray(d.tray); placed = d.placed || {};
-      setState('place'); showScreen(null);
-      $('phaseHdr').classList.add('show'); $('phaseTxt').textContent = 'POSICIONE SUA PEÇA!';
-      renderPlace();
       break;
     case 'champion': setState('champion'); showChampion(d); break;
   }
@@ -1764,6 +1825,7 @@ function placeCars(grid) {
       if (p.type === 'holes' && Math.random() < 0.8 * k) return { lane: rnd(-1.2, 1.2) };
       if (p.type === 'wind' && Math.random() < 0.7 * k) return { lane: p.windDir * rnd(1.5, 3) };
       if (p.type === 'bigjump' && Math.random() < 0.5 * k) return { slow: rnd(14, 20) };
+      if (p.type === 'doublejump' && Math.random() < 0.5 * k) return { slow: rnd(11, 15) };
       return null;
     }) : null;
     if (c.ai.err) {                         // no máximo 1–2 erros por bot por rodada (pista longa não vira massacre)
@@ -1816,11 +1878,8 @@ function act(a) {
     case 'continue': if (isHost() && state === 'results') hostAfterResults(); break;
     case 'resume': resume(); break;
     case 'again': if (isHost() && state === 'champion') { if (NET.role === 'solo') hostStartMatch(); else { for (const p of players) p.score = 0; hostEnter('lobby', { players: plist() }); } } break;
-    case 'placepiece': {
-      const it = myItem();
-      if (state === 'place' && it && ITEMS[it.type].kind === 'piece' && !placed[myId]) toHost({ t: 'place' });
-      break;
-    }
+    case 'placepiece': if (state === 'pick' && buildMode() === 'piece') toHost({ t: 'place' }); break;
+    case 'backcards': if (state === 'pick' && (buildMode() === 'piece' || buildMode() === 'obs')) { SFX.click(); toHost({ t: 'unpick' }); } break;
   }
 }
 function goTitle() {
@@ -1904,53 +1963,47 @@ function pickWeighted(list) {
   for (const k of list) { r -= ITEMS[k].w; if (r <= 0) return k; }
   return list[list.length - 1];
 }
+// embaralhamento Fisher–Yates (sem viés) e sorteio ponderado sem repetição
+function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+function drawDistinct(list, n) {
+  const pool = list.slice(), out = [];
+  while (out.length < n && pool.length) { const k = pickWeighted(pool); out.push(k); pool.splice(pool.indexOf(k), 1); }
+  return out;
+}
+const DECK_PIECES = 6, DECK_OBS = 4;                  // 10 cartas por rodada
+// carta utilizável agora? (peça cabe no fim da pista / ainda há espaço livre para obstáculo)
+function itemEnabled(type) { return ITEMS[type].kind === 'piece' ? canPlace(type) : freeSlots().length > 0; }
 function hostStartPick() {
-  const n = clamp(players.length + 2, 4, 10);
   const pieces = Object.keys(ITEMS).filter(k => ITEMS[k].kind === 'piece');
   const obs = Object.keys(ITEMS).filter(k => ITEMS[k].kind === 'obs');
-  const types = [];
-  const nPieces = Math.max(2, Math.round(n * rnd(0.45, 0.6)));
-  for (let i = 0; i < n; i++) types.push(pickWeighted(i < nPieces ? pieces : obs));
-  // espalha as peças pela tela (grade com jitter, ordem embaralhada)
-  const cols = n <= 4 ? n : n <= 8 ? 4 : 5, rows = Math.ceil(n / cols);
-  const cellsP = [];
-  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) cellsP.push([c, r]);
-  cellsP.sort(() => Math.random() - 0.5);
-  const it = [];
-  for (let i = 0; i < n; i++) {
-    const [c, r] = cellsP[i];
-    const x = 0.14 + (c + 0.5) / cols * 0.72 + rnd(-0.15, 0.15) / cols;
-    const y = 0.30 + (r + 0.5) / rows * 0.56 + rnd(-0.04, 0.04);
-    it.push({ id: i, type: types[i], x: r2(clamp(x, 0.1, 0.9)), y: r2(clamp(y, 0.26, 0.88)), rot: Math.round(rnd(-14, 14)), by: -1 });
-  }
-  HST.pickEnd = -1; HST.botAt = {};
-  for (const p of players) if (p.bot) HST.botAt[p.id] = rnd(0.7, 3.6);
-  hostEnter('pick', { tray: it, dur: 7 });
+  const deck = shuffle([...drawDistinct(pieces, DECK_PIECES), ...drawDistinct(obs, DECK_OBS)])
+    .map((type, i) => ({ id: i, type, rot: Math.round(rnd(-4, 4)), by: -1 }));
+  HST.botAt = {}; HST.botPlaceAt = {}; HST.placeEnd = -1;
+  for (const p of players) if (p.bot) HST.botAt[p.id] = rnd(0.8, 4);
+  hostEnter('pick', { tray: deck, placed: {}, dur: 20 });
 }
+function broadcastBuild() { broadcast({ t: 'track', types: trackTypes(), obs: obsData(), placed }); }
 function hostPick(pid, id) {
-  if (state !== 'pick' || holds[pid] !== undefined) return;
+  if (state !== 'pick' || holds[pid] !== undefined || placed[pid]) return;
   const item = tray.find(i => i.id === id);
   if (!item || item.by >= 0) { sendTo(pid, { t: 'msg', text: 'ALGUÉM PEGOU ANTES!', color: '#ff2e55', deny: true }); return; }
+  if (!itemEnabled(item.type)) { sendTo(pid, { t: 'msg', text: 'SEM ESPAÇO PARA ESSA CARTA!', color: '#ff2e55', deny: true }); return; }
   item.by = pid;
   applyTray(tray); broadcast({ t: 'tray', tray });
-  if (players.every(p => holds[p.id] !== undefined)) HST.pickEnd = phaseT + 0.8;
+  const pl = playerById(pid); if (pl && pl.bot) HST.botPlaceAt[pid] = phaseT + rnd(0.8, 3);
 }
-function hostStartPlace() {
-  // quem não pegou nada recebe uma sobra aleatória
-  for (const p of players) if (holds[p.id] === undefined) {
-    const free = tray.filter(i => i.by < 0);
-    if (free.length) { const it = free[Math.floor(Math.random() * free.length)]; it.by = p.id; holds[p.id] = it.id; }
-  }
-  HST.placeEnd = -1; HST.botAt = {};
-  for (const p of players) if (p.bot) HST.botAt[p.id] = rnd(0.8, 4.5);
-  hostEnter('place', { tray, placed: {}, dur: 12 });
+// "Voltar às Cartas": devolve a carta ainda não posicionada (a rodada não avança)
+function hostUnpick(pid) {
+  if (state !== 'pick' || placed[pid]) return;
+  const item = tray.find(i => i.id === holds[pid]); if (!item) return;
+  item.by = -1;
+  applyTray(tray); broadcast({ t: 'tray', tray });
 }
 function hostPlace(pid, slotKey, auto) {
-  if (state !== 'place' || placed[pid]) return;
+  if (state !== 'pick' || placed[pid]) return;
   const it = tray.find(i => i.id === holds[pid]); if (!it) return;
-  const def = ITEMS[it.type];
   let ok = false;
-  if (def.kind === 'piece') {
+  if (ITEMS[it.type].kind === 'piece') {
     ok = canPlace(it.type);
     if (ok) { const t = trackTypes(); t.splice(t.length - 1, 0, it.type); applyTrack(t, obsData(), true); }
     else sendTo(pid, { t: 'msg', text: 'NÃO COUBE NO FIM DA PISTA!', color: '#ff2e55', deny: true });
@@ -1966,101 +2019,168 @@ function hostPlace(pid, slotKey, auto) {
     }
   }
   placed[pid] = ok ? 'ok' : 'no';
-  renderPlace();
-  broadcast({ t: 'track', types: trackTypes(), obs: obsData(), placed });
-  if (players.every(p => placed[p.id] || holds[p.id] === undefined)) HST.placeEnd = phaseT + 1.3;
+  renderBuild(); broadcastBuild();
+}
+// tempo acabou / bot: usa a carta que tem (ou uma sobra utilizável) e posiciona sozinho
+function hostAutoPlace(pid) {
+  if (placed[pid]) return;
+  if (holds[pid] === undefined) {
+    const free = tray.filter(i => i.by < 0 && itemEnabled(i.type));
+    if (free.length) { free[Math.floor(Math.random() * free.length)].by = pid; applyTray(tray); broadcast({ t: 'tray', tray }); }
+  }
+  const it = tray.find(i => i.id === holds[pid]);
+  if (!it) { placed[pid] = 'no'; renderBuild(); broadcastBuild(); return; }
+  if (ITEMS[it.type].kind === 'obs') { const fs = freeSlots(); hostPlace(pid, fs[Math.floor(Math.random() * fs.length)], true); }
+  else hostPlace(pid, null, true);
 }
 function hostUpdateBuild() {
   if (state === 'results') { if (phaseT >= phaseDur) hostAfterResults(); return; }
-  if (state === 'pick') {
-    for (const id in HST.botAt) if (holds[id] === undefined && phaseT >= HST.botAt[id]) {
-      const free = tray.filter(i => i.by < 0);
-      if (free.length) hostPick(+id, free[Math.floor(Math.random() * free.length)].id);
-      delete HST.botAt[id];
-    }
-    if ((HST.pickEnd >= 0 && phaseT >= HST.pickEnd) || phaseT >= phaseDur) hostStartPlace();
-    return;
+  if (state !== 'pick') return;
+  for (const id in HST.botAt) if (phaseT >= HST.botAt[id]) {
+    delete HST.botAt[id];
+    const free = tray.filter(i => i.by < 0 && itemEnabled(i.type));
+    if (free.length) hostPick(+id, free[Math.floor(Math.random() * free.length)].id); else hostAutoPlace(+id);
   }
-  if (state === 'place') {
-    for (const id in HST.botAt) if (!placed[id] && phaseT >= HST.botAt[id]) {
-      const it = tray.find(i => i.id === holds[id]);
-      if (it && ITEMS[it.type].kind === 'obs') { const fs = freeSlots(); hostPlace(+id, fs[Math.floor(Math.random() * fs.length)], true); }
-      else hostPlace(+id, null, true);
-      delete HST.botAt[id];
-    }
-    if (HST.placeEnd < 0 && phaseT >= phaseDur) {         // tempo acabou: coloca automaticamente o que falta
-      for (const p of players) if (!placed[p.id] && holds[p.id] !== undefined) hostPlace(p.id, null, true);
-      HST.placeEnd = phaseT + 1.3;
-    }
-    if (HST.placeEnd >= 0 && phaseT >= HST.placeEnd) hostStartRound();
+  for (const id in HST.botPlaceAt) if (phaseT >= HST.botPlaceAt[id]) { delete HST.botPlaceAt[id]; hostAutoPlace(+id); }
+  if (HST.placeEnd < 0 && (players.every(p => placed[p.id]) || phaseT >= phaseDur)) {
+    for (const p of players) hostAutoPlace(p.id);
+    HST.placeEnd = phaseT + 1.3;
   }
+  if (HST.placeEnd >= 0 && phaseT >= HST.placeEnd) hostStartRound();
 }
 
 // ------------------------------------------------------ UI de montagem
 function applyTray(t) {
   tray = t; holds = {};
   for (const i of tray) if (i.by >= 0) holds[i.by] = i.id;
-  if (state === 'pick') renderTray();
+  renderBuild();
 }
 function myItem() { return tray.find(i => i.id === holds[myId]); }
+// modo da minha tela na montagem: cartas | encaixar peça | posicionar obstáculo | pronto
+function buildMode() {
+  const it = myItem();
+  return placed[myId] ? 'done' : !it ? 'cards' : ITEMS[it.type].kind === 'obs' ? 'obs' : 'piece';
+}
+const KEY_LABEL = i => i === 9 ? '0' : String(i + 1);
 function renderTray() {
   const el = $('tray');
-  el.classList.add('show');
   const gen = tray.map(i => i.id + i.type).join();
   if (el.dataset.gen !== gen) {
     el.dataset.gen = gen;
     el.innerHTML = tray.map((it, k) => {
       const d = ITEMS[it.type];
-      return `<button class="item" data-id="${it.id}" style="left:${it.x * 100}%;top:${it.y * 100}%;--r:${it.rot}deg;--dl:${-k * 0.27}s">
-        <div class="who"></div><div class="in"><svg viewBox="0 0 64 64">${d.svg}</svg><div class="nm">${d.name}</div>
+      return `<button class="item" data-id="${it.id}" style="--r:${it.rot}deg;--dl:${-k * 0.27}s">
+        <span class="key">${KEY_LABEL(k)}</span><div class="who"></div><div class="in"><svg viewBox="0 0 64 64">${d.svg}</svg><div class="nm">${d.name}</div>
         <div class="tg ${d.kind === 'piece' ? 'p' : 'o'}">${d.kind === 'piece' ? 'PISTA' : 'OBSTÁCULO'}</div></div></button>`;
     }).join('');
-    el.querySelectorAll('.item').forEach(b => b.addEventListener('pointerdown', e => {
-      e.stopPropagation();
-      if (state !== 'pick' || holds[myId] !== undefined) return;
-      SFX.grab();
-      toHost({ t: 'pick', id: +b.dataset.id });
-    }));
+    el.querySelectorAll('.item').forEach(b => b.addEventListener('click', () => pickCard(tray.findIndex(i => i.id === +b.dataset.id))));
   }
   for (const it of tray) {
     const b = el.querySelector(`[data-id="${it.id}"]`); if (!b) continue;
     const p = playerById(it.by);
     b.classList.toggle('taken', it.by >= 0 && it.by !== myId);
     b.classList.toggle('mine', it.by === myId);
+    b.classList.toggle('off', it.by < 0 && !itemEnabled(it.type));       // "SEM ESPAÇO"
     b.style.setProperty('--tc', p ? p.color : '#fff');
     b.querySelector('.who').textContent = p ? p.name : '';
   }
-  $('phaseTxt').textContent = holds[myId] !== undefined ? 'PEGOU! ESPERANDO OS OUTROS...' : 'RÁPIDO! PEGUE UMA PEÇA!';
 }
-function renderPlace() {
-  if (state !== 'place') return;
-  const it = myItem(), bar = $('placebar');
-  bar.classList.add('show');
+// clique ou atalho (1–9, 0): valida de novo antes de pedir ao host
+function pickCard(idx) {
+  const it = tray[idx];
+  if (state !== 'pick' || buildMode() !== 'cards' || !it || it.by >= 0) return;
+  if (!itemEnabled(it.type)) { SFX.deny(); toast('SEM ESPAÇO!', '#ff2e55', 0.9); return; }
+  SFX.grab();
+  toHost({ t: 'pick', id: it.id });
+}
+function renderBuild() {
+  if (state !== 'pick') return;
+  const mode = buildMode(), it = myItem(), d = it && ITEMS[it.type];
+  $('tray').classList.toggle('show', mode === 'cards');
+  if (mode === 'cards') renderTray();
+  $('phaseTxt').textContent = { cards: 'RÁPIDO! ESCOLHA UMA CARTA (1–0)', piece: 'ENCAIXE SUA PEÇA!', obs: 'POSICIONE O OBSTÁCULO!', done: 'PRONTO! ESPERANDO OS OUTROS...' }[mode];
+  const bar = $('placebar');
+  bar.classList.toggle('show', mode !== 'cards');
+  bar.dataset.mode = mode;
   $('placeChips').innerHTML = players.map(p => `<span class="chip ${placed[p.id] === 'ok' ? 'ok' : placed[p.id] === 'no' ? 'no' : ''}" style="${placed[p.id] ? '' : 'border:1px solid ' + p.color}">${esc(p.name)}${placed[p.id] === 'ok' ? ' ✓' : placed[p.id] === 'no' ? ' ✗' : ''}</span>`).join('');
-  const btn = $('placeBtn');
-  if (!it) { $('placeIcon').innerHTML = ''; $('placeTxt').innerHTML = '<b>Sem peça nesta rodada</b><br>Assista os outros montarem!'; btn.style.display = 'none'; slotGroup.visible = false; return; }
-  const d = ITEMS[it.type];
-  $('placeIcon').innerHTML = d.svg;
-  const done = placed[myId];
-  if (d.kind === 'piece') {
-    const fits = canPlace(it.type);
-    $('placeTxt').innerHTML = done ? (done === 'ok' ? `<b>${d.name}</b> encaixada! ✓` : `<b>${d.name}</b> não coube ✗`) :
-      `<b>${d.name}</b><br>${fits ? 'Encaixe no fim da pista antes dos outros!' : '⚠ Não cabe agora — talvez caiba depois que outro encaixar.'}`;
-    btn.style.display = done ? 'none' : '';
-    slotGroup.visible = false;
-  } else {
-    $('placeTxt').innerHTML = done ? `<b>${d.name}</b> posicionado! ✓` : `<b>${d.name}</b><br>Toque/clique num <span style="color:#00e5ff">espaço brilhante</span> da pista.`;
-    btn.style.display = 'none';
-    slotGroup.visible = !done;
+  $('placeIcon').innerHTML = d ? d.svg : '';
+  if (mode === 'piece') $('placeTxt').innerHTML = `<b>${d.name}</b><br>${canPlace(it.type) ? 'Encaixe no fim da pista antes dos outros!' : '⚠ Não cabe agora — volte às cartas e escolha outra.'}`;
+  else if (mode === 'obs') $('placeTxt').innerHTML = `<b>${d.name}</b><br>Toque num <span style="color:#00e5ff">espaço brilhante</span>`;
+  else if (mode === 'done') $('placeTxt').innerHTML = placed[myId] === 'ok' ? `<b>${d ? d.name : 'Peça'}</b> colocada! ✓` : '<b>Sem carta nesta rodada</b>';
+  setSlotMode(mode === 'obs');
+}
+// ---- câmera manual da montagem: estado próprio (alvo, distância, limites, modo manual)
+const BC = { active: false, manual: false, x: 0, z: 0, d: 60, ax: 0, az: 0, autoD: 60, b: null };
+const PTRS = new Map(); let pinch = null;
+function bcClamp() {
+  const b = BC.b;
+  if (b) { BC.x = clamp(BC.x, b.x0 - 30, b.x1 + 30); BC.z = clamp(BC.z, b.z0 - 30, b.z1 + 30); }
+  BC.d = clamp(BC.d, 22, Math.max(45, BC.autoD * 1.3));
+}
+function bcManual() { if (!BC.manual) { BC.x = BC.ax; BC.z = BC.az; BC.d = BC.autoD; BC.manual = true; } }
+// enquadramento inicial perto das zonas livres (começa pelas mais novas, no fim da pista)
+function focusSlots() {
+  const pts = freeSlots().map(k => { const [pi, si] = k.split(':').map(Number), p = track[pi], sl = p.slots[si]; p.world(sl.s, sl.v, tmpW); return { x: tmpW.x, z: tmpW.z, pi }; });
+  if (!pts.length) { BC.manual = false; return; }
+  pts.sort((u, v) => v.pi - u.pi);
+  let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9;
+  for (const q of pts) {
+    const nx0 = Math.min(x0, q.x), nx1 = Math.max(x1, q.x), nz0 = Math.min(z0, q.z), nz1 = Math.max(z1, q.z);
+    if (x0 < 1e9 && Math.max(nx1 - nx0, nz1 - nz0) > 90) break;
+    x0 = nx0; x1 = nx1; z0 = nz0; z1 = nz1;
   }
+  BC.x = (x0 + x1) / 2; BC.z = (z0 + z1) / 2; BC.d = Math.max(32, Math.max(x1 - x0, (z1 - z0) * 1.3) * 0.9 + 26);
+  BC.manual = true; bcClamp();
+}
+function setSlotMode(on) {
+  slotGroup.visible = on;
+  $('camHint').classList.toggle('show', on);
+  if (on && !BC.active) { BC.active = true; focusSlots(); }
+  if (!on && BC.active) { BC.active = false; BC.manual = false; PTRS.clear(); pinch = null; }
+}
+function panBy(dx, dy) {
+  bcManual();
+  const wpp = 2 * Math.hypot(BC.d, BC.d * 0.5) * Math.tan(camera.fov * Math.PI / 360) / H;   // metros por pixel
+  BC.x -= dx * wpp; BC.z -= dy * wpp * 1.12; bcClamp();
+}
+function zoomBy(k) { bcManual(); BC.d *= k; bcClamp(); }
+function pinchInfo() { const [a, b] = [...PTRS.values()]; return { d: Math.hypot(a.x - b.x, a.y - b.y), x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; }
+{
+  const gl = $('gl');
+  gl.addEventListener('pointerdown', e => {
+    if (!BC.active) return;
+    try { gl.setPointerCapture(e.pointerId); } catch (x) { }
+    PTRS.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, moved: false, pinch: false });
+    if (PTRS.size >= 2) { for (const q of PTRS.values()) q.pinch = true; pinch = pinchInfo(); }
+  });
+  gl.addEventListener('pointermove', e => {
+    const q = PTRS.get(e.pointerId); if (!q || !BC.active) return;
+    const dx = e.clientX - q.x, dy = e.clientY - q.y; q.x = e.clientX; q.y = e.clientY;
+    if (!q.moved && Math.hypot(q.x - q.sx, q.y - q.sy) > 8) q.moved = true;
+    if (PTRS.size === 1) { if (q.moved) panBy(dx, dy); }
+    else if (pinch) { const n = pinchInfo(); zoomBy(pinch.d / Math.max(20, n.d)); panBy(n.x - pinch.x, n.y - pinch.y); pinch = n; }
+  });
+  const end = e => {
+    const q = PTRS.get(e.pointerId); if (!q) return;
+    PTRS.delete(e.pointerId); if (PTRS.size < 2) pinch = null;
+    if (e.type === 'pointerup' && !q.moved && !q.pinch) tryPlaceAt(e.clientX, e.clientY);   // tap curto = escolher zona
+  };
+  gl.addEventListener('pointerup', end); gl.addEventListener('pointercancel', end);
+  gl.addEventListener('wheel', e => { if (!BC.active) return; e.preventDefault(); zoomBy(e.deltaY > 0 ? 1.12 : 1 / 1.12); }, { passive: false });
+  document.querySelectorAll('[data-cam]').forEach(b => b.addEventListener('click', () => {
+    SFX.click();
+    const c = b.dataset.cam;
+    if (c === 'in') zoomBy(0.75); else if (c === 'out') zoomBy(1.33); else if (c === 'all') BC.manual = false;
+  }));
 }
 const raycaster = new THREE.Raycaster(), ndc = new THREE.Vector2();
 function tryPlaceAt(x, y) {
-  const it = myItem();
-  if (!it || placed[myId] || ITEMS[it.type].kind !== 'obs' || !slotGroup.visible) return;
+  if (buildMode() !== 'obs' || !slotGroup.visible) return;
   ndc.set(x / W * 2 - 1, -(y / H) * 2 + 1);
+  camera.updateMatrixWorld(); slotGroup.updateMatrixWorld(true);   // marcadores recém-criados ainda sem matriz de mundo
   raycaster.setFromCamera(ndc, camera);
-  const hit = raycaster.intersectObjects(slotGroup.children, false)[0];
+  const hits = raycaster.intersectObjects(slotGroup.children, true).filter(h => h.object.userData.key);
+  const hit = hits.find(h => h.object.userData.plate) || hits[0];        // placa tem prioridade sobre o feixe de outra zona
   if (hit) { SFX.grab(); toHost({ t: 'place', key: hit.object.userData.key }); }
 }
 function showResults(d) {
@@ -2300,10 +2420,20 @@ function obstacleContact(c, dt) {
     }
   }
 }
+// caixa fixa no frame da peça (centro cs,cv; meia-extensão hs,hv): empurra o carro para fora
+function boxPushLocal(c, Q, cs, cv, hs, hv, dt) {
+  const ds = Q.s - cs, dv = Q.v - cv;
+  let es = ds - clamp(ds, -hs, hs), ev = dv - clamp(dv, -hv, hv), d = Math.hypot(es, ev);
+  if (d >= CAR_R) return;
+  if (d < 1e-4) { if (Math.abs(ds) / hs > Math.abs(dv) / hv) { es = Math.sign(ds) || 1; ev = 0; } else { es = 0; ev = Math.sign(dv) || 1; } } else { es /= d; ev /= d; }
+  pushOut(c, Q.fx * es + Q.rx * ev, Q.fz * es + Q.rz * ev, CAR_R - d, dt);
+}
 function trackContact(c, dt) {
   let Pc = track[c.pi], Q = c.Q;
   Pc.query(c.x, c.z, Q);
+  // troca de peça só com o carro lateralmente sobre a pista: fora da borda, nenhuma outra peça "captura" o carro
   for (let k = 0; k < 3; k++) {
+    if (Math.abs(Q.v) > Q.hw + 0.25) break;
     if (Q.s > Pc.len && c.pi < track.length - 1) { c.pi++; Pc = track[c.pi]; Pc.query(c.x, c.z, Q); }
     else if (Q.s < 0 && c.pi > 0) { c.pi--; Pc = track[c.pi]; Pc.query(c.x, c.z, Q); }
     else break;
@@ -2315,8 +2445,8 @@ function trackContact(c, dt) {
       else { c.y = Q.h; c.vy = vg; }
     } else {
       c.grounded = false; c.airT = 0;
-      const J = JUMPS[Pc.type];
-      if (c.isLocal && J && Q.s >= J.rampEnd - 0.5) { SFX.jump(); toast(Pc.type === 'bigjump' ? 'MEGA VOOOO!' : 'VOOOA!', '#ffd23f', 0.9); }
+      const sg = profileSeg(Pc.type, Q.s);
+      if (c.isLocal && sg && sg[2] === 'gap' && Math.abs(Q.v) <= Q.hw) { SFX.jump(); toast(Pc.type === 'bigjump' ? 'MEGA VOOOO!' : 'VOOOA!', '#ffd23f', 0.9); }
     }
   }
   if (!c.grounded) {
@@ -2330,21 +2460,26 @@ function trackContact(c, dt) {
       }
     }
   }
+  // mureta unilateral: só empurra de dentro para fora, na faixa entre o limite interno e o centro da parede.
+  // Se o centro do carro já passou do limite externo (pulou ou saiu pela borda), cai livre — sem teleporte.
+  const inner = Q.hw - CAR_R, outer = Q.hw + 0.25;
   if (c.y > Q.h - 0.7 && c.y < Q.h + WALL_H + 0.25) {
-    const lim = Q.hw - CAR_R;
-    if (Q.v > lim && Q.wallR) pushOut(c, -Q.rx, -Q.rz, Q.v - lim, dt);
-    else if (Q.v < -lim && Q.wallL) pushOut(c, Q.rx, Q.rz, -lim - Q.v, dt);
-    if (Pc.type === 'start' && Q.s < CAR_R + 0.6) pushOut(c, Q.fx, Q.fz, CAR_R + 0.6 - Q.s, dt);
-    if (Pc.type === 'finish' && Q.s > Pc.len - 0.8 - CAR_R) pushOut(c, -Q.fx, -Q.fz, Q.s - (Pc.len - 0.8 - CAR_R), dt);
+    if (Q.wallR && Q.v > inner && Q.v <= outer) pushOut(c, -Q.rx, -Q.rz, Q.v - inner, dt);
+    else if (Q.wallL && Q.v < -inner && Q.v >= -outer) pushOut(c, Q.rx, Q.rz, -inner - Q.v, dt);
+    if (Math.abs(Q.v) <= outer) {
+      if (Pc.type === 'start' && Q.s < CAR_R + 0.6) pushOut(c, Q.fx, Q.fz, CAR_R + 0.6 - Q.s, dt);
+      if (Pc.type === 'finish' && Q.s > Pc.len - 0.8 - CAR_R) pushOut(c, -Q.fx, -Q.fz, Q.s - (Pc.len - 0.8 - CAR_R), dt);
+    }
   }
+  if (Pc.type === 'chicane' && c.y < Q.h + 1.5) for (const b of BARRIERS) boxPushLocal(c, Q, b.s, (b.v0 + b.v1) / 2, 0.6, (b.v1 - b.v0) / 2, dt);
   obstacleContact(c, dt);
   c.padCool -= dt; c.hitCool -= dt;
   if (Pc.type === 'boost' && c.grounded && c.padCool <= 0 && Q.s > PAD.s0 && Q.s < PAD.s1 && Math.abs(Q.v) < PAD.hv) {
     giveBoost(c, PAD.pow, PAD.dur, PAD.kick); c.padCool = 0.6;
     if (c.isLocal) { SFX.pad(); toast('BOOST!', '#a6ff3b', 0.6); shake = Math.max(shake, 0.15); }
   }
-  const JP = JUMPS[Pc.type];
-  if (JP && JP.pad && c.grounded && c.padCool <= 0 && Q.s > JP.pad[0] && Q.s < JP.pad[1] && Math.abs(Q.v) < PAD.hv) {
+  const RP = RAMP_PADS[Pc.type];
+  if (RP && c.grounded && c.padCool <= 0 && Q.s > RP[0] && Q.s < RP[1] && Math.abs(Q.v) < PAD.hv) {
     giveBoost(c, 0.5, 1.3, 5); c.padCool = 0.8;
     if (c.isLocal) { SFX.boost(2); toast('MEGA TURBO!', '#ff2e88', 0.8); shake = Math.max(shake, 0.25); }
   }
@@ -2418,7 +2553,8 @@ function laneFor(c, sG) {
   if (p.type === 'wind') return -p.windDir * 2.6 + wob * 0.3;
   if (p.type === 'ice') return wob * 0.3;
   if (p.type === 'bridge') return wob * 0.45;
-  if (p.type === 'jump' || p.type === 'bigjump') return wob * 0.3;
+  if (PROFILES[p.type]) return wob * 0.3;
+  if (p.type === 'chicane') { if (s < 5) return 2.6; if (s < 19) return 3.0; if (s < 33) return -3.0; if (s < 47) return 3.0; return 0; }
   if (p.turn) {
     const nx = track[i + 1];
     if (nx && (nx.type === 'bridge' || nx.type === 'holes')) return -p.turn * 2.2 + wob * 0.2;   // curva antes de peça estreita: abre e alinha
@@ -2438,6 +2574,7 @@ function speedLimitAt(c, sG) {
   else if (p.type === 'holes') lim = 17 + c.ai.skill * 2;
   else if (p.type === 'wind') lim = 20 + c.ai.skill * 2;
   else if (p.type === 'bumps') lim = 22;
+  else if (p.type === 'chicane') lim = 14 + c.ai.skill * 2;
   for (const o of obstacles) if (o.pi === i && o.type === 'spinner') lim = Math.min(lim, 18);
   return lim;
 }
@@ -2474,11 +2611,15 @@ function update(dt) {
   animateObstacles(dt);
   if (state === 'countdown' || state === 'race') { updateRace(dt); return; }
   if (isHost()) hostUpdateBuild();
-  if (state === 'pick' || state === 'place') {
+  if (state === 'pick') {
     const k = phaseDur ? clamp(1 - phaseT / phaseDur, 0, 1) : 0;
     $('phaseBar').style.width = (k * 100) + '%';
     $('phaseBar').style.background = k < 0.3 ? '#ff2e55' : '#a6ff3b';
-    if (state === 'place' && slotGroup.visible) M.slot.opacity = 0.55 + 0.4 * Math.sin(clockT * 6);
+    if (slotGroup.visible) {
+      M.slot.opacity = 0.6 + 0.35 * Math.sin(clockT * 6); beamMat.opacity = 0.2 + 0.12 * Math.sin(clockT * 6);
+      const sc = clamp((BC.manual ? BC.d : BC.autoD) / 55, 1, 2.4);   // marcador cresce quando a câmera está longe
+      for (const g of slotGroup.children) g.scale.setScalar(sc);
+    }
   }
   overviewCamera(dt);
   SFX.update(0, 0, false, 0, false, 0);
@@ -2660,18 +2801,24 @@ function overviewCamera(dt) {
   const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
   const ex = x1 - x0 + CELL * 1.6, ez = z1 - z0 + CELL * 1.6;
   const th = Math.tan(30 * Math.PI / 180), aspect = W / H;
-  const top = state === 'pick' || state === 'place' ? 0.1 : 0;
-  const bottom = state === 'place' ? Math.min(0.4, ($('placebar').offsetHeight + 20) / H) : 0;
+  const top = state === 'pick' ? 0.1 : 0;
+  const bottom = state === 'pick' && $('placebar').classList.contains('show') ? Math.min(0.4, ($('placebar').offsetHeight + 20) / H) : 0;
   const visH = Math.max(0.3, 1 - top - bottom - 0.08);
   const d = Math.max(ez / (2 * th * visH), ex / (2 * th * aspect * 0.92)) * 1.05 + 12;
   const ang = state === 'title' || state === 'lobby' ? clockT / 9 : 0;
   const off = (bottom - top) * th * d;
-  camDesired.set(cx + Math.sin(ang) * d * 0.5, d, cz + Math.cos(ang) * d * 0.5 + off * 0.9);
-  vLook.set(cx, 0, cz + off);
+  BC.ax = cx; BC.az = cz + off; BC.autoD = d; BC.b = { x0, x1, z0, z1 };
+  if (BC.active && BC.manual) {                       // câmera manual da montagem (pan/zoom do jogador)
+    camDesired.set(BC.x, BC.d, BC.z + BC.d * 0.5); vLook.set(BC.x, 0, BC.z);
+  } else {
+    camDesired.set(cx + Math.sin(ang) * d * 0.5, d, cz + Math.cos(ang) * d * 0.5 + off * 0.9);
+    vLook.set(cx, 0, cz + off);
+  }
   scene.fog.near = lerp(scene.fog.near, d * 0.9, 1 - Math.exp(-dt * 3)); scene.fog.far = lerp(scene.fog.far, d * 2.6 + 60, 1 - Math.exp(-dt * 3));
   camera.far = Math.max(800, d * 3);
-  camera.position.lerp(camDesired, 1 - Math.exp(-dt * 2.5));
-  camLook.lerp(vLook, 1 - Math.exp(-dt * 3));
+  const kf = BC.active && BC.manual ? 12 : 2.5;
+  camera.position.lerp(camDesired, 1 - Math.exp(-dt * kf));
+  camLook.lerp(vLook, 1 - Math.exp(-dt * kf * 1.2));
   shake = Math.max(0, shake - dt * 1.2);
   camera.position.x += rnd(-1, 1) * shake; camera.position.y += rnd(-1, 1) * shake;
   camera.lookAt(camLook);
@@ -2748,7 +2895,8 @@ $('loading').remove();
 window.__game = {
   get state() { return state; }, get R() { return R; }, get track() { return track; }, get obstacles() { return obstacles; },
   get tray() { return tray; }, get holds() { return holds; }, get placed() { return placed; }, get players() { return players; },
-  get NET() { return NET; }, cars, update, act, canPlace, freeSlots, hostPick, hostPlace, toHost, myCar, keys
+  get NET() { return NET; }, cars, update, act, canPlace, freeSlots, hostPick, hostPlace, toHost, myCar, keys,
+  get BC() { return BC; }, PTRS, pickCard, buildMode, itemEnabled, stepCar, trackContact, tryPlaceAt, panBy, zoomBy, applyTrack, camera
 };
 requestAnimationFrame(frame);
 </script>
