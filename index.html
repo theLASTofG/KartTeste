@@ -5,20 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="theme-color" content="#090b10" />
+  <meta name="theme-color" content="#090d16" />
   <link rel="manifest" href="/manifest.json" />
-  <title>KartTeste — Turbo Drift Arcade</title>
+  <title>KartTeste 3D — Monte a Pista até 1000 Pontos!</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <style>
     :root {
-      --bg: #080a0f;
-      --panel: rgba(14, 18, 28, 0.86);
+      --bg: #090d16;
+      --panel: rgba(13, 19, 33, 0.86);
       --cyan: #00f0ff;
+      --green: #10b981;
+      --yellow: #facc15;
       --orange: #ff8800;
       --purple: #d946ef;
-      --green: #10b981;
       --red: #ef4444;
-      --yellow: #facc15;
     }
 
     * {
@@ -40,93 +41,92 @@
       color: #fff;
     }
 
-    #gameCanvas {
-      display: block;
-      width: 100vw;
-      height: 100vh;
+    #gameContainer {
+      position: fixed;
+      inset: 0;
     }
 
-    /* HUD SUPERIOR */
-    #hud {
+    /* HUD SUPERIOR: PLACAR ATÉ 1000 PONTOS */
+    #topBar {
       position: fixed;
       top: 0;
       left: 0;
       right: 0;
-      padding: 10px 16px;
+      padding: 10px 14px;
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
       pointer-events: none;
       z-index: 10;
-    }
-
-    .hud-group {
-      display: flex;
       gap: 10px;
-      align-items: center;
-      flex-wrap: wrap;
     }
 
-    .hud-card {
-      background: var(--panel);
-      border: 1px solid rgba(255, 255, 255, 0.14);
-      border-radius: 12px;
-      padding: 6px 12px;
-      backdrop-filter: blur(8px);
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
-    }
-
-    .hud-label {
-      font-size: 10px;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      color: #94a3b8;
-      font-weight: 700;
-    }
-
-    .hud-value {
-      font-size: 20px;
-      font-weight: 900;
-      font-variant-numeric: tabular-nums;
-    }
-
-    #posDisplay {
-      color: var(--yellow);
-      font-size: 24px;
-    }
-
-    /* BOTÕES RÁPIDOS NO TOPO */
-    .top-actions {
-      pointer-events: auto;
+    #scoreboardHud {
       display: flex;
       gap: 8px;
+      flex-wrap: wrap;
+      max-width: 68%;
+    }
+
+    .score-pill {
+      background: var(--panel);
+      border: 2px solid rgba(255, 255, 255, 0.16);
+      border-radius: 12px;
+      padding: 5px 10px;
+      min-width: 112px;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+    }
+
+    .score-pill-top {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      font-weight: 900;
+      margin-bottom: 4px;
+    }
+
+    .score-bar-bg {
+      width: 100%;
+      height: 7px;
+      background: rgba(255, 255, 255, 0.12);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+
+    .score-bar-fill {
+      height: 100%;
+      width: 0%;
+      border-radius: 99px;
+      transition: width 0.35s ease;
+    }
+
+    .top-buttons {
+      pointer-events: auto;
+      display: flex;
+      gap: 6px;
       flex-wrap: wrap;
       justify-content: flex-end;
     }
 
-    .btn-top {
+    .btn-hud {
       background: var(--panel);
-      color: #e2e8f0;
-      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #fff;
+      border: 1px solid rgba(255, 255, 255, 0.22);
       border-radius: 10px;
-      padding: 8px 12px;
-      font-size: 12px;
+      padding: 7px 11px;
+      font-size: 11px;
       font-weight: 800;
       cursor: pointer;
-      transition: transform 0.1s, border-color 0.15s, background 0.15s;
     }
 
-    .btn-top:active {
-      transform: scale(0.94);
-    }
-
-    .btn-top.active {
-      background: rgba(16, 185, 129, 0.28);
+    .btn-hud.active {
       border-color: var(--green);
+      background: rgba(16, 185, 129, 0.28);
       color: #6ee7b7;
     }
 
-    /* BARRA DE TURBO / VELOCÍMETRO */
+    /* INFO DA RODADA E VELOCIDADE */
     #bottomHud {
       position: fixed;
       bottom: 14px;
@@ -135,55 +135,72 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 6px;
+      gap: 5px;
       pointer-events: none;
       z-index: 10;
     }
 
-    #speedBox {
-      display: flex;
-      align-items: baseline;
-      gap: 5px;
-      background: var(--panel);
-      padding: 4px 16px;
-      border-radius: 999px;
-      border: 1px solid rgba(255, 255, 255, 0.15);
-    }
-
-    #speedVal {
-      font-size: 26px;
+    #driftStatus {
+      font-size: 12px;
       font-weight: 900;
-      color: var(--cyan);
-      font-variant-numeric: tabular-nums;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      min-height: 16px;
+      text-shadow: 0 2px 8px #000;
     }
 
-    #driftMeterWrap {
-      width: 190px;
-      height: 12px;
+    #turboBarWrap {
+      width: 170px;
+      height: 10px;
       background: rgba(0, 0, 0, 0.65);
-      border: 1px solid rgba(255, 255, 255, 0.22);
-      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 99px;
       overflow: hidden;
-      position: relative;
     }
 
-    #driftMeterBar {
+    #turboBarFill {
       width: 0%;
       height: 100%;
       background: var(--cyan);
-      transition: background 0.1s;
     }
 
-    #statusBanner {
-      font-size: 13px;
+    #speedPill {
+      background: var(--panel);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      padding: 4px 14px;
+      border-radius: 99px;
       font-weight: 900;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-      min-height: 18px;
-      text-shadow: 0 2px 8px rgba(0,0,0,0.9);
+      font-size: 18px;
+      color: var(--cyan);
     }
 
-    /* CONTROLES TOUCH MOBILE */
+    /* ANÚNCIO GIGANTE NO MEIO DA TELA */
+    #centerBanner {
+      position: fixed;
+      top: 32%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      pointer-events: none;
+      z-index: 18;
+    }
+
+    #centerMainText {
+      font-size: 54px;
+      font-weight: 900;
+      font-style: italic;
+      text-shadow: 0 6px 26px rgba(0, 0, 0, 0.9);
+    }
+
+    #centerSubText {
+      font-size: 16px;
+      font-weight: 800;
+      color: #facc15;
+      text-shadow: 0 3px 12px rgba(0, 0, 0, 0.9);
+      margin-top: 4px;
+    }
+
+    /* CONTROLES TOUCH MOBILE MULTI-TOQUE */
     #touchControls {
       position: fixed;
       inset: 0;
@@ -192,474 +209,386 @@
       display: flex;
       justify-content: space-between;
       align-items: flex-end;
-      padding: 18px 22px;
+      padding: 16px 20px;
     }
 
-    .touch-cluster {
+    .touch-side {
       display: flex;
-      gap: 14px;
+      gap: 12px;
       align-items: flex-end;
       pointer-events: auto;
     }
 
-    .touch-btn {
+    .t-btn {
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      border-radius: 22px;
-      border: 2px solid rgba(255, 255, 255, 0.28);
+      border-radius: 20px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
       background: rgba(15, 23, 42, 0.62);
       color: #fff;
       font-weight: 900;
       backdrop-filter: blur(6px);
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
-      transition: transform 0.06s, background 0.06s, border-color 0.06s;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+      transition: transform 0.05s, background 0.05s;
     }
 
-    .touch-btn.pressed {
+    .t-btn.pressed {
       transform: scale(0.92);
       border-color: #fff;
     }
 
-    .btn-steer {
-      width: 86px;
-      height: 86px;
-      font-size: 34px;
+    .t-steer {
+      width: 82px;
+      height: 82px;
+      font-size: 32px;
     }
-
-    .btn-steer.pressed {
-      background: rgba(0, 240, 255, 0.35);
+    .t-steer.pressed {
+      background: rgba(0, 240, 255, 0.38);
       border-color: var(--cyan);
     }
 
-    .btn-brake {
-      width: 72px;
-      height: 72px;
-      font-size: 13px;
-      border-color: rgba(239, 68, 68, 0.55);
-      background: rgba(127, 29, 29, 0.45);
+    .t-brake {
+      width: 68px;
+      height: 68px;
+      font-size: 12px;
+      background: rgba(127, 29, 29, 0.5);
+      border-color: rgba(239, 68, 68, 0.6);
     }
+    .t-brake.pressed { background: rgba(239, 68, 68, 0.8); }
 
-    .btn-brake.pressed {
-      background: rgba(239, 68, 68, 0.75);
+    .t-drift {
+      width: 84px;
+      height: 84px;
+      font-size: 14px;
+      background: rgba(112, 26, 117, 0.55);
+      border-color: rgba(217, 70, 239, 0.7);
     }
+    .t-drift.pressed { background: rgba(217, 70, 239, 0.88); }
 
-    .btn-drift {
-      width: 88px;
-      height: 88px;
-      font-size: 15px;
-      border-color: rgba(217, 70, 239, 0.65);
-      background: rgba(112, 26, 117, 0.52);
+    .t-gas {
+      width: 100px;
+      height: 100px;
+      font-size: 16px;
+      background: rgba(6, 95, 70, 0.6);
+      border-color: rgba(16, 185, 129, 0.75);
     }
+    .t-gas.pressed { background: rgba(16, 185, 129, 0.9); }
 
-    .btn-drift.pressed {
-      background: rgba(217, 70, 239, 0.82);
-      box-shadow: 0 0 24px rgba(217, 70, 239, 0.7);
-    }
-
-    .btn-gas {
-      width: 104px;
-      height: 104px;
-      font-size: 17px;
-      border-color: rgba(16, 185, 129, 0.7);
-      background: rgba(6, 95, 70, 0.58);
-    }
-
-    .btn-gas.pressed {
-      background: rgba(16, 185, 129, 0.85);
-      box-shadow: 0 0 28px rgba(16, 185, 129, 0.7);
-    }
-
-    .btn-sub {
-      font-size: 10px;
+    .t-sub {
+      font-size: 9px;
       opacity: 0.8;
       margin-top: 2px;
     }
 
-    /* CONTAGEM REGRESSIVA CENTRAL */
-    #centerAnnounce {
-      position: fixed;
-      top: 38%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      font-size: 72px;
-      font-weight: 900;
-      font-style: italic;
-      text-shadow: 0 6px 28px rgba(0, 0, 0, 0.85);
-      pointer-events: none;
-      z-index: 15;
-      transition: transform 0.15s, opacity 0.15s;
-    }
-
-    /* MODAL MENU / SALA ONLINE */
-    .modal-backdrop {
+    /* OVERLAY DE CONSTRUÇÃO DE PISTA (ESTILO MAKE WAY / ROBLOX) */
+    .overlay-panel {
       position: fixed;
       inset: 0;
-      background: rgba(5, 8, 15, 0.82);
-      backdrop-filter: blur(10px);
+      background: rgba(6, 10, 19, 0.76);
+      backdrop-filter: blur(8px);
       display: flex;
       align-items: center;
       justify-content: center;
-      z-index: 30;
-      padding: 16px;
+      z-index: 25;
+      padding: 14px;
     }
 
-    .modal-backdrop.hidden {
+    .overlay-panel.hidden {
       display: none;
     }
 
-    .modal-box {
-      background: #0f1624;
-      border: 1px solid rgba(0, 240, 255, 0.3);
-      border-radius: 20px;
-      padding: 22px;
-      max-width: 500px;
+    .builder-card {
+      background: #0f172a;
+      border: 2px solid rgba(0, 240, 255, 0.35);
+      border-radius: 22px;
+      padding: 20px;
+      max-width: 640px;
       width: 100%;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.75);
       text-align: center;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
     }
 
-    .modal-title {
-      font-size: 28px;
+    .builder-title {
+      font-size: 25px;
       font-weight: 900;
       font-style: italic;
-      background: linear-gradient(90deg, #00f0ff, #facc15, #d946ef);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+      color: var(--yellow);
+      margin-bottom: 4px;
+    }
+
+    .builder-sub {
+      font-size: 13px;
+      color: #cbd5e1;
+      margin-bottom: 14px;
+    }
+
+    .piece-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .piece-option {
+      background: rgba(255, 255, 255, 0.05);
+      border: 2px solid rgba(255, 255, 255, 0.16);
+      border-radius: 14px;
+      padding: 12px 8px;
+      cursor: pointer;
+      transition: transform 0.12s, border-color 0.12s, background 0.12s;
+    }
+
+    .piece-option:hover, .piece-option:active {
+      transform: translateY(-3px) scale(1.02);
+      border-color: var(--cyan);
+      background: rgba(0, 240, 255, 0.15);
+    }
+
+    .piece-icon {
+      font-size: 28px;
       margin-bottom: 6px;
     }
 
-    .modal-sub {
+    .piece-name {
       font-size: 13px;
-      color: #94a3b8;
-      margin-bottom: 16px;
-    }
-
-    .track-selector {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 8px;
-      margin-bottom: 16px;
-    }
-
-    .track-card {
-      background: rgba(255, 255, 255, 0.05);
-      border: 2px solid rgba(255, 255, 255, 0.12);
-      border-radius: 12px;
-      padding: 10px 6px;
-      cursor: pointer;
-      transition: all 0.15s;
-    }
-
-    .track-card.selected {
-      border-color: var(--cyan);
-      background: rgba(0, 240, 255, 0.14);
-    }
-
-    .track-card h4 {
-      font-size: 13px;
+      font-weight: 900;
       margin-bottom: 3px;
     }
 
-    .track-card p {
+    .piece-desc {
       font-size: 10px;
       color: #94a3b8;
     }
 
-    .online-box {
+    .round-results {
       background: rgba(0, 0, 0, 0.35);
-      border: 1px solid rgba(255, 255, 255, 0.1);
       border-radius: 12px;
-      padding: 12px;
-      margin-bottom: 16px;
+      padding: 10px;
+      margin-bottom: 14px;
+      text-align: left;
     }
 
-    .online-row {
+    .result-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      font-weight: 800;
+      padding: 4px 6px;
+    }
+
+    .btn-big {
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: #fff;
+      border: none;
+      border-radius: 14px;
+      padding: 13px 24px;
+      font-size: 17px;
+      font-weight: 900;
+      width: 100%;
+      cursor: pointer;
+    }
+
+    .online-bar {
       display: flex;
       gap: 8px;
       justify-content: center;
       align-items: center;
-      margin-top: 8px;
       flex-wrap: wrap;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
     }
 
-    .input-code {
+    .code-input {
       background: #1e293b;
       border: 1px solid rgba(255, 255, 255, 0.25);
       color: #fff;
-      padding: 8px 12px;
+      padding: 7px 10px;
       border-radius: 8px;
-      font-size: 14px;
-      font-weight: 800;
-      text-transform: uppercase;
-      width: 130px;
+      font-weight: 900;
+      width: 110px;
       text-align: center;
+      text-transform: uppercase;
       user-select: text;
       -webkit-user-select: text;
       touch-action: auto;
     }
 
-    .btn-primary {
-      background: linear-gradient(135deg, #10b981, #059669);
-      color: #fff;
-      border: none;
-      border-radius: 14px;
-      padding: 14px 28px;
-      font-size: 18px;
-      font-weight: 900;
-      width: 100%;
-      cursor: pointer;
-      box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
-    }
-
-    .btn-secondary {
-      background: #1e293b;
-      color: #fff;
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      border-radius: 8px;
-      padding: 8px 12px;
-      font-size: 12px;
-      font-weight: 800;
-      cursor: pointer;
-    }
-
     @media (max-width: 700px) {
-      .btn-steer { width: 74px; height: 74px; font-size: 28px; }
-      .btn-gas { width: 92px; height: 92px; font-size: 15px; }
-      .btn-drift { width: 78px; height: 78px; font-size: 13px; }
-      .btn-brake { width: 62px; height: 62px; font-size: 11px; }
-      .hud-value { font-size: 16px; }
-      #posDisplay { font-size: 20px; }
+      .t-steer { width: 70px; height: 70px; font-size: 26px; }
+      .t-gas { width: 88px; height: 88px; font-size: 14px; }
+      .t-drift { width: 74px; height: 74px; font-size: 12px; }
+      .t-brake { width: 58px; height: 58px; font-size: 10px; }
+      #centerMainText { font-size: 36px; }
+      .score-pill { min-width: 92px; padding: 4px 7px; }
     }
   </style>
 </head>
 <body>
 
-  <canvas id="gameCanvas"></canvas>
+  <div id="gameContainer"></div>
 
-  <!-- HUD SUPERIOR -->
-  <div id="hud">
-    <div class="hud-group">
-      <div class="hud-card">
-        <div class="hud-label">Posição</div>
-        <div class="hud-value" id="posDisplay">1º / 5</div>
-      </div>
-      <div class="hud-card">
-        <div class="hud-label">Volta</div>
-        <div class="hud-value" id="lapDisplay">1 / 3</div>
-      </div>
-      <div class="hud-card">
-        <div class="hud-label">Tempo</div>
-        <div class="hud-value" id="timeDisplay">00:00.0</div>
-      </div>
-      <div class="hud-card">
-        <div class="hud-label">Recorde</div>
-        <div class="hud-value" id="bestDisplay" style="color: #00f0ff;">--:--.-</div>
-      </div>
-    </div>
-
-    <div class="top-actions">
-      <button class="btn-top" id="btnAutoGas" title="Acelerar sozinho no celular">⚡ AUTO-GAS: OFF</button>
-      <button class="btn-top" id="btnCam" title="Alternar câmera (Tecla C)">🎥 CÂMERA: DINÂMICA</button>
-      <button class="btn-top" id="btnReset" title="Voltar para a pista (Tecla R)">🔄 RESET</button>
-      <button class="btn-top" id="btnMenu">🏁 PISTAS / ONLINE</button>
+  <!-- PLACAR DE 0 A 1000 PONTOS NO TOPO -->
+  <div id="topBar">
+    <div id="scoreboardHud"></div>
+    <div class="top-buttons">
+      <button class="btn-hud" id="btnAutoGas">⚡ AUTO-GAS: OFF</button>
+      <button class="btn-hud" id="btnCamMode">🎥 CÂMERA: 3D CHASE</button>
+      <button class="btn-hud" id="btnRoomModal">🌐 SALA ONLINE</button>
     </div>
   </div>
 
-  <!-- ANÚNCIO CENTRAL (3, 2, 1, GO!) -->
-  <div id="centerAnnounce"></div>
+  <!-- ANÚNCIO CENTRAL -->
+  <div id="centerBanner">
+    <div id="centerMainText"></div>
+    <div id="centerSubText"></div>
+  </div>
 
-  <!-- VELOCÍMETRO E BARRA DE DRIFT/TURBO -->
+  <!-- VELOCÍMETRO E TURBO -->
   <div id="bottomHud">
-    <div id="statusBanner"></div>
-    <div id="driftMeterWrap">
-      <div id="driftMeterBar"></div>
+    <div id="driftStatus"></div>
+    <div id="turboBarWrap">
+      <div id="turboBarFill"></div>
     </div>
-    <div id="speedBox">
-      <span id="speedVal">0</span>
-      <span style="font-size: 11px; color: #94a3b8; font-weight: 800;">KM/H</span>
-    </div>
+    <div id="speedPill"><span id="speedVal">0</span> <small style="font-size:10px;color:#94a3b8">KM/H</small></div>
   </div>
 
-  <!-- CONTROLES TOUCH MULTI-TOQUE (MOBILE + TABLET) -->
+  <!-- CONTROLES TOUCH MULTI-TOQUE (CELULAR) -->
   <div id="touchControls">
-    <div class="touch-cluster" id="leftCluster">
-      <div class="touch-btn btn-steer" data-action="left">◄</div>
-      <div class="touch-btn btn-steer" data-action="right">►</div>
+    <div class="touch-side">
+      <div class="t-btn t-steer" data-action="left">◄</div>
+      <div class="t-btn t-steer" data-action="right">►</div>
     </div>
-
-    <div class="touch-cluster" id="rightCluster">
-      <div class="touch-btn btn-brake" data-action="brake">
-        FREIO
-        <span class="btn-sub">RÉ</span>
-      </div>
-      <div class="touch-btn btn-drift" data-action="drift">
-        DRIFT
-        <span class="btn-sub">TURBO</span>
-      </div>
-      <div class="touch-btn btn-gas" data-action="gas">
-        ACELERAR
-        <span class="btn-sub">GAS</span>
-      </div>
+    <div class="touch-side">
+      <div class="t-btn t-brake" data-action="brake">FREIO<span class="t-sub">RÉ</span></div>
+      <div class="t-btn t-drift" data-action="drift">DRIFT<span class="t-sub">TURBO</span></div>
+      <div class="t-btn t-gas" data-action="gas">ACELERAR<span class="t-sub">GAS</span></div>
     </div>
   </div>
 
-  <!-- MENU INICIAL / SELEÇÃO DE PISTA / MULTIPLAYER ONLINE -->
-  <div class="modal-backdrop" id="menuModal">
-    <div class="modal-box">
-      <div class="modal-title">KART TESTE: TURBO DRIFT</div>
-      <div class="modal-sub">Física Arcade Ultra-Fluida • PC (WASD + Espaço) & Mobile Multi-Touch</div>
-
-      <div class="track-selector" id="trackSelector">
-        <div class="track-card selected" data-track="0">
-          <h4>1. Circuito Neon</h4>
-          <p>Rápido & Largo</p>
-        </div>
-        <div class="track-card" data-track="1">
-          <h4>2. Vale do Drift</h4>
-          <p>Curvas em S & Turbo</p>
-        </div>
-        <div class="track-card" data-track="2">
-          <h4>3. Arena Turbo 8</h4>
-          <p>Cruzamento Insano</p>
-        </div>
+  <!-- MODAL DE CONSTRUIR A PISTA A CADA RODADA (ESTILO ROBLOX / MAKE WAY) -->
+  <div class="overlay-panel hidden" id="buildModal">
+    <div class="builder-card">
+      <div class="builder-title" id="buildTitle">🛠️ FIM DA RODADA! AUMENTE A PISTA!</div>
+      <div class="builder-sub" id="buildSubtitle">
+        Primeiro a chegar em <b>1.000 PONTOS</b> vence! Escolha a próxima peça 3D para encaixar na pista:
       </div>
 
-      <div class="online-box">
-        <div style="font-size: 12px; font-weight: 800; color: #00f0ff;">🌐 MULTIPLAYER ONLINE INSTANTÂNEO (P2P)</div>
-        <div id="onlineStatusText" style="font-size: 11px; color: #94a3b8; margin-top: 4px;">
-          Jogue solo contra IA ou crie uma sala para correr com amigos!
-        </div>
-        <div class="online-row">
-          <button class="btn-secondary" id="btnCreateRoom">Criar Sala Online</button>
-          <input class="input-code" id="roomCodeInput" placeholder="CÓDIGO" maxlength="6" />
-          <button class="btn-secondary" id="btnJoinRoom">Entrar</button>
-        </div>
+      <div class="round-results" id="roundResultsList"></div>
+
+      <div class="piece-grid" id="pieceChoicesGrid"></div>
+    </div>
+  </div>
+
+  <!-- MODAL DE CAMPEÃO (1000 PONTOS) OU MENU INICIAL -->
+  <div class="overlay-panel" id="startModal">
+    <div class="builder-card">
+      <div class="builder-title" id="startModalTitle">🏎️ MICRO-KARTS 3D: MONTE A PISTA!</div>
+      <div class="builder-sub" id="startModalSub">
+        Comece numa pista curta 3D! A cada rodada que acaba, vocês escolhem novas peças (Rampas, Curvas, Boosts, Pontes Sem Muro) para a pista ficar cada vez maior!<br/>
+        <b>Quem bater 1.000 PONTOS primeiro ganha!</b>
       </div>
 
-      <button class="btn-primary" id="btnStartRace">🚀 ACELERAR AGORA!</button>
+      <button class="btn-big" id="btnPlayNow">🚀 COMEÇAR CORRIDA (RUMO AOS 1000 PTS)</button>
+
+      <div class="online-bar">
+        <span style="font-size:12px;font-weight:800;color:#00f0ff;">🌐 Jogar c/ Amigos:</span>
+        <button class="btn-hud" id="btnHostOnline">Criar Sala</button>
+        <input class="code-input" id="inputRoomCode" placeholder="CÓDIGO" maxlength="6" />
+        <button class="btn-hud" id="btnJoinOnline">Entrar</button>
+        <div id="netStatusLabel" style="width:100%;font-size:11px;color:#94a3b8;margin-top:4px;"></div>
+      </div>
     </div>
   </div>
 
   <script>
-    /******************************************************************
-     * 1. MOTOR DE ÁUDIO PROCEDURAL (WEB AUDIO API - ZERO ARQUIVOS)
-     ******************************************************************/
-    class SoundEngine {
+    /********************************************************************
+     * 1. SINTETIZADOR DE ÁUDIO (MOTOR, DRIFT, TURBO, QUEDA E VITÓRIA)
+     ********************************************************************/
+    class SoundFX {
       constructor() {
         this.ctx = null;
         this.engineOsc = null;
         this.engineGain = null;
-        this.driftNoiseGain = null;
-        this.initialized = false;
+        this.ready = false;
       }
 
       init() {
-        if (this.initialized) return;
-        const AudioCtx = window.AudioContext || window.webkitAudioContext;
-        if (!AudioCtx) return;
-        this.ctx = new AudioCtx();
+        if (this.ready) return;
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        this.ctx = new AC();
 
-        // Oscilador do motor
         this.engineOsc = this.ctx.createOscillator();
         this.engineOsc.type = 'sawtooth';
-        this.engineOsc.frequency.value = 55;
+        this.engineOsc.frequency.value = 60;
 
         const filter = this.ctx.createBiquadFilter();
         filter.type = 'lowpass';
-        filter.frequency.value = 340;
+        filter.frequency.value = 360;
 
         this.engineGain = this.ctx.createGain();
-        this.engineGain.gain.value = 0.05;
+        this.engineGain.gain.value = 0.04;
 
         this.engineOsc.connect(filter);
         filter.connect(this.engineGain);
         this.engineGain.connect(this.ctx.destination);
         this.engineOsc.start();
-
-        // Ruído branco filtrado para pneu cantando no drift
-        const bufferSize = this.ctx.sampleRate * 1.5;
-        const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-        const output = noiseBuffer.getChannelData(0);
-        for (let i = 0; i < bufferSize; i++) {
-          output[i] = Math.random() * 2 - 1;
-        }
-        const whiteNoise = this.ctx.createBufferSource();
-        whiteNoise.buffer = noiseBuffer;
-        whiteNoise.loop = true;
-
-        const bandpass = this.ctx.createBiquadFilter();
-        bandpass.type = 'bandpass';
-        bandpass.frequency.value = 1100;
-        bandpass.Q.value = 3.5;
-
-        this.driftNoiseGain = this.ctx.createGain();
-        this.driftNoiseGain.gain.value = 0.0;
-
-        whiteNoise.connect(bandpass);
-        bandpass.connect(this.driftNoiseGain);
-        this.driftNoiseGain.connect(this.ctx.destination);
-        whiteNoise.start();
-
-        this.initialized = true;
+        this.ready = true;
       }
 
-      updateEngine(speedRatio, isDrifting, boostTime) {
-        if (!this.initialized || !this.ctx) return;
+      updateEngine(speedRatio, boostActive) {
+        if (!this.ready || !this.ctx) return;
         if (this.ctx.state === 'suspended') this.ctx.resume();
-
-        const now = this.ctx.currentTime;
-        const baseFreq = 52 + Math.abs(speedRatio) * 145 + (boostTime > 0 ? 45 : 0);
-        this.engineOsc.frequency.setTargetAtTime(baseFreq, now, 0.04);
-        this.engineGain.gain.setTargetAtTime(0.04 + Math.min(0.06, Math.abs(speedRatio) * 0.05), now, 0.05);
-
-        const targetDriftGain = (isDrifting && Math.abs(speedRatio) > 0.25) ? 0.045 : 0.0;
-        this.driftNoiseGain.gain.setTargetAtTime(targetDriftGain, now, 0.06);
+        const freq = 58 + Math.min(1.3, Math.abs(speedRatio)) * 155 + (boostActive ? 55 : 0);
+        this.engineOsc.frequency.setTargetAtTime(freq, this.ctx.currentTime, 0.04);
       }
 
-      beep(freq = 440, duration = 0.14, type = 'sine', vol = 0.12) {
-        if (!this.initialized || !this.ctx) return;
+      tone(freq, dur = 0.14, type = 'sine', vol = 0.12) {
+        if (!this.ready || !this.ctx) return;
+        const now = this.ctx.currentTime;
         const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
+        const g = this.ctx.createGain();
         osc.type = type;
-        osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
-        gain.gain.setValueAtTime(vol, this.ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
-        osc.connect(gain);
-        gain.connect(this.ctx.destination);
+        osc.frequency.setValueAtTime(freq, now);
+        g.gain.setValueAtTime(vol, now);
+        g.gain.exponentialRampToValueAtTime(0.001, now + dur);
+        osc.connect(g);
+        g.connect(this.ctx.destination);
         osc.start();
-        osc.stop(this.ctx.currentTime + duration);
+        osc.stop(now + dur);
       }
 
-      playBoost(level = 1) {
-        if (!this.initialized || !this.ctx) return;
+      boostSound(level = 1) {
+        if (!this.ready || !this.ctx) return;
         const now = this.ctx.currentTime;
         const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
+        const g = this.ctx.createGain();
         osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(180 + level * 90, now);
-        osc.frequency.exponentialRampToValueAtTime(520 + level * 140, now + 0.28);
-        gain.gain.setValueAtTime(0.14, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
-        osc.connect(gain);
-        gain.connect(this.ctx.destination);
+        osc.frequency.setValueAtTime(190 + level * 80, now);
+        osc.frequency.exponentialRampToValueAtTime(580 + level * 130, now + 0.28);
+        g.gain.setValueAtTime(0.14, now);
+        g.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+        osc.connect(g);
+        g.connect(this.ctx.destination);
         osc.start();
-        osc.stop(now + 0.32);
+        osc.stop(now + 0.3);
       }
     }
 
-    const sound = new SoundEngine();
+    const sfx = new SoundFX();
 
-    /******************************************************************
-     * 2. CONTROLES HÍBRIDOS PC + MOBILE MULTI-TOUCH SEM CONFLITO
-     ******************************************************************/
-    class InputManager {
+    /********************************************************************
+     * 2. CONTROLES HÍBRIDOS (PC + MOBILE MULTI-TOUCH REAL)
+     ********************************************************************/
+    class Controls {
       constructor() {
         this.keys = {};
-        this.touchActions = { left: false, right: false, gas: false, brake: false, drift: false };
+        this.touch = { left: false, right: false, gas: false, brake: false, drift: false };
         this.autoGas = false;
-        this.justPressedDrift = false;
         this._prevDrift = false;
 
         window.addEventListener('keydown', (e) => {
@@ -667,72 +596,63 @@
           if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) {
             e.preventDefault();
           }
-          if (e.code === 'KeyR') game.resetPlayerToTrack();
-          if (e.code === 'KeyC') game.toggleCameraMode();
+          if (e.code === 'KeyC') game.toggleCamera();
         });
-
         window.addEventListener('keyup', (e) => {
           this.keys[e.code] = false;
         });
 
-        this.setupMultiTouch();
+        this.bindTouch();
       }
 
-      setupMultiTouch() {
-        const buttons = Array.from(document.querySelectorAll('.touch-btn'));
+      bindTouch() {
+        const btns = Array.from(document.querySelectorAll('.t-btn'));
+        const container = document.getElementById('touchControls');
 
-        const evaluateTouches = (e) => {
-          sound.init();
-          const nextState = { left: false, right: false, gas: false, brake: false, drift: false };
-
-          // Verifica todos os dedos ativos na tela (permite segurar Acelerar + deslizar Direção + apertar Drift juntos!)
+        const handleTouches = (e) => {
+          sfx.init();
+          const next = { left: false, right: false, gas: false, brake: false, drift: false };
           for (let i = 0; i < e.touches.length; i++) {
             const t = e.touches[i];
             const el = document.elementFromPoint(t.clientX, t.clientY);
-            const btn = el ? el.closest('.touch-btn') : null;
+            const btn = el ? el.closest('.t-btn') : null;
             if (btn && btn.dataset.action) {
-              nextState[btn.dataset.action] = true;
+              next[btn.dataset.action] = true;
             }
           }
-
-          this.touchActions = nextState;
-          buttons.forEach((b) => {
-            const act = b.dataset.action;
-            b.classList.toggle('pressed', !!this.touchActions[act]);
-          });
+          this.touch = next;
+          btns.forEach((b) => b.classList.toggle('pressed', !!this.touch[b.dataset.action]));
         };
 
-        const touchContainer = document.getElementById('touchControls');
-        ['touchstart', 'touchmove', 'touchend', 'touchcancel'].forEach((evtName) => {
-          touchContainer.addEventListener(evtName, (e) => {
+        ['touchstart', 'touchmove', 'touchend', 'touchcancel'].forEach((ev) => {
+          container.addEventListener(ev, (e) => {
             e.preventDefault();
-            evaluateTouches(e);
+            handleTouches(e);
           }, { passive: false });
         });
 
-        // Suporte a clique de mouse nos botões da tela para testar no PC também
-        buttons.forEach((btn) => {
+        btns.forEach((btn) => {
           const act = btn.dataset.action;
           btn.addEventListener('mousedown', () => {
-            sound.init();
-            this.touchActions[act] = true;
+            sfx.init();
+            this.touch[act] = true;
             btn.classList.add('pressed');
           });
           window.addEventListener('mouseup', () => {
-            this.touchActions[act] = false;
+            this.touch[act] = false;
             btn.classList.remove('pressed');
           });
         });
       }
 
-      getState() {
-        const left = this.keys['ArrowLeft'] || this.keys['KeyA'] || this.touchActions.left;
-        const right = this.keys['ArrowRight'] || this.keys['KeyD'] || this.touchActions.right;
-        const gas = this.autoGas || this.keys['ArrowUp'] || this.keys['KeyW'] || this.touchActions.gas;
-        const brake = this.keys['ArrowDown'] || this.keys['KeyS'] || this.touchActions.brake;
-        const drift = this.keys['Space'] || this.keys['ShiftLeft'] || this.keys['ShiftRight'] || this.touchActions.drift;
+      poll() {
+        const left = this.keys['ArrowLeft'] || this.keys['KeyA'] || this.touch.left;
+        const right = this.keys['ArrowRight'] || this.keys['KeyD'] || this.touch.right;
+        const gas = this.autoGas || this.keys['ArrowUp'] || this.keys['KeyW'] || this.touch.gas;
+        const brake = this.keys['ArrowDown'] || this.keys['KeyS'] || this.touch.brake;
+        const drift = this.keys['Space'] || this.keys['ShiftLeft'] || this.keys['ShiftRight'] || this.touch.drift;
 
-        this.justPressedDrift = drift && !this._prevDrift;
+        const justDrift = drift && !this._prevDrift;
         this._prevDrift = drift;
 
         return {
@@ -740,282 +660,516 @@
           gas,
           brake,
           drift,
-          justPressedDrift: this.justPressedDrift
+          justDrift
         };
       }
     }
 
-    /******************************************************************
-     * 3. GERADOR DE PISTAS (SPLINE SUAVE + BOOST PADS + CHECKPOINTS)
-     ******************************************************************/
-    const TRACK_DEFS = [
+    /********************************************************************
+     * 3. CATÁLOGO DE PEÇAS 3D PARA MONTAR A PISTA A CADA RODADA!
+     ********************************************************************/
+    const TRACK_PIECE_CATALOG = [
       {
-        name: 'Circuito Neon GP',
-        roadWidth: 215,
-        theme: { grass: '#090d16', asphalt: '#1a2234', kerbA: '#00f0ff', kerbB: '#1e293b', glow: '#00f0ff' },
-        points: [
-          { x: 0, y: 0 },
-          { x: 950, y: 0 },
-          { x: 1550, y: 380 },
-          { x: 1450, y: 1120 },
-          { x: 750, y: 1420 },
-          { x: 100, y: 1100 },
-          { x: -450, y: 1380 },
-          { x: -1150, y: 1020 },
-          { x: -1200, y: 260 },
-          { x: -650, y: -20 }
-        ],
-        boostIndices: [18, 62, 118, 165]
+        type: 'straight',
+        name: 'Reta Clássica',
+        icon: '🛣️',
+        desc: 'Reta segura com muretas laterais',
+        length: 34,
+        turnSteps: 0,
+        width: 16,
+        walled: true
       },
       {
-        name: 'Vale do Drift',
-        roadWidth: 195,
-        theme: { grass: '#0d0914', asphalt: '#211830', kerbA: '#d946ef', kerbB: '#facc15', glow: '#d946ef' },
-        points: [
-          { x: 0, y: 0 },
-          { x: 880, y: -40 },
-          { x: 1360, y: 320 },
-          { x: 860, y: 740 },
-          { x: 1420, y: 1240 },
-          { x: 780, y: 1680 },
-          { x: 0, y: 1320 },
-          { x: -680, y: 1650 },
-          { x: -1240, y: 1120 },
-          { x: -720, y: 600 },
-          { x: -1180, y: 140 },
-          { x: -580, y: -120 }
-        ],
-        boostIndices: [14, 88, 145, 200]
+        type: 'boost_straight',
+        name: 'Reta Turbo Boost',
+        icon: '⚡',
+        desc: 'Tapete luminoso de alta velocidade!',
+        length: 36,
+        turnSteps: 0,
+        width: 16,
+        walled: true,
+        hasBoost: true
       },
       {
-        name: 'Arena Turbo 8',
-        roadWidth: 210,
-        theme: { grass: '#08120e', asphalt: '#182825', kerbA: '#10b981', kerbB: '#ffffff', glow: '#10b981' },
-        points: [
-          { x: -400, y: 0 },
-          { x: 450, y: 0 },
-          { x: 1180, y: -420 },
-          { x: 1650, y: 150 },
-          { x: 1200, y: 780 },
-          { x: 320, y: 420 },
-          { x: -520, y: 820 },
-          { x: -1320, y: 760 },
-          { x: -1620, y: 120 },
-          { x: -1120, y: -420 }
-        ],
-        boostIndices: [10, 52, 108, 155, 195]
+        type: 'turn_left',
+        name: 'Curva p/ Esquerda',
+        icon: '↩️',
+        desc: 'Curva 45° ideal para carregar Drift!',
+        length: 30,
+        turnSteps: -1,
+        width: 17,
+        walled: true
+      },
+      {
+        type: 'turn_right',
+        name: 'Curva p/ Direita',
+        icon: '↪️',
+        desc: 'Curva 45° rápida com zebra neon!',
+        length: 30,
+        turnSteps: 1,
+        width: 17,
+        walled: true
+      },
+      {
+        type: 'ramp_gap',
+        name: 'Rampa com Salto!',
+        icon: '🚀',
+        desc: 'Salto sobre o abismo! Passe rápido!',
+        length: 38,
+        turnSteps: 0,
+        width: 16,
+        walled: false,
+        hasRamp: true,
+        hasGap: true,
+        hasBoost: true
+      },
+      {
+        type: 'narrow_bridge',
+        name: 'Ponte Sem Muro!',
+        icon: '⚠️',
+        desc: 'Pista estreita sobre o abismo! Cuidado!',
+        length: 34,
+        turnSteps: 0,
+        width: 10.5,
+        walled: false
+      },
+      {
+        type: 'obstacles',
+        name: 'Corredor de Pilares',
+        icon: '🔨',
+        desc: 'Blocos neon no meio da pista para desviar!',
+        length: 36,
+        turnSteps: 0,
+        width: 17,
+        walled: true,
+        hasPillars: true
       }
     ];
 
-    class Track {
-      constructor(defIndex = 0) {
-        const def = TRACK_DEFS[defIndex] || TRACK_DEFS[0];
-        this.name = def.name;
-        this.roadWidth = def.roadWidth;
-        this.theme = def.theme;
-        this.samples = this.buildCatmullRomSamples(def.points, 220);
-        this.boostPads = def.boostIndices.map((idx) => {
-          const s = this.samples[idx % this.samples.length];
-          return { x: s.x, y: s.y, angle: s.angle, radius: 58 };
+    /********************************************************************
+     * 4. CONSTRUTOR MODULAR DA PISTA 3D (THREE.JS)
+     ********************************************************************/
+    class ModularTrack3D {
+      constructor(scene) {
+        this.scene = scene;
+        this.group = new THREE.Group();
+        this.scene.add(this.group);
+
+        // Lista de tipos de peças que formam a pista atual (vai crescendo a cada rodada!)
+        this.pieceSequence = [];
+        this.segments = [];
+      }
+
+      resetToStarterTrack() {
+        // Começa com uma pista pequena (3 peças iniciais) igual no Roblox/Make Way!
+        this.pieceSequence = ['straight', 'boost_straight', 'turn_left'];
+        this.rebuildMesh();
+      }
+
+      addPiece(pieceType) {
+        this.pieceSequence.push(pieceType);
+        this.rebuildMesh();
+      }
+
+      rebuildMesh() {
+        while (this.group.children.length > 0) {
+          const obj = this.group.children[0];
+          this.group.remove(obj);
+        }
+        this.segments = [];
+
+        let cursorX = 0;
+        let cursorZ = 0;
+        let cursorAngle = 0; // 0 = apontando para +Z
+
+        // Adiciona todas as peças da sequência + 1 peça final de Linha de Chegada
+        const fullList = [...this.pieceSequence, 'finish_line'];
+
+        fullList.forEach((type, index) => {
+          const def = type === 'finish_line'
+            ? { type: 'finish_line', length: 28, turnSteps: 0, width: 18, walled: true, isFinish: true }
+            : (TRACK_PIECE_CATALOG.find((p) => p.type === type) || TRACK_PIECE_CATALOG[0]);
+
+          const deltaAngle = (def.turnSteps || 0) * (Math.PI / 4); // passos de 45 graus
+          const segAngle = cursorAngle + deltaAngle * 0.5;
+          const dirX = Math.sin(segAngle);
+          const dirZ = Math.cos(segAngle);
+          const rightX = Math.cos(segAngle);
+          const rightZ = -Math.sin(segAngle);
+
+          const len = def.length;
+          const startX = cursorX;
+          const startZ = cursorZ;
+          const centerX = startX + dirX * (len * 0.5);
+          const centerZ = startZ + dirZ * (len * 0.5);
+          const endX = startX + dirX * len;
+          const endZ = startZ + dirZ * len;
+
+          const seg = {
+            index,
+            type: def.type,
+            startX,
+            startZ,
+            centerX,
+            centerZ,
+            endX,
+            endZ,
+            angle: segAngle,
+            dirX,
+            dirZ,
+            rightX,
+            rightZ,
+            length: len,
+            width: def.width,
+            walled: def.walled,
+            hasBoost: !!def.hasBoost,
+            hasRamp: !!def.hasRamp,
+            hasGap: !!def.hasGap,
+            hasPillars: !!def.hasPillars,
+            isFinish: !!def.isFinish,
+            pillars: []
+          };
+
+          this.buildSegment3D(seg);
+          this.segments.push(seg);
+
+          // Avança cursor com leve sobreposição para não haver frestas nas curvas
+          cursorX = endX - dirX * 1.5;
+          cursorZ = endZ - dirZ * 1.5;
+          cursorAngle += deltaAngle;
         });
       }
 
-      buildCatmullRomSamples(pts, totalSamples) {
-        const res = [];
-        const n = pts.length;
-        for (let i = 0; i < totalSamples; i++) {
-          const tGlobal = (i / totalSamples) * n;
-          const idx = Math.floor(tGlobal);
-          const t = tGlobal - idx;
+      buildSegment3D(seg) {
+        const segGroup = new THREE.Group();
+        segGroup.position.set(seg.centerX, 0, seg.centerZ);
+        segGroup.rotation.y = seg.angle;
 
-          const p0 = pts[(idx - 1 + n) % n];
-          const p1 = pts[idx % n];
-          const p2 = pts[(idx + 1) % n];
-          const p3 = pts[(idx + 2) % n];
+        const roadColor = seg.isFinish ? 0x1e293b : (seg.index % 2 === 0 ? 0x1e2638 : 0x252f45);
+        const roadMat = new THREE.MeshStandardMaterial({ color: roadColor, roughness: 0.7 });
 
-          const t2 = t * t;
-          const t3 = t2 * t;
+        if (seg.hasGap) {
+          // Peça dividida com buraco de abismo no meio + rampa!
+          const partLen = seg.length * 0.36;
+          const geoA = new THREE.BoxGeometry(seg.width, 1.2, partLen);
+          const meshA = new THREE.Mesh(geoA, roadMat);
+          meshA.position.set(0, -0.6, -seg.length * 0.32);
+          segGroup.add(meshA);
 
-          const x = 0.5 * (
-            (2 * p1.x) +
-            (-p0.x + p2.x) * t +
-            (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 +
-            (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3
-          );
-          const y = 0.5 * (
-            (2 * p1.y) +
-            (-p0.y + p2.y) * t +
-            (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 +
-            (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3
-          );
+          const meshB = new THREE.Mesh(geoA, roadMat);
+          meshB.position.set(0, -0.6, seg.length * 0.32);
+          segGroup.add(meshB);
 
-          res.push({ x, y, angle: 0, nx: 0, ny: 0 });
+          // Rampa de lançamento antes do buraco
+          const rampGeo = new THREE.BoxGeometry(seg.width * 0.85, 0.8, 7.5);
+          const rampMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, emissive: 0x443300 });
+          const rampMesh = new THREE.Mesh(rampGeo, rampMat);
+          rampMesh.position.set(0, 0.45, -seg.length * 0.16);
+          rampMesh.rotation.x = -0.22;
+          segGroup.add(rampMesh);
+        } else {
+          // Asfalto contínuo
+          const roadGeo = new THREE.BoxGeometry(seg.width, 1.2, seg.length + 2.2);
+          const roadMesh = new THREE.Mesh(roadGeo, roadMat);
+          roadMesh.position.y = -0.6;
+          roadMesh.receiveShadow = true;
+          segGroup.add(roadMesh);
         }
 
-        for (let i = 0; i < res.length; i++) {
-          const curr = res[i];
-          const next = res[(i + 1) % res.length];
-          const dx = next.x - curr.x;
-          const dy = next.y - curr.y;
-          curr.angle = Math.atan2(dy, dx);
-          const len = Math.hypot(dx, dy) || 1;
-          curr.nx = -dy / len;
-          curr.ny = dx / len;
+        // Muretas / Zebras laterais (se a peça tiver proteção)
+        if (seg.walled) {
+          const wallColor = seg.index % 2 === 0 ? 0x00f0ff : 0xd946ef;
+          const wallMat = new THREE.MeshStandardMaterial({
+            color: wallColor,
+            emissive: wallColor,
+            emissiveIntensity: 0.25
+          });
+          const wallGeo = new THREE.BoxGeometry(0.9, 1.3, seg.length + 1.5);
+
+          const leftWall = new THREE.Mesh(wallGeo, wallMat);
+          leftWall.position.set(seg.width * 0.5, 0.5, 0);
+          segGroup.add(leftWall);
+
+          const rightWall = new THREE.Mesh(wallGeo, wallMat);
+          rightWall.position.set(-seg.width * 0.5, 0.5, 0);
+          segGroup.add(rightWall);
+        } else {
+          // Listras de alerta amarelas nas bordas sem muro!
+          const warnMat = new THREE.MeshBasicMaterial({ color: 0xfacc15 });
+          const warnGeo = new THREE.BoxGeometry(0.45, 0.1, seg.length);
+          const wL = new THREE.Mesh(warnGeo, warnMat);
+          wL.position.set(seg.width * 0.5 - 0.3, 0.05, 0);
+          const wR = new THREE.Mesh(warnGeo, warnMat);
+          wR.position.set(-seg.width * 0.5 + 0.3, 0.05, 0);
+          segGroup.add(wL, wR);
         }
-        return res;
+
+        // Tapete de Boost Pad 3D
+        if (seg.hasBoost) {
+          const boostGeo = new THREE.BoxGeometry(seg.width * 0.55, 0.14, 7.5);
+          const boostMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff });
+          const boostMesh = new THREE.Mesh(boostGeo, boostMat);
+          boostMesh.position.set(0, 0.08, -seg.length * 0.2);
+          segGroup.add(boostMesh);
+        }
+
+        // Pilares de Obstáculo no meio da pista
+        if (seg.hasPillars) {
+          const pillarGeo = new THREE.CylinderGeometry(1.35, 1.35, 3.6, 16);
+          const pillarMat = new THREE.MeshStandardMaterial({
+            color: 0xef4444,
+            emissive: 0x7f1d1d
+          });
+          const offsets = [
+            { lx: -3.6, lz: -6 },
+            { lx: 3.6, lz: 0 },
+            { lx: -3.2, lz: 7 }
+          ];
+          offsets.forEach((o) => {
+            const pMesh = new THREE.Mesh(pillarGeo, pillarMat);
+            pMesh.position.set(o.lx, 1.8, o.lz);
+            segGroup.add(pMesh);
+
+            // Salva posição global do pilar para colisão física
+            const wx = seg.centerX + seg.rightX * o.lx + seg.dirX * o.lz;
+            const wz = seg.centerZ + seg.rightZ * o.lx + seg.dirZ * o.lz;
+            seg.pillars.push({ x: wx, z: wz, r: 1.55 });
+          });
+        }
+
+        // Pórtico da Linha de Chegada 3D
+        if (seg.isFinish) {
+          const postGeo = new THREE.BoxGeometry(1.1, 8, 1.1);
+          const postMat = new THREE.MeshStandardMaterial({ color: 0xfacc15 });
+          const pL = new THREE.Mesh(postGeo, postMat);
+          pL.position.set(seg.width * 0.5, 4, 2);
+          const pR = new THREE.Mesh(postGeo, postMat);
+          pR.position.set(-seg.width * 0.5, 4, 2);
+
+          const bannerGeo = new THREE.BoxGeometry(seg.width + 1.5, 2.0, 1.2);
+          const bannerMat = new THREE.MeshStandardMaterial({
+            color: 0x10b981,
+            emissive: 0x065f46
+          });
+          const banner = new THREE.Mesh(bannerGeo, bannerMat);
+          banner.position.set(0, 7.5, 2);
+
+          // Faixa quadriculada no chão
+          const stripGeo = new THREE.BoxGeometry(seg.width - 1, 0.12, 3.2);
+          const stripMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+          const strip = new THREE.Mesh(stripGeo, stripMat);
+          strip.position.set(0, 0.06, 2);
+
+          segGroup.add(pL, pR, banner, strip);
+        }
+
+        this.group.add(segGroup);
       }
 
-      getNearestSample(x, y) {
-        let bestIdx = 0;
-        let bestDistSq = Infinity;
-        for (let i = 0; i < this.samples.length; i++) {
-          const s = this.samples[i];
-          const dSq = (x - s.x) ** 2 + (y - s.y) ** 2;
-          if (dSq < bestDistSq) {
-            bestDistSq = dSq;
-            bestIdx = i;
+      findClosestSegment(x, z) {
+        let bestSeg = this.segments[0];
+        let bestLocalZ = 0;
+        let bestLocalX = 0;
+        let bestDist = Infinity;
+
+        for (const seg of this.segments) {
+          const dx = x - seg.centerX;
+          const dz = z - seg.centerZ;
+          const localZ = dx * seg.dirX + dz * seg.dirZ;
+          const localX = dx * seg.rightX + dz * seg.rightZ;
+
+          const clampedZ = Math.max(-seg.length * 0.55, Math.min(seg.length * 0.55, localZ));
+          const distZ = localZ - clampedZ;
+          const dist = Math.hypot(localX, distZ);
+
+          if (dist < bestDist) {
+            bestDist = dist;
+            bestSeg = seg;
+            bestLocalZ = localZ;
+            bestLocalX = localX;
           }
         }
-        return { index: bestIdx, sample: this.samples[bestIdx], dist: Math.sqrt(bestDistSq) };
+        return { seg: bestSeg, localX: bestLocalX, localZ: bestLocalZ, dist: bestDist };
       }
     }
 
-    /******************************************************************
-     * 4. FÍSICA ARCADE DO KART (DRIFT + MINI-TURBO + VÁCUO + SLIDE)
-     ******************************************************************/
-    class Kart {
-      constructor(opts) {
-        this.id = opts.id || 'player';
-        this.name = opts.name || 'VOCÊ';
-        this.color = opts.color || '#00f0ff';
+    /********************************************************************
+     * 5. MICRO-KART 3D (CARRINHO PEQUENO 3D + FÍSICA DE SALTO E DRIFT)
+     ********************************************************************/
+    class MicroKart3D {
+      constructor(scene, opts) {
+        this.scene = scene;
+        this.id = opts.id;
+        this.name = opts.name;
+        this.colorHex = opts.colorHex;
+        this.colorCss = opts.colorCss;
         this.isAI = !!opts.isAI;
         this.isRemote = !!opts.isRemote;
-        this.aiSkill = opts.aiSkill || 1.0;
-        this.aiLaneOffset = opts.aiLaneOffset || 0;
+        this.aiSkill = opts.aiSkill || 0.95;
+        this.laneBias = opts.laneBias || 0;
 
-        this.resetState(opts.x || 0, opts.y || 0, opts.angle || 0);
+        // Pontuação rumo aos 1.000 pontos!
+        this.score = 0;
+        this.roundPointsEarned = 0;
+
+        this.mesh = this.createToyCarMesh(this.colorHex);
+        this.scene.add(this.mesh);
+
+        this.resetForRound(0, 0, 0);
       }
 
-      resetState(x, y, angle) {
+      createToyCarMesh(colorHex) {
+        const root = new THREE.Group();
+
+        // Corpo compacto (Micro-Kart / Toy Car 3D)
+        const bodyMat = new THREE.MeshStandardMaterial({
+          color: colorHex,
+          roughness: 0.35,
+          metalness: 0.2
+        });
+        const chassis = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.62, 2.75), bodyMat);
+        chassis.position.y = 0.52;
+        chassis.castShadow = true;
+        root.add(chassis);
+
+        // Cabine / Capota fofa de carrinho pequeno
+        const cabinMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.2 });
+        const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.38, 0.52, 1.35), cabinMat);
+        cabin.position.set(0, 0.98, -0.15);
+        root.add(cabin);
+
+        // Aerofólio traseiro esportivo
+        const wing = new THREE.Mesh(new THREE.BoxGeometry(1.85, 0.14, 0.45), bodyMat);
+        wing.position.set(0, 1.05, -1.25);
+        root.add(wing);
+
+        // Faróis dianteiros brilhantes
+        const lampMat = new THREE.MeshBasicMaterial({ color: 0xfef08a });
+        const lampGeo = new THREE.BoxGeometry(0.32, 0.2, 0.1);
+        const l1 = new THREE.Mesh(lampGeo, lampMat);
+        l1.position.set(0.55, 0.56, 1.38);
+        const l2 = new THREE.Mesh(lampGeo, lampMat);
+        l2.position.set(-0.55, 0.56, 1.38);
+        root.add(l1, l2);
+
+        // Chama de Turbo atrás do escapamento
+        const flameGeo = new THREE.ConeGeometry(0.42, 1.5, 10);
+        const flameMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff });
+        this.flameMesh = new THREE.Mesh(flameGeo, flameMat);
+        this.flameMesh.rotation.x = -Math.PI * 0.5;
+        this.flameMesh.position.set(0, 0.48, -2.0);
+        this.flameMesh.visible = false;
+        root.add(this.flameMesh);
+
+        // 4 Rodinhas robustas
+        this.wheels = [];
+        const wheelGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.38, 14);
+        wheelGeo.rotateZ(Math.PI * 0.5);
+        const wheelMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.8 });
+
+        const positions = [
+          { x: 0.96, y: 0.42, z: 0.88, front: true },
+          { x: -0.96, y: 0.42, z: 0.88, front: true },
+          { x: 0.96, y: 0.42, z: -0.88, front: false },
+          { x: -0.96, y: 0.42, z: -0.88, front: false }
+        ];
+        positions.forEach((p) => {
+          const wMesh = new THREE.Mesh(wheelGeo, wheelMat);
+          wMesh.position.set(p.x, p.y, p.z);
+          root.add(wMesh);
+          this.wheels.push({ mesh: wMesh, front: p.front });
+        });
+
+        this.bodyGroup = chassis;
+        return root;
+      }
+
+      resetForRound(x, z, angle) {
         this.x = x;
-        this.y = y;
+        this.y = 0;
+        this.z = z;
         this.vx = 0;
         this.vy = 0;
+        this.vz = 0;
         this.angle = angle;
         this.speed = 0;
-        this.steerVisual = 0;
 
-        // Drift & Boost (Estilo Mario Kart)
         this.isDrifting = false;
         this.driftDir = 0;
-        this.driftCharge = 0; // 0 a 3.2s
-        this.driftLevel = 0;  // 0, 1 (Azul), 2 (Laranja), 3 (Roxo)
+        this.driftCharge = 0;
+        this.driftLevel = 0;
         this.boostTimer = 0;
         this.boostPower = 0;
-        this.hopTimer = 0;
-        this.slipstreamCharge = 0;
 
-        // Progresso da corrida
-        this.lap = 1;
-        this.lastSampleIndex = 0;
-        this.totalProgress = 0;
-        this.passedHalfway = false;
-        this.finished = false;
+        this.finishedRound = false;
+        this.eliminated = false;
+        this.finishOrder = 99;
+        this.maxSegmentReached = 0;
+        this.progressMetric = 0;
+
+        this.mesh.position.set(this.x, this.y, this.z);
+        this.mesh.rotation.set(0, this.angle, 0);
       }
 
-      update(dt, input, track, allKarts, canDrive) {
+      update(dt, ctrl, track, allKarts, canDrive) {
         if (this.isRemote) return;
-
-        if (!canDrive) {
-          this.vx *= 0.9;
-          this.vy *= 0.9;
+        if (this.finishedRound || this.eliminated) {
+          this.vx *= 0.92;
+          this.vz *= 0.92;
+          this.x += this.vx * dt;
+          this.z += this.vz * dt;
+          if (this.eliminated) {
+            this.y -= 24 * dt;
+            this.mesh.rotation.x += 5 * dt;
+          }
+          this.mesh.position.set(this.x, this.y, this.z);
           return;
         }
 
+        if (!canDrive) return;
+
         if (this.isAI) {
-          input = this.computeAIInput(track, allKarts);
+          ctrl = this.computeAIControls(track);
         }
 
-        // Parâmetros de física arcade super responsiva
-        const maxSpeedBase = 760 * (this.isAI ? this.aiSkill : 1.0);
-        const accel = 880;
-        const reverseAccel = 520;
-        const turnRate = 3.15;
+        const maxSpd = 38 * (this.isAI ? this.aiSkill : 1.0) + this.boostPower;
+        const accel = 46;
+        const turnSpeed = 2.95;
 
-        // Hop inicial ao apertar Drift
-        if (input.justPressedDrift && this.speed > 220 && !this.isDrifting) {
-          this.hopTimer = 0.14;
-          if (input.steer !== 0) {
+        // Mecânica de Drift + 3 Níveis de Mini-Turbo
+        if (ctrl.justDrift && this.speed > 12 && !this.isDrifting && this.y <= 0.1) {
+          this.vy = 4.2; // Pulinho (hop) do kart
+          if (ctrl.steer !== 0) {
             this.isDrifting = true;
-            this.driftDir = input.steer;
+            this.driftDir = ctrl.steer;
             this.driftCharge = 0;
             this.driftLevel = 0;
           }
         }
 
-        if (this.hopTimer > 0) {
-          this.hopTimer = Math.max(0, this.hopTimer - dt);
-          if (!this.isDrifting && input.drift && input.steer !== 0 && this.speed > 220) {
-            this.isDrifting = true;
-            this.driftDir = input.steer;
-          }
-        }
-
-        // Gerenciamento do Drift e liberação do Mini-Turbo
         if (this.isDrifting) {
-          if (!input.drift || this.speed < 190) {
-            // Soltou o drift! Ativa o Boost se tiver carregado!
+          if (!ctrl.drift || this.speed < 9) {
             if (this.driftLevel > 0) {
-              const durations = [0, 0.75, 1.25, 1.85];
-              const powers = [0, 260, 360, 480];
-              this.boostTimer = durations[this.driftLevel];
-              this.boostPower = powers[this.driftLevel];
-              if (!this.isAI) {
-                sound.playBoost(this.driftLevel);
-                game.triggerCameraKick(this.driftLevel * 4.5);
-              }
+              const bTimes = [0, 0.75, 1.25, 1.8];
+              const bPowers = [0, 14, 20, 27];
+              this.boostTimer = bTimes[this.driftLevel];
+              this.boostPower = bPowers[this.driftLevel];
+              if (!this.isAI) sfx.boostSound(this.driftLevel);
             }
             this.isDrifting = false;
             this.driftDir = 0;
             this.driftCharge = 0;
             this.driftLevel = 0;
           } else {
-            // Acumula faísca de turbo durante a curva
-            const steerBonus = (input.steer === this.driftDir) ? 1.35 : 0.75;
-            this.driftCharge += dt * steerBonus;
-            const prevLevel = this.driftLevel;
-            if (this.driftCharge >= 2.1) this.driftLevel = 3;
-            else if (this.driftCharge >= 1.1) this.driftLevel = 2;
-            else if (this.driftCharge >= 0.42) this.driftLevel = 1;
-
-            if (!this.isAI && this.driftLevel > prevLevel) {
-              sound.beep(360 + this.driftLevel * 180, 0.09, 'triangle', 0.1);
+            this.driftCharge += dt * (ctrl.steer === this.driftDir ? 1.35 : 0.8);
+            const oldLvl = this.driftLevel;
+            if (this.driftCharge >= 1.9) this.driftLevel = 3;
+            else if (this.driftCharge >= 1.0) this.driftLevel = 2;
+            else if (this.driftCharge >= 0.4) this.driftLevel = 1;
+            if (!this.isAI && this.driftLevel > oldLvl) {
+              sfx.tone(380 + this.driftLevel * 170, 0.08, 'triangle', 0.1);
             }
           }
-        }
-
-        // Vácuo (Slipstream) atrás de outros karts
-        let inSlipstream = false;
-        const fx = Math.cos(this.angle);
-        const fy = Math.sin(this.angle);
-        for (const other of allKarts) {
-          if (other === this) continue;
-          const dx = other.x - this.x;
-          const dy = other.y - this.y;
-          const dist = Math.hypot(dx, dy);
-          if (dist > 55 && dist < 290 && this.speed > 320) {
-            const dot = (dx * fx + dy * fy) / dist;
-            if (dot > 0.88) {
-              inSlipstream = true;
-              break;
-            }
-          }
-        }
-
-        if (inSlipstream) {
-          this.slipstreamCharge = Math.min(1.5, this.slipstreamCharge + dt * 1.4);
-        } else {
-          this.slipstreamCharge = Math.max(0, this.slipstreamCharge - dt * 1.0);
         }
 
         if (this.boostTimer > 0) {
@@ -1024,926 +1178,613 @@
           this.boostPower = 0;
         }
 
-        // Direção suave + contra-esterço no drift
-        this.steerVisual += (input.steer - this.steerVisual) * Math.min(1, dt * 14);
-        const speedFactor = Math.min(1, Math.hypot(this.vx, this.vy) / 140);
+        // Rotação (no sistema Three.js: angle=0 aponta para +Z, virar à direita diminui angle)
+        const turnSign = -ctrl.steer;
         if (this.isDrifting) {
-          // No drift, você tem rotação base na direção do drift + controle fino no volante
-          const effectiveTurn = this.driftDir * 0.68 + input.steer * 0.55;
-          this.angle += effectiveTurn * turnRate * dt;
+          const driftSteer = (-this.driftDir * 0.65) + (turnSign * 0.55);
+          this.angle += driftSteer * turnSpeed * dt;
         } else {
-          const reverseSign = this.speed < -20 ? -1 : 1;
-          this.angle += input.steer * turnRate * speedFactor * reverseSign * dt;
+          const spdFactor = Math.min(1, Math.abs(this.speed) / 8);
+          const revSign = this.speed < -1 ? -1 : 1;
+          this.angle += turnSign * turnSpeed * spdFactor * revSign * dt;
         }
 
-        // Vetores frente e lateral do kart
-        const forwardX = Math.cos(this.angle);
-        const forwardY = Math.sin(this.angle);
-        const rightX = -forwardY;
-        const rightY = forwardX;
+        const fx = Math.sin(this.angle);
+        const fz = Math.cos(this.angle);
+        const rx = Math.cos(this.angle);
+        const rz = -Math.sin(this.angle);
 
-        // Decomposição da velocidade atual
-        let forwardVel = this.vx * forwardX + this.vy * forwardY;
-        let lateralVel = this.vx * rightX + this.vy * rightY;
+        let fVel = this.vx * fx + this.vz * fz;
+        let lVel = this.vx * rx + this.vz * rz;
 
-        const slipstreamBoost = this.slipstreamCharge > 0.45 ? 135 : 0;
-        const currentMaxSpeed = maxSpeedBase + this.boostPower + slipstreamBoost;
-
-        if (input.gas) {
-          forwardVel += (accel + (this.boostTimer > 0 ? 520 : 0)) * dt;
-        } else if (input.brake) {
-          if (forwardVel > 40) {
-            forwardVel -= accel * 1.35 * dt;
-          } else {
-            forwardVel -= reverseAccel * dt;
-          }
+        if (ctrl.gas) {
+          fVel += (accel + (this.boostTimer > 0 ? 30 : 0)) * dt;
+        } else if (ctrl.brake) {
+          fVel -= accel * 1.15 * dt;
         } else {
-          // Desaceleração natural suave
-          forwardVel *= Math.pow(0.45, dt);
+          fVel *= Math.pow(0.4, dt);
         }
 
-        // Limite suave de velocidade máxima
-        if (forwardVel > currentMaxSpeed) {
-          forwardVel += (currentMaxSpeed - forwardVel) * Math.min(1, dt * 6);
-        }
-        if (forwardVel < -260) forwardVel = -260;
+        if (fVel > maxSpd) fVel += (maxSpd - fVel) * Math.min(1, dt * 6);
+        if (fVel < -16) fVel = -16;
 
-        // Aderência lateral (Grip vs. Drift suave)
-        const lateralGrip = this.isDrifting ? 3.2 : 11.5;
-        lateralVel *= Math.exp(-lateralGrip * dt);
+        const grip = this.isDrifting ? 3.2 : 11.0;
+        lVel *= Math.exp(-grip * dt);
 
-        // Reconstrói velocidade no mundo
-        this.vx = forwardX * forwardVel + rightX * lateralVel;
-        this.vy = forwardY * forwardVel + rightY * lateralVel;
-        this.speed = forwardVel;
+        this.vx = fx * fVel + rx * lVel;
+        this.vz = fz * fVel + rz * lVel;
+        this.speed = fVel;
 
-        // Move o kart
         this.x += this.vx * dt;
-        this.y += this.vy * dt;
+        this.z += this.vz * dt;
 
-        // Verifica Boost Pads na pista
-        for (const pad of track.boostPads) {
-          if (Math.hypot(this.x - pad.x, this.y - pad.y) < pad.radius) {
-            if (this.boostTimer < 0.4) {
+        // Física vertical (Rampas, Gravidade e Queda no Abismo!)
+        const info = track.findClosestSegment(this.x, this.z);
+        const seg = info.seg;
+        this.maxSegmentReached = Math.max(this.maxSegmentReached, seg.index);
+        this.progressMetric = seg.index * 100 + (info.localZ + seg.length * 0.5);
+
+        // Rampa de lançamento
+        if (seg.hasRamp && info.localZ > -seg.length * 0.28 && info.localZ < -seg.length * 0.04 && this.y <= 0.6) {
+          this.vy = Math.max(this.vy, 11.5 + Math.max(0, this.speed * 0.16));
+          if (!this.isAI) sfx.tone(520, 0.12, 'sine', 0.1);
+        }
+
+        // Boost Pad
+        if (seg.hasBoost && Math.abs(info.localZ + seg.length * 0.2) < 4.5 && Math.abs(info.localX) < seg.width * 0.35) {
+          if (this.boostTimer < 0.3 && !this.isAI) sfx.boostSound(2);
+          this.boostTimer = Math.max(this.boostTimer, 0.95);
+          this.boostPower = Math.max(this.boostPower, 22);
+        }
+
+        // Pilares de Obstáculo
+        if (seg.hasPillars) {
+          for (const pil of seg.pillars) {
+            const dx = this.x - pil.x;
+            const dz = this.z - pil.z;
+            const d = Math.hypot(dx, dz);
+            if (d < pil.r + 1.0) {
+              const nx = dx / (d || 1);
+              const nz = dz / (d || 1);
+              this.x = pil.x + nx * (pil.r + 1.05);
+              this.z = pil.z + nz * (pil.r + 1.05);
+              this.vx = nx * 14;
+              this.vz = nz * 14;
+              if (!this.isAI) sfx.tone(140, 0.12, 'sawtooth', 0.15);
+            }
+          }
+        }
+
+        // Verifica se está sobre o buraco da rampa ou fora da largura da pista sem muro
+        const inGapHole = seg.hasGap && Math.abs(info.localZ) < seg.length * 0.13;
+        const halfW = seg.width * 0.5 - 0.85;
+
+        if (seg.walled && Math.abs(info.localX) > halfW && this.y <= 0.6) {
+          // Desliza suavemente na mureta lateral!
+          const clampedX = Math.sign(info.localX) * halfW;
+          const correction = clampedX - info.localX;
+          this.x += seg.rightX * correction;
+          this.z += seg.rightZ * correction;
+
+          const sideDot = this.vx * seg.rightX + this.vz * seg.rightZ;
+          this.vx -= seg.rightX * sideDot * 1.1;
+          this.vz -= seg.rightZ * sideDot * 1.1;
+        } else if (!seg.walled && Math.abs(info.localX) > halfW + 0.7 && this.y <= 0.2) {
+          // Saiu da ponte sem muro! Cai no abismo!
+          this.eliminated = true;
+          if (!this.isAI) {
+            sfx.tone(160, 0.35, 'sawtooth', 0.16);
+            game.banner('CAIU NO ABISMO!', 'Aguarde o fim da rodada...', '#ef4444', 1.8);
+          }
+        }
+
+        if (this.y > 0 || inGapHole) {
+          this.vy -= 26 * dt;
+          this.y += this.vy * dt;
+          if (this.y <= 0) {
+            if (inGapHole) {
+              this.eliminated = true;
               if (!this.isAI) {
-                sound.playBoost(2);
-                game.triggerCameraKick(7);
+                sfx.tone(150, 0.35, 'sawtooth', 0.16);
+                game.banner('CAIU NO SALTO!', 'Passou devagar demais na rampa!', '#ef4444', 1.8);
               }
+            } else {
+              this.y = 0;
+              this.vy = 0;
             }
-            this.boostTimer = Math.max(this.boostTimer, 0.95);
-            this.boostPower = Math.max(this.boostPower, 380);
           }
         }
 
-        // Colisão deslizante com as bordas da pista (NUNCA trava o carro!)
-        const nearest = track.getNearestSample(this.x, this.y);
-        const maxOffset = track.roadWidth * 0.5 - 18;
-        if (nearest.dist > maxOffset) {
-          const s = nearest.sample;
-          const dx = this.x - s.x;
-          const dy = this.y - s.y;
-          const dist = Math.hypot(dx, dy) || 1;
-          const nx = dx / dist;
-          const ny = dy / dist;
-
-          // Reposiciona suavemente na borda e desliza o vetor velocidade na tangente da pista
-          this.x = s.x + nx * maxOffset;
-          this.y = s.y + ny * maxOffset;
-
-          const outDot = this.vx * nx + this.vy * ny;
-          if (outDot > 0) {
-            this.vx -= nx * outDot * 1.15;
-            this.vy -= ny * outDot * 1.15;
-            // Perde apenas um pouquinho de velocidade ao raspar no muro
-            this.vx *= 0.94;
-            this.vy *= 0.94;
-          }
-
-          if (Math.abs(this.speed) > 220) {
-            game.spawnSparks(this.x, this.y, '#facc15', 2);
-          }
+        // Chegou na Linha de Chegada (último segmento)!
+        if (seg.isFinish && info.localZ > -1.0 && !this.finishedRound) {
+          this.finishedRound = true;
+          game.onKartCrossedFinish(this);
         }
 
-        // Marcas de pneu e partículas de drift/boost
-        if ((this.isDrifting || Math.abs(lateralVel) > 135) && Math.abs(this.speed) > 200) {
-          game.addSkidMark(this.x, this.y, this.angle);
-          if (this.driftLevel > 0) {
-            const sparkColors = ['', '#00f0ff', '#ff8800', '#e879f9'];
-            game.spawnSparks(
-              this.x - forwardX * 20,
-              this.y - forwardY * 20,
-              sparkColors[this.driftLevel],
-              this.driftLevel
-            );
+        // Atualiza visual 3D do Micro-Kart
+        this.mesh.position.set(this.x, this.y, this.z);
+        this.mesh.rotation.set(0, this.angle, 0);
+
+        // Inclinação de carroceria (Body Roll) e chama de turbo
+        this.mesh.rotation.z = ctrl.steer * 0.09;
+        this.flameMesh.visible = this.boostTimer > 0 || this.driftLevel > 0;
+        if (this.flameMesh.visible) {
+          const colors = [0x00f0ff, 0x00f0ff, 0xff8800, 0xd946ef];
+          this.flameMesh.material.color.setHex(this.boostTimer > 0 ? 0x00f0ff : colors[this.driftLevel]);
+        }
+
+        // Gira e esterça as rodinhas 3D
+        this.wheels.forEach((w) => {
+          w.mesh.rotation.x += this.speed * dt * 1.4;
+          if (w.front) {
+            w.mesh.rotation.y = -ctrl.steer * 0.42;
           }
-        }
-
-        if (this.boostTimer > 0) {
-          game.spawnSparks(this.x - forwardX * 24, this.y - forwardY * 24, '#38bdf8', 2);
-        }
-
-        // Atualiza progresso e voltas
-        this.updateLapProgress(nearest.index, track.samples.length);
+        });
       }
 
-      updateLapProgress(currentIndex, totalSamples) {
-        const half = Math.floor(totalSamples * 0.5);
-        if (Math.abs(currentIndex - half) < 18) {
-          this.passedHalfway = true;
-        }
+      computeAIControls(track) {
+        const info = track.findClosestSegment(this.x, this.z);
+        const nextIdx = Math.min(track.segments.length - 1, info.seg.index + 1);
+        const targetSeg = track.segments[nextIdx];
 
-        // Cruzou a linha de chegada na direção certa após passar pela metade da pista
-        if (this.lastSampleIndex > totalSamples * 0.82 && currentIndex < totalSamples * 0.18) {
-          if (this.passedHalfway) {
-            this.passedHalfway = false;
-            if (this.id === 'player') {
-              game.onPlayerCompletedLap();
-            }
-            this.lap++;
-          }
-        }
-        this.lastSampleIndex = currentIndex;
-        this.totalProgress = (this.lap - 1) * totalSamples + currentIndex;
-      }
+        const safeBias = targetSeg.walled ? this.laneBias : this.laneBias * 0.25;
+        const tx = targetSeg.centerX + targetSeg.rightX * safeBias;
+        const tz = targetSeg.centerZ + targetSeg.rightZ * safeBias;
 
-      computeAIInput(track, allKarts) {
-        const nearest = track.getNearestSample(this.x, this.y);
-        const lookAheadIdx = (nearest.index + 10) % track.samples.length;
-        const farAheadIdx = (nearest.index + 22) % track.samples.length;
-        const targetSample = track.samples[lookAheadIdx];
-        const farSample = track.samples[farAheadIdx];
-
-        const tx = targetSample.x + targetSample.nx * this.aiLaneOffset;
-        const ty = targetSample.y + targetSample.ny * this.aiLaneOffset;
-
-        const desiredAngle = Math.atan2(ty - this.y, tx - this.x);
+        const desiredAngle = Math.atan2(tx - this.x, tz - this.z);
         let diff = desiredAngle - this.angle;
         while (diff > Math.PI) diff -= Math.PI * 2;
         while (diff < -Math.PI) diff += Math.PI * 2;
 
-        // Verifica se vem curva fechada pra IA usar Drift!
-        let curveDiff = farSample.angle - targetSample.angle;
-        while (curveDiff > Math.PI) curveDiff -= Math.PI * 2;
-        while (curveDiff < -Math.PI) curveDiff += Math.PI * 2;
-
-        const steer = diff > 0.08 ? 1 : (diff < -0.08 ? -1 : 0);
-        const wantDrift = Math.abs(curveDiff) > 0.45 && this.speed > 420 && this.driftCharge < 1.3;
-        const justPressedDrift = wantDrift && !this.isDrifting;
+        // Como angle positivo gira p/ direita do eixo +Z via sin(angle), ajustamos o steer:
+        const steer = diff < -0.07 ? 1 : (diff > 0.07 ? -1 : 0);
+        const wantDrift = targetSeg.walled && Math.abs(diff) > 0.38 && this.speed > 24;
 
         return {
           steer,
           gas: true,
           brake: false,
           drift: wantDrift,
-          justPressedDrift
+          justDrift: wantDrift && !this.isDrifting
         };
       }
     }
 
-    /******************************************************************
-     * 5. MULTIPLAYER ONLINE P2P (PEERJS) — SALAS POR CÓDIGO
-     ******************************************************************/
-    class NetworkManager {
-      constructor(gameRef) {
-        this.game = gameRef;
-        this.peer = null;
-        this.connections = [];
-        this.roomCode = null;
-        this.isHost = false;
-        this.sendTimer = 0;
-      }
-
-      createRoom() {
-        const code = Math.random().toString(36).substring(2, 6).toUpperCase();
-        this.roomCode = code;
-        this.isHost = true;
-        const statusEl = document.getElementById('onlineStatusText');
-        statusEl.textContent = `Criando sala ${code}...`;
-
-        this.peer = new Peer('KARTTESTE-' + code);
-        this.peer.on('open', () => {
-          statusEl.innerHTML = `✅ Sala criada! Código: <b style="color:#facc15;font-size:14px">${code}</b> (Passe para seu amigo!)`;
-          document.getElementById('roomCodeInput').value = code;
-        });
-
-        this.peer.on('connection', (conn) => {
-          this.setupConnection(conn);
-        });
-
-        this.peer.on('error', (err) => {
-          statusEl.textContent = 'Aviso Online: ' + err.type;
-        });
-      }
-
-      joinRoom(rawCode) {
-        const code = (rawCode || '').trim().toUpperCase();
-        if (!code) return;
-        this.roomCode = code;
-        this.isHost = false;
-        const statusEl = document.getElementById('onlineStatusText');
-        statusEl.textContent = `Conectando na sala ${code}...`;
-
-        this.peer = new Peer();
-        this.peer.on('open', () => {
-          const conn = this.peer.connect('KARTTESTE-' + code, { reliable: false });
-          this.setupConnection(conn);
-        });
-      }
-
-      setupConnection(conn) {
-        conn.on('open', () => {
-          this.connections.push(conn);
-          document.getElementById('onlineStatusText').innerHTML =
-            `🟢 Conectado na sala <b style="color:#10b981">${this.roomCode}</b>! (${this.connections.length} online)`;
-          conn.send({ type: 'track', trackIndex: this.game.currentTrackIndex });
-        });
-
-        conn.on('data', (data) => {
-          if (!data) return;
-          if (data.type === 'track' && !this.isHost) {
-            this.game.selectTrack(data.trackIndex);
-          } else if (data.type === 'state') {
-            this.game.updateRemoteKart(conn.peer, data);
-          }
-        });
-      }
-
-      broadcastPlayerState(kart, dt) {
-        if (this.connections.length === 0) return;
-        this.sendTimer += dt;
-        if (this.sendTimer < 0.04) return; // 25 pacotes/seg
-        this.sendTimer = 0;
-
-        const payload = {
-          type: 'state',
-          x: Math.round(kart.x),
-          y: Math.round(kart.y),
-          vx: Math.round(kart.vx),
-          vy: Math.round(kart.vy),
-          angle: Number(kart.angle.toFixed(3)),
-          driftLevel: kart.driftLevel,
-          boost: kart.boostTimer > 0
-        };
-
-        for (const c of this.connections) {
-          if (c.open) c.send(payload);
-        }
-      }
-    }
-
-    /******************************************************************
-     * 6. GERENCIADOR PRINCIPAL DO JOGO E RENDERIZADOR 60/120 FPS
-     ******************************************************************/
-    class Game {
+    /********************************************************************
+     * 6. GERENCIADOR DO JOGO 3D (ROBLOX / MAKE WAY LOOP ATÉ 1000 PTS)
+     ********************************************************************/
+    class Game3D {
       constructor() {
-        this.canvas = document.getElementById('gameCanvas');
-        this.ctx = this.canvas.getContext('2d');
-        this.input = new InputManager();
-        this.net = new NetworkManager(this);
+        this.container = document.getElementById('gameContainer');
+        this.controls = new Controls();
 
-        this.currentTrackIndex = 0;
-        this.track = new Track(0);
+        this.targetWinScore = 1000;
+        this.roundNumber = 1;
+        this.state = 'MENU'; // MENU, COUNTDOWN, RACING, BUILD_PHASE, GAME_OVER
+        this.countdownTimer = 0;
+        this.roundTimer = 0;
+        this.finishCounter = 0;
+        this.camMode = 0; // 0 = 3D Chase Proxima, 1 = 3D Panorâmica
+
+        this.initThree();
+        this.track = new ModularTrack3D(this.scene);
         this.karts = [];
-        this.remoteKarts = new Map();
         this.player = null;
-
-        this.skidMarks = [];
-        this.particles = [];
-
-        this.camera = {
-          x: 0,
-          y: 0,
-          zoom: 0.85,
-          angle: 0,
-          shake: 0,
-          mode: 0 // 0 = Dinâmica (Look-Ahead), 1 = Perseguição Rotativa
-        };
-
-        this.totalLaps = 3;
-        this.raceTimer = 0;
-        this.lapStartTime = 0;
-        this.bestLapTime = Number(localStorage.getItem('kart_best_0')) || 0;
-        this.countdown = 0;
-        this.canDrive = false;
-
-        this.resize();
-        window.addEventListener('resize', () => this.resize());
-        this.setupUI();
-        this.initRace();
+        this.createRacers();
+        this.bindUI();
+        this.setupNetworking();
 
         this.lastTime = performance.now();
         requestAnimationFrame((t) => this.loop(t));
       }
 
-      resize() {
-        this.canvas.width = window.innerWidth;
-        this.canvas.height = window.innerHeight;
+      initThree() {
+        this.scene = new THREE.Scene();
+        this.scene.background = new THREE.Color(0x090d16);
+        this.scene.fog = new THREE.FogExp2(0x090d16, 0.0045);
+
+        this.camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.5, 450);
+
+        this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+        this.renderer.setSize(window.innerWidth, window.innerHeight);
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        this.container.appendChild(this.renderer.domElement);
+
+        const hemi = new THREE.HemisphereLight(0xa5f3fc, 0x0f172a, 0.95);
+        this.scene.add(hemi);
+
+        const dir = new THREE.DirectionalLight(0xffffff, 0.9);
+        dir.position.set(45, 90, 40);
+        this.scene.add(dir);
+
+        // Grade estilizada lá embaixo no abismo (Void) para dar sensação de altura 3D!
+        const grid = new THREE.GridHelper(900, 90, 0x00f0ff, 0x1e293b);
+        grid.position.y = -18;
+        this.scene.add(grid);
+
+        window.addEventListener('resize', () => {
+          this.camera.aspect = window.innerWidth / window.innerHeight;
+          this.camera.updateProjectionMatrix();
+          this.renderer.setSize(window.innerWidth, window.innerHeight);
+        });
       }
 
-      setupUI() {
-        const btnAutoGas = document.getElementById('btnAutoGas');
-        btnAutoGas.addEventListener('click', () => {
-          this.input.autoGas = !this.input.autoGas;
-          btnAutoGas.textContent = `⚡ AUTO-GAS: ${this.input.autoGas ? 'ON' : 'OFF'}`;
-          btnAutoGas.classList.toggle('active', this.input.autoGas);
-        });
-
-        document.getElementById('btnCam').addEventListener('click', () => this.toggleCameraMode());
-        document.getElementById('btnReset').addEventListener('click', () => this.resetPlayerToTrack());
-
-        const menuModal = document.getElementById('menuModal');
-        document.getElementById('btnMenu').addEventListener('click', () => {
-          menuModal.classList.remove('hidden');
-        });
-
-        document.getElementById('btnStartRace').addEventListener('click', () => {
-          sound.init();
-          menuModal.classList.add('hidden');
-          this.initRace();
-        });
-
-        document.querySelectorAll('.track-card').forEach((card) => {
-          card.addEventListener('click', () => {
-            const idx = Number(card.dataset.track);
-            this.selectTrack(idx);
-          });
-        });
-
-        document.getElementById('btnCreateRoom').addEventListener('click', () => {
-          this.net.createRoom();
-        });
-
-        document.getElementById('btnJoinRoom').addEventListener('click', () => {
-          const code = document.getElementById('roomCodeInput').value;
-          this.net.joinRoom(code);
-        });
-
-        // Se abriu com ?room=XXXX na URL
-        const params = new URLSearchParams(window.location.search);
-        if (params.get('room')) {
-          document.getElementById('roomCodeInput').value = params.get('room');
-          this.net.joinRoom(params.get('room'));
-        }
-      }
-
-      selectTrack(idx) {
-        this.currentTrackIndex = idx;
-        document.querySelectorAll('.track-card').forEach((c) => {
-          c.classList.toggle('selected', Number(c.dataset.track) === idx);
-        });
-        this.bestLapTime = Number(localStorage.getItem(`kart_best_${idx}`)) || 0;
-        this.updateBestLapHUD();
-        this.initRace();
-      }
-
-      toggleCameraMode() {
-        this.camera.mode = (this.camera.mode + 1) % 2;
-        document.getElementById('btnCam').textContent =
-          this.camera.mode === 0 ? '🎥 CÂMERA: DINÂMICA' : '🎥 CÂMERA: CHASE 360°';
-      }
-
-      initRace() {
-        this.track = new Track(this.currentTrackIndex);
-        this.skidMarks = [];
-        this.particles = [];
-        this.karts = [];
-
-        const startSample = this.track.samples[0];
-        const backX = -Math.cos(startSample.angle);
-        const backY = -Math.sin(startSample.angle);
-
-        // Cria o Jogador e 4 Rivais de IA no grid de largada
-        const racers = [
-          { id: 'player', name: 'VOCÊ', color: '#00f0ff', isAI: false, skill: 1.0, lane: 0 },
-          { id: 'ai1', name: 'NITRO', color: '#ef4444', isAI: true, skill: 0.99, lane: -48 },
-          { id: 'ai2', name: 'APEX', color: '#facc15', isAI: true, skill: 0.96, lane: 48 },
-          { id: 'ai3', name: 'VORTEX', color: '#d946ef', isAI: true, skill: 0.93, lane: -35 },
-          { id: 'ai4', name: 'BLAZE', color: '#10b981', isAI: true, skill: 0.90, lane: 35 }
+      createRacers() {
+        const roster = [
+          { id: 'player', name: 'VOCÊ', colorHex: 0x00f0ff, colorCss: '#00f0ff', isAI: false, skill: 1.0, lane: 0 },
+          { id: 'bot1', name: 'TURBO-X', colorHex: 0xef4444, colorCss: '#ef4444', isAI: true, skill: 0.97, lane: -3.2 },
+          { id: 'bot2', name: 'SPARK', colorHex: 0xfacc15, colorCss: '#facc15', isAI: true, skill: 0.94, lane: 3.2 },
+          { id: 'bot3', name: 'NEON', colorHex: 0xd946ef, colorCss: '#d946ef', isAI: true, skill: 0.91, lane: -1.8 }
         ];
 
-        racers.forEach((r, idx) => {
-          const row = Math.floor(idx / 2);
-          const side = (idx % 2 === 0 ? -1 : 1) * (idx === 0 ? 0 : 44);
-          const x = startSample.x + backX * (row * 68 + 20) + startSample.nx * side;
-          const y = startSample.y + backY * (row * 68 + 20) + startSample.ny * side;
+        this.karts = roster.map((r) => new MicroKart3D(this.scene, r));
+        this.player = this.karts[0];
+        this.renderScoreboardHUD();
+      }
 
-          const kart = new Kart({
-            id: r.id,
-            name: r.name,
-            color: r.color,
-            isAI: r.isAI,
-            aiSkill: r.skill,
-            aiLaneOffset: r.lane,
-            x,
-            y,
-            angle: startSample.angle
-          });
-          this.karts.push(kart);
-          if (r.id === 'player') this.player = kart;
+      bindUI() {
+        const btnAuto = document.getElementById('btnAutoGas');
+        btnAuto.addEventListener('click', () => {
+          this.controls.autoGas = !this.controls.autoGas;
+          btnAuto.textContent = `⚡ AUTO-GAS: ${this.controls.autoGas ? 'ON' : 'OFF'}`;
+          btnAuto.classList.toggle('active', this.controls.autoGas);
         });
 
-        this.camera.x = this.player.x;
-        this.camera.y = this.player.y;
-        this.raceTimer = 0;
-        this.lapStartTime = 0;
-        this.updateBestLapHUD();
-        this.startCountdown();
+        document.getElementById('btnCamMode').addEventListener('click', () => this.toggleCamera());
+
+        document.getElementById('btnRoomModal').addEventListener('click', () => {
+          document.getElementById('startModal').classList.remove('hidden');
+        });
+
+        document.getElementById('btnPlayNow').addEventListener('click', () => {
+          sfx.init();
+          document.getElementById('startModal').classList.add('hidden');
+          if (this.state === 'MENU' || this.state === 'GAME_OVER') {
+            this.startNewMatch();
+          }
+        });
       }
 
-      startCountdown() {
-        this.canDrive = false;
-        this.countdown = 3.2;
-        this._lastCountBeep = 4;
+      toggleCamera() {
+        this.camMode = (this.camMode + 1) % 2;
+        document.getElementById('btnCamMode').textContent =
+          this.camMode === 0 ? '🎥 CÂMERA: 3D CHASE' : '🎥 CÂMERA: 3D ALTA';
       }
 
-      resetPlayerToTrack() {
-        if (!this.player) return;
-        const nearest = this.track.getNearestSample(this.player.x, this.player.y);
-        this.player.x = nearest.sample.x;
-        this.player.y = nearest.sample.y;
-        this.player.angle = nearest.sample.angle;
-        this.player.vx = 0;
-        this.player.vy = 0;
-        this.player.speed = 0;
+      startNewMatch() {
+        this.roundNumber = 1;
+        this.karts.forEach((k) => { k.score = 0; });
+        this.track.resetToStarterTrack();
+        this.renderScoreboardHUD();
+        this.startRound();
       }
 
-      onPlayerCompletedLap() {
-        const lapTime = this.raceTimer - this.lapStartTime;
-        this.lapStartTime = this.raceTimer;
+      startRound() {
+        this.finishCounter = 0;
+        this.roundTimer = 0;
 
-        if (lapTime > 4 && (this.bestLapTime === 0 || lapTime < this.bestLapTime)) {
-          this.bestLapTime = lapTime;
-          localStorage.setItem(`kart_best_${this.currentTrackIndex}`, String(lapTime));
-          this.updateBestLapHUD();
-          this.announce('NOVO RECORDE!', '#00f0ff', 1.4);
-        } else {
-          this.announce(`VOLTA ${this.player.lap}/${this.totalLaps}`, '#facc15', 1.1);
+        // Posiciona os micro-karts lado a lado no segmento 0
+        const seg0 = this.track.segments[0];
+        this.karts.forEach((k, i) => {
+          const lateral = (i - (this.karts.length - 1) * 0.5) * 2.8;
+          const sx = seg0.startX + seg0.rightX * lateral + seg0.dirX * 3;
+          const sz = seg0.startZ + seg0.rightZ * lateral + seg0.dirZ * 3;
+          k.resetForRound(sx, sz, seg0.angle);
+        });
+
+        this.state = 'COUNTDOWN';
+        this.countdownTimer = 2.6;
+        this._lastBeepSec = 4;
+        this.banner(`RODADA ${this.roundNumber}`, `Pista com ${this.track.pieceSequence.length} peças • Meta: 1000 PTS`, '#00f0ff', 1.5);
+      }
+
+      onKartCrossedFinish(kart) {
+        this.finishCounter++;
+        kart.finishOrder = this.finishCounter;
+
+        // Tabela de pontos estilo Make Way (1º ganha 300, 2º 220, 3º 150, 4º 100)
+        const rewards = [0, 300, 220, 150, 100];
+        const pts = rewards[this.finishCounter] || 80;
+        kart.roundPointsEarned = pts;
+        kart.score = Math.min(this.targetWinScore, kart.score + pts);
+
+        if (kart === this.player) {
+          sfx.tone(880, 0.25, 'triangle', 0.16);
+          this.banner(`${this.finishCounter}º LUGAR! +${pts} PTS`, 'Aguardando fim da rodada...', '#10b981', 1.8);
         }
-        sound.beep(880, 0.22, 'triangle', 0.16);
+        this.renderScoreboardHUD();
       }
 
-      updateBestLapHUD() {
-        document.getElementById('bestDisplay').textContent =
-          this.bestLapTime > 0 ? this.formatTime(this.bestLapTime) : '--:--.-';
+      checkRoundEnd(dt) {
+        this.roundTimer += dt;
+        const allDone = this.karts.every((k) => k.finishedRound || k.eliminated);
+        const playerDoneWait = (this.player.finishedRound || this.player.eliminated) && this.roundTimer > 6.5;
+        const timeout = this.roundTimer > 22;
+
+        if (allDone || playerDoneWait || timeout) {
+          this.endRoundAndOpenBuilder();
+        }
       }
 
-      announce(text, color = '#fff', duration = 1.0) {
-        const el = document.getElementById('centerAnnounce');
-        el.textContent = text;
-        el.style.color = color;
-        el.style.opacity = '1';
-        clearTimeout(this._announceTimeout);
-        this._announceTimeout = setTimeout(() => {
-          el.style.opacity = '0';
+      endRoundAndOpenBuilder() {
+        // Quem não terminou ganha pontos proporcionais até onde chegou na pista!
+        this.karts.forEach((k) => {
+          if (!k.finishedRound) {
+            const bonus = Math.min(90, Math.round((k.maxSegmentReached / this.track.segments.length) * 90));
+            k.roundPointsEarned = bonus;
+            k.score = Math.min(this.targetWinScore, k.score + bonus);
+          }
+        });
+
+        this.renderScoreboardHUD();
+
+        // Verifica se alguém bateu 1.000 PONTOS!
+        const sorted = [...this.karts].sort((a, b) => b.score - a.score);
+        if (sorted[0].score >= this.targetWinScore) {
+          this.state = 'GAME_OVER';
+          const modal = document.getElementById('startModal');
+          document.getElementById('startModalTitle').textContent = `🏆 ${sorted[0].name} BATEU 1.000 PONTOS E VENCEU!`;
+          document.getElementById('startModalSub').innerHTML =
+            `Partida épica após <b>${this.roundNumber} rodadas</b> e uma pista gigante de <b>${this.track.pieceSequence.length} peças</b>!<br/>Quer começar uma nova corrida do zero?`;
+          document.getElementById('btnPlayNow').textContent = '🔄 JOGAR NOVA PARTIDA (0 A 1000 PTS)';
+          modal.classList.remove('hidden');
+          sfx.tone(660, 0.4, 'triangle', 0.18);
+          return;
+        }
+
+        // Abre a Fase de Construção (Montar a próxima parte da pista!)
+        this.state = 'BUILD_PHASE';
+        const buildModal = document.getElementById('buildModal');
+        const resultsEl = document.getElementById('roundResultsList');
+
+        resultsEl.innerHTML = sorted.map((k, idx) => `
+          <div class="result-row" style="color:${k.colorCss}">
+            <span>${idx + 1}º ${k.name} ${k.eliminated ? '💀 (Caiu)' : '🏁'}</span>
+            <span>+${k.roundPointsEarned} pts ➔ <b>${k.score} / 1000 PTS</b></span>
+          </div>
+        `).join('');
+
+        // Sorteia 4 peças variadas para o jogador escolher e acoplar no final da pista!
+        const shuffled = [...TRACK_PIECE_CATALOG].sort(() => Math.random() - 0.5).slice(0, 4);
+        const gridEl = document.getElementById('pieceChoicesGrid');
+        gridEl.innerHTML = '';
+
+        shuffled.forEach((piece) => {
+          const card = document.createElement('div');
+          card.className = 'piece-option';
+          card.innerHTML = `
+            <div class="piece-icon">${piece.icon}</div>
+            <div class="piece-name">${piece.name}</div>
+            <div class="piece-desc">${piece.desc}</div>
+          `;
+          card.addEventListener('click', () => {
+            this.selectPieceForNextRound(piece.type);
+          });
+          gridEl.appendChild(card);
+        });
+
+        buildModal.classList.remove('hidden');
+      }
+
+      selectPieceForNextRound(pieceType) {
+        sfx.tone(580, 0.14, 'sine', 0.14);
+        document.getElementById('buildModal').classList.add('hidden');
+
+        // Adiciona a peça escolhida pelo jogador + 1 peça escolhida pelos outros corredores para a pista crescer rápido!
+        this.track.addPiece(pieceType);
+        const randomExtra = TRACK_PIECE_CATALOG[Math.floor(Math.random() * TRACK_PIECE_CATALOG.length)].type;
+        this.track.addPiece(randomExtra);
+
+        if (this.netConn && this.netConn.open) {
+          this.netConn.send({ type: 'addPieces', p1: pieceType, p2: randomExtra });
+        }
+
+        this.roundNumber++;
+        this.startRound();
+      }
+
+      renderScoreboardHUD() {
+        const container = document.getElementById('scoreboardHud');
+        container.innerHTML = this.karts.map((k) => {
+          const pct = Math.min(100, (k.score / this.targetWinScore) * 100);
+          return `
+            <div class="score-pill">
+              <div class="score-pill-top">
+                <span style="color:${k.colorCss}">${k.name}</span>
+                <span>${k.score}/1000</span>
+              </div>
+              <div class="score-bar-bg">
+                <div class="score-bar-fill" style="width:${pct}%;background:${k.colorCss}"></div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      banner(main, sub = '', color = '#fff', duration = 1.2) {
+        const m = document.getElementById('centerMainText');
+        const s = document.getElementById('centerSubText');
+        m.textContent = main;
+        m.style.color = color;
+        s.textContent = sub;
+        clearTimeout(this._bannerTimeout);
+        this._bannerTimeout = setTimeout(() => {
+          m.textContent = '';
+          s.textContent = '';
         }, duration * 1000);
       }
 
-      triggerCameraKick(amount) {
-        this.camera.shake = Math.min(18, this.camera.shake + amount);
-      }
-
-      addSkidMark(x, y, angle) {
-        this.skidMarks.push({ x, y, angle, alpha: 0.48 });
-        if (this.skidMarks.length > 420) this.skidMarks.shift();
-      }
-
-      spawnSparks(x, y, color, count = 2) {
-        for (let i = 0; i < count; i++) {
-          const a = Math.random() * Math.PI * 2;
-          const spd = 40 + Math.random() * 140;
-          this.particles.push({
-            x,
-            y,
-            vx: Math.cos(a) * spd,
-            vy: Math.sin(a) * spd,
-            life: 0.22 + Math.random() * 0.2,
-            maxLife: 0.4,
-            color,
-            size: 3 + Math.random() * 4
-          });
-        }
-      }
-
-      updateRemoteKart(peerId, data) {
-        let rk = this.remoteKarts.get(peerId);
-        if (!rk) {
-          rk = new Kart({ id: peerId, name: 'ONLINE', color: '#38bdf8', isRemote: true });
-          this.remoteKarts.set(peerId, rk);
-          this.karts.push(rk);
-        }
-        rk.targetX = data.x;
-        rk.targetY = data.y;
-        rk.vx = data.vx;
-        rk.vy = data.vy;
-        rk.targetAngle = data.angle;
-        rk.driftLevel = data.driftLevel;
-        rk.boostTimer = data.boost ? 0.2 : 0;
-      }
-
-      resolveKartCollisions() {
-        const radius = 23;
+      resolveKartBumps() {
+        const minDist = 2.05;
         for (let i = 0; i < this.karts.length; i++) {
           for (let j = i + 1; j < this.karts.length; j++) {
             const a = this.karts[i];
             const b = this.karts[j];
+            if (a.eliminated || b.eliminated) continue;
             const dx = b.x - a.x;
-            const dy = b.y - a.y;
-            const dist = Math.hypot(dx, dy);
-            if (dist > 0 && dist < radius * 2) {
-              const overlap = (radius * 2 - dist) * 0.5;
-              const nx = dx / dist;
-              const ny = dy / dist;
+            const dz = b.z - a.z;
+            const d = Math.hypot(dx, dz);
+            if (d > 0 && d < minDist) {
+              const overlap = (minDist - d) * 0.5;
+              const nx = dx / d;
+              const nz = dz / d;
               a.x -= nx * overlap;
-              a.y -= ny * overlap;
+              a.z -= nz * overlap;
               b.x += nx * overlap;
-              b.y += ny * overlap;
+              b.z += nz * overlap;
 
-              // Troca elástica suave de impulso
-              const kx = a.vx - b.vx;
-              const ky = a.vy - b.vy;
-              const p = 2 * (nx * kx + ny * ky) / 2;
-              a.vx -= p * nx * 0.65;
-              a.vy -= p * ny * 0.65;
-              b.vx += p * nx * 0.65;
-              b.vy += p * ny * 0.65;
-
-              this.spawnSparks((a.x + b.x) * 0.5, (a.y + b.y) * 0.5, '#ffffff', 3);
+              const push = 6.5;
+              a.vx -= nx * push;
+              a.vz -= nz * push;
+              b.vx += nx * push;
+              b.vz += nz * push;
             }
           }
         }
       }
 
-      update(dt) {
-        // Contagem regressiva de largada
-        if (!this.canDrive) {
-          this.countdown -= dt;
-          const sec = Math.ceil(this.countdown);
-          if (sec !== this._lastCountBeep && sec >= 1 && sec <= 3) {
-            this._lastCountBeep = sec;
-            this.announce(String(sec), '#facc15', 0.8);
-            sound.beep(440, 0.12, 'square', 0.12);
-          }
-          if (this.countdown <= 0.2) {
-            this.canDrive = true;
-            this.announce('VAI!!', '#10b981', 0.9);
-            sound.beep(880, 0.28, 'sawtooth', 0.16);
-          }
-        } else {
-          this.raceTimer += dt;
-        }
+      setupNetworking() {
+        this.peer = null;
+        this.netConn = null;
+        const statusEl = document.getElementById('netStatusLabel');
 
-        const playerInput = this.input.getState();
+        document.getElementById('btnHostOnline').addEventListener('click', () => {
+          const code = Math.random().toString(36).substring(2, 6).toUpperCase();
+          statusEl.textContent = `Criando sala ${code}...`;
+          this.peer = new Peer('KART3D-' + code);
+          this.peer.on('open', () => {
+            document.getElementById('inputRoomCode').value = code;
+            statusEl.innerHTML = `✅ Sala criada! Passe o código <b style="color:#facc15">${code}</b> para seu amigo!`;
+          });
+          this.peer.on('connection', (conn) => {
+            this.netConn = conn;
+            statusEl.innerHTML = `🟢 Amigo conectado na sala <b>${code}</b>!`;
+            this.bindConnEvents(conn);
+          });
+        });
 
-        // Rubber-banding sutil para manter os rivais IA sempre divertidos
-        for (const k of this.karts) {
-          if (k.isAI && this.player) {
-            const diff = this.player.totalProgress - k.totalProgress;
-            k.aiSkill = 0.96 + Math.max(-0.08, Math.min(0.12, diff * 0.0022));
-          }
-          if (k.isRemote && k.targetX !== undefined) {
-            k.x += (k.targetX - k.x) * Math.min(1, dt * 15);
-            k.y += (k.targetY - k.y) * Math.min(1, dt * 15);
-            k.angle += (k.targetAngle - k.angle) * Math.min(1, dt * 15);
-          } else {
-            k.update(dt, k.id === 'player' ? playerInput : null, this.track, this.karts, this.canDrive);
-          }
-        }
-
-        this.resolveKartCollisions();
-
-        // Atualiza Partículas
-        for (let i = this.particles.length - 1; i >= 0; i--) {
-          const p = this.particles[i];
-          p.x += p.vx * dt;
-          p.y += p.vy * dt;
-          p.life -= dt;
-          if (p.life <= 0) this.particles.splice(i, 1);
-        }
-
-        // Câmera Dinâmica com Look-Ahead e Zoom de Velocidade
-        if (this.player) {
-          const lookAheadX = this.player.vx * 0.22;
-          const lookAheadY = this.player.vy * 0.22;
-          const targetX = this.player.x + lookAheadX;
-          const targetY = this.player.y + lookAheadY;
-
-          this.camera.x += (targetX - this.camera.x) * Math.min(1, dt * 8.5);
-          this.camera.y += (targetY - this.camera.y) * Math.min(1, dt * 8.5);
-
-          const speedRatio = Math.min(1, Math.abs(this.player.speed) / 950);
-          const baseZoom = window.innerWidth < 750 ? 0.62 : 0.82;
-          const targetZoom = baseZoom - speedRatio * 0.14 - (this.player.boostTimer > 0 ? 0.05 : 0);
-          this.camera.zoom += (targetZoom - this.camera.zoom) * Math.min(1, dt * 5);
-
-          if (this.camera.mode === 1) {
-            const desiredCamAngle = -this.player.angle - Math.PI * 0.5;
-            let aDiff = desiredCamAngle - this.camera.angle;
-            while (aDiff > Math.PI) aDiff -= Math.PI * 2;
-            while (aDiff < -Math.PI) aDiff += Math.PI * 2;
-            this.camera.angle += aDiff * Math.min(1, dt * 7);
-          } else {
-            this.camera.angle += (0 - this.camera.angle) * Math.min(1, dt * 8);
-          }
-
-          if (this.camera.shake > 0) {
-            this.camera.shake = Math.max(0, this.camera.shake - dt * 28);
-          }
-
-          sound.updateEngine(speedRatio, this.player.isDrifting, this.player.boostTimer);
-          this.net.broadcastPlayerState(this.player, dt);
-          this.updateHUD();
-        }
+        document.getElementById('btnJoinOnline').addEventListener('click', () => {
+          const code = document.getElementById('inputRoomCode').value.trim().toUpperCase();
+          if (!code) return;
+          statusEl.textContent = `Entrando na sala ${code}...`;
+          this.peer = new Peer();
+          this.peer.on('open', () => {
+            const conn = this.peer.connect('KART3D-' + code);
+            this.netConn = conn;
+            this.bindConnEvents(conn);
+          });
+        });
       }
 
-      updateHUD() {
-        const sorted = [...this.karts].sort((a, b) => b.totalProgress - a.totalProgress);
-        const pos = sorted.indexOf(this.player) + 1;
-        document.getElementById('posDisplay').textContent = `${pos}º / ${this.karts.length}`;
-        document.getElementById('lapDisplay').textContent = `${Math.min(this.totalLaps, this.player.lap)} / ${this.totalLaps}`;
-        document.getElementById('timeDisplay').textContent = this.formatTime(this.raceTimer);
+      bindConnEvents(conn) {
+        conn.on('open', () => {
+          document.getElementById('netStatusLabel').innerHTML = `🟢 Conectado no Multiplayer Online!`;
+        });
+        conn.on('data', (data) => {
+          if (data && data.type === 'addPieces') {
+            this.track.addPiece(data.p1);
+            this.track.addPiece(data.p2);
+            document.getElementById('buildModal').classList.add('hidden');
+            this.roundNumber++;
+            this.startRound();
+          }
+        });
+      }
 
-        const kmh = Math.round(Math.abs(this.player.speed) * 0.28);
+      updateCamera(dt) {
+        if (this.state === 'BUILD_PHASE') {
+          // Na fase de construção, foca lá na ponta da pista onde a nova peça vai entrar!
+          const lastSeg = this.track.segments[this.track.segments.length - 1];
+          const targetPos = new THREE.Vector3(lastSeg.centerX - 28, 34, lastSeg.centerZ - 28);
+          this.camera.position.lerp(targetPos, Math.min(1, dt * 4));
+          this.camera.lookAt(lastSeg.centerX, 0, lastSeg.centerZ);
+          return;
+        }
+
+        if (!this.player) return;
+        const backDist = this.camMode === 0 ? 11.5 : 18.5;
+        const upHeight = this.camMode === 0 ? 6.2 : 12.5;
+
+        const targetX = this.player.x - Math.sin(this.player.angle) * backDist;
+        const targetY = Math.max(2, this.player.y + upHeight);
+        const targetZ = this.player.z - Math.cos(this.player.angle) * backDist;
+
+        this.camera.position.x += (targetX - this.camera.position.x) * Math.min(1, dt * 10);
+        this.camera.position.y += (targetY - this.camera.position.y) * Math.min(1, dt * 8);
+        this.camera.position.z += (targetZ - this.camera.position.z) * Math.min(1, dt * 10);
+
+        const lookX = this.player.x + Math.sin(this.player.angle) * 8;
+        const lookZ = this.player.z + Math.cos(this.player.angle) * 8;
+        this.camera.lookAt(lookX, Math.max(-2, this.player.y + 1.2), lookZ);
+      }
+
+      updateBottomHUD() {
+        if (!this.player) return;
+        const kmh = Math.round(Math.abs(this.player.speed) * 3.2);
         document.getElementById('speedVal').textContent = String(kmh);
 
-        const bar = document.getElementById('driftMeterBar');
-        const banner = document.getElementById('statusBanner');
+        const bar = document.getElementById('turboBarFill');
+        const status = document.getElementById('driftStatus');
 
         if (this.player.boostTimer > 0) {
           bar.style.width = '100%';
           bar.style.background = '#00f0ff';
-          banner.textContent = '🔥 TURBO BOOST ATIVO!';
-          banner.style.color = '#00f0ff';
+          status.textContent = '🔥 TURBO BOOST!';
+          status.style.color = '#00f0ff';
         } else if (this.player.isDrifting) {
-          const pct = Math.min(100, (this.player.driftCharge / 2.1) * 100);
-          bar.style.width = `${pct}%`;
-          const colors = ['#64748b', '#00f0ff', '#ff8800', '#d946ef'];
-          const labels = ['DRIFT...', '⚡ MINI-TURBO PRONTO (SOLTE!)', '🔥 SUPER-TURBO PRONTO!', '💜 ULTRA-TURBO MÁXIMO!!'];
-          bar.style.background = colors[this.player.driftLevel];
-          banner.textContent = labels[this.player.driftLevel];
-          banner.style.color = colors[this.player.driftLevel];
-        } else if (this.player.slipstreamCharge > 0.45) {
-          bar.style.width = `${Math.min(100, (this.player.slipstreamCharge / 1.5) * 100)}%`;
-          bar.style.background = '#facc15';
-          banner.textContent = '💨 VÁCUO ATIVO (+VELOCIDADE)';
-          banner.style.color = '#facc15';
+          bar.style.width = `${Math.min(100, (this.player.driftCharge / 1.9) * 100)}%`;
+          const cols = ['#64748b', '#00f0ff', '#ff8800', '#d946ef'];
+          const txts = ['DRIFT...', '⚡ MINI-TURBO (SOLTE!)', '🔥 SUPER-TURBO!', '💜 ULTRA-TURBO MÁXIMO!'];
+          bar.style.background = cols[this.player.driftLevel];
+          status.textContent = txts[this.player.driftLevel];
+          status.style.color = cols[this.player.driftLevel];
         } else {
           bar.style.width = '0%';
-          banner.textContent = '';
+          status.textContent = '';
         }
-      }
-
-      formatTime(t) {
-        const mins = Math.floor(t / 60);
-        const secs = Math.floor(t % 60);
-        const tenths = Math.floor((t * 10) % 10);
-        return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}.${tenths}`;
-      }
-
-      draw() {
-        const ctx = this.ctx;
-        const w = this.canvas.width;
-        const h = this.canvas.height;
-
-        ctx.fillStyle = this.track.theme.grass;
-        ctx.fillRect(0, 0, w, h);
-
-        ctx.save();
-        const shakeX = (Math.random() - 0.5) * this.camera.shake;
-        const shakeY = (Math.random() - 0.5) * this.camera.shake;
-        ctx.translate(w * 0.5 + shakeX, h * 0.5 + shakeY);
-        ctx.scale(this.camera.zoom, this.camera.zoom);
-        ctx.rotate(this.camera.angle);
-        ctx.translate(-this.camera.x, -this.camera.y);
-
-        this.drawBackgroundGrid(ctx);
-        this.drawTrack(ctx);
-        this.drawSkidMarks(ctx);
-        this.drawBoostPads(ctx);
-        this.drawParticles(ctx);
-
-        for (const k of this.karts) {
-          this.drawKart(ctx, k);
-        }
-
-        ctx.restore();
-      }
-
-      drawBackgroundGrid(ctx) {
-        const step = 180;
-        const span = 2200;
-        const startX = Math.floor((this.camera.x - span) / step) * step;
-        const endX = this.camera.x + span;
-        const startY = Math.floor((this.camera.y - span) / step) * step;
-        const endY = this.camera.y + span;
-
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.035)';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        for (let x = startX; x <= endX; x += step) {
-          ctx.moveTo(x, startY);
-          ctx.lineTo(x, endY);
-        }
-        for (let y = startY; y <= endY; y += step) {
-          ctx.moveTo(startX, y);
-          ctx.lineTo(endX, y);
-        }
-        ctx.stroke();
-      }
-
-      drawTrack(ctx) {
-        const samples = this.track.samples;
-        const rw = this.track.roadWidth;
-
-        // Zebras externas (Kerbs)
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-
-        for (let i = 0; i < samples.length; i++) {
-          const s1 = samples[i];
-          const s2 = samples[(i + 1) % samples.length];
-          ctx.strokeStyle = i % 2 === 0 ? this.track.theme.kerbA : this.track.theme.kerbB;
-          ctx.lineWidth = rw + 26;
-          ctx.beginPath();
-          ctx.moveTo(s1.x, s1.y);
-          ctx.lineTo(s2.x, s2.y);
-          ctx.stroke();
-        }
-
-        // Asfalto principal
-        ctx.strokeStyle = this.track.theme.asphalt;
-        ctx.lineWidth = rw;
-        ctx.beginPath();
-        samples.forEach((s, i) => {
-          if (i === 0) ctx.moveTo(s.x, s.y);
-          else ctx.lineTo(s.x, s.y);
-        });
-        ctx.closePath();
-        ctx.stroke();
-
-        // Linha central tracejada
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.14)';
-        ctx.lineWidth = 4;
-        ctx.setLineDash([28, 28]);
-        ctx.stroke();
-        ctx.setLineDash([]);
-
-        // Linha de Largada / Chegada quadriculada
-        const s0 = samples[0];
-        ctx.save();
-        ctx.translate(s0.x, s0.y);
-        ctx.rotate(s0.angle);
-        const squares = 10;
-        const sqSize = rw / squares;
-        for (let r = 0; r < 2; r++) {
-          for (let c = 0; c < squares; c++) {
-            ctx.fillStyle = (r + c) % 2 === 0 ? '#ffffff' : '#0f172a';
-            ctx.fillRect((r - 1) * sqSize, -rw * 0.5 + c * sqSize, sqSize, sqSize);
-          }
-        }
-        ctx.restore();
-      }
-
-      drawBoostPads(ctx) {
-        const pulse = (Math.sin(performance.now() * 0.012) + 1) * 0.5;
-        for (const pad of this.track.boostPads) {
-          ctx.save();
-          ctx.translate(pad.x, pad.y);
-          ctx.rotate(pad.angle);
-
-          ctx.fillStyle = `rgba(0, 240, 255, ${0.22 + pulse * 0.25})`;
-          ctx.strokeStyle = '#00f0ff';
-          ctx.lineWidth = 3;
-          ctx.beginPath();
-          ctx.roundRect(-36, -34, 72, 68, 10);
-          ctx.fill();
-          ctx.stroke();
-
-          // Setas >>> luminosas
-          ctx.strokeStyle = '#facc15';
-          ctx.lineWidth = 5;
-          for (let i = -1; i <= 1; i++) {
-            const ox = i * 16;
-            ctx.beginPath();
-            ctx.moveTo(ox - 8, -16);
-            ctx.lineTo(ox + 8, 0);
-            ctx.lineTo(ox - 8, 16);
-            ctx.stroke();
-          }
-          ctx.restore();
-        }
-      }
-
-      drawSkidMarks(ctx) {
-        ctx.fillStyle = 'rgba(10, 12, 18, 0.42)';
-        for (const m of this.skidMarks) {
-          ctx.save();
-          ctx.translate(m.x, m.y);
-          ctx.rotate(m.angle);
-          ctx.fillRect(-14, -14, 10, 5);
-          ctx.fillRect(-14, 9, 10, 5);
-          ctx.restore();
-        }
-      }
-
-      drawParticles(ctx) {
-        for (const p of this.particles) {
-          ctx.fillStyle = p.color;
-          ctx.globalAlpha = Math.max(0, p.life / p.maxLife);
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        ctx.globalAlpha = 1;
-      }
-
-      drawKart(ctx, k) {
-        ctx.save();
-        ctx.translate(k.x, k.y);
-        ctx.rotate(k.angle);
-
-        // Efeito de pulo (Hop) ao iniciar o drift
-        const hopScale = k.hopTimer > 0 ? 1.15 : 1.0;
-        ctx.scale(hopScale, hopScale);
-
-        // Aura de Turbo ou Carga de Drift
-        if (k.boostTimer > 0) {
-          ctx.fillStyle = 'rgba(0, 240, 255, 0.32)';
-          ctx.beginPath();
-          ctx.arc(0, 0, 34, 0, Math.PI * 2);
-          ctx.fill();
-        } else if (k.driftLevel > 0) {
-          const glowColors = ['', 'rgba(0,240,255,0.35)', 'rgba(255,136,0,0.42)', 'rgba(217,70,239,0.5)'];
-          ctx.fillStyle = glowColors[k.driftLevel];
-          ctx.beginPath();
-          ctx.arc(-12, 0, 24 + k.driftLevel * 4, 0, Math.PI * 2);
-          ctx.fill();
-        }
-
-        // 4 Rodas (as dianteiras esterçam visualmente!)
-        ctx.fillStyle = '#090b10';
-        // Traseiras
-        ctx.fillRect(-19, -20, 12, 7);
-        ctx.fillRect(-19, 13, 12, 7);
-        // Dianteiras com ângulo de direção
-        const drawFrontWheel = (wy) => {
-          ctx.save();
-          ctx.translate(12, wy);
-          ctx.rotate(k.steerVisual * 0.45);
-          ctx.fillRect(-6, -3.5, 12, 7);
-          ctx.restore();
-        };
-        drawFrontWheel(-16);
-        drawFrontWheel(16);
-
-        // Chassi do Kart
-        ctx.fillStyle = k.color;
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.roundRect(-22, -14, 44, 28, 9);
-        ctx.fill();
-        ctx.stroke();
-
-        // Faixa esportiva e Cockpit
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
-        ctx.fillRect(-18, -4, 36, 8);
-
-        ctx.fillStyle = '#0f172a';
-        ctx.beginPath();
-        ctx.arc(-2, 0, 8, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Capacete do piloto
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.arc(-1, 0, 5.5, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.restore();
-
-        // Nome acima do Kart
-        ctx.save();
-        ctx.translate(k.x, k.y - 32);
-        ctx.rotate(-this.camera.angle);
-        ctx.font = '900 12px system-ui, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillStyle = k.id === 'player' ? '#facc15' : '#e2e8f0';
-        ctx.fillText(k.name, 0, 0);
-        ctx.restore();
       }
 
       loop(now) {
         const dt = Math.min(0.05, (now - this.lastTime) / 1000);
         this.lastTime = now;
 
-        this.update(dt);
-        this.draw();
+        if (this.state === 'COUNTDOWN') {
+          this.countdownTimer -= dt;
+          const sec = Math.ceil(this.countdownTimer);
+          if (sec !== this._lastBeepSec && sec >= 1 && sec <= 3) {
+            this._lastBeepSec = sec;
+            this.banner(String(sec), 'Prepare-se!', '#facc15', 0.8);
+            sfx.tone(440, 0.12, 'square', 0.12);
+          }
+          if (this.countdownTimer <= 0) {
+            this.state = 'RACING';
+            this.banner('VAI!!', 'Chegue na linha verde sem cair!', '#10b981', 0.9);
+            sfx.tone(880, 0.25, 'sawtooth', 0.16);
+          }
+        }
 
+        const ctrl = this.controls.poll();
+        const canDrive = this.state === 'RACING';
+
+        this.karts.forEach((k) => {
+          k.update(dt, k === this.player ? ctrl : null, this.track, this.karts, canDrive);
+        });
+
+        if (this.state === 'RACING') {
+          this.resolveKartBumps();
+          this.checkRoundEnd(dt);
+        }
+
+        this.updateCamera(dt);
+        this.updateBottomHUD();
+        sfx.updateEngine(this.player.speed / 38, this.player.boostTimer > 0);
+
+        this.renderer.render(this.scene, this.camera);
         requestAnimationFrame((t) => this.loop(t));
       }
     }
 
-    const game = new Game();
+    const game = new Game3D();
   </script>
 </body>
 </html>
