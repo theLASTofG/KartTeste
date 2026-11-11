@@ -4,7 +4,7 @@ import { $, clamp, esc, rnd, store } from './utils.js';
 import { fmtPts, GRID_SLOTS, HW, MAXP, PH, SIDE_WALLS, TARGET_OPTS } from './config.js';
 import { SFX } from './audio.js';
 import { applyTheme, themeKey, THEMES } from './scene.js';
-import { applyTrack, finishGlobal, INITIAL_TYPES, obstacles, PRESETS, tmpW, track, trackTypes } from './track.js';
+import { activeExits, applyTrack, finishGlobal, INITIAL_TYPES, obstacles, PRESETS, tmpW, track, trackTypes } from './track.js';
 import { applyBots, cars, isHost, isMP, NET, plist, syncCars } from './cars.js';
 import { centerText, showScreen, toast, updateBoard } from './hud.js';
 import { createRoom, hostLobbyChanged, joinRoom, leaveRoom, startSolo, toHost } from './net.js';
@@ -44,7 +44,7 @@ export function enterPhase(ph, d) {
       placeCars(d.grid);
       G.R = { t: 0, cd: d.dur || 3.2, lastBeep: 4, finishCount: 0, firstFinishT: -1, endT: -1, maxT: 14 + finishGlobal / 9,
         startPressed: false, startEligible: false, spectateT: 0, netAcc: 0 };
-      $('rnd').textContent = 'RODADA ' + G.round + ' · ' + (track.length - 1) + ' PEÇAS';
+      $('rnd').textContent = 'RODADA ' + G.round + ' · ' + track.filter(p => p.type !== 'finish').length + ' PEÇAS';
       G.lastHud = {}; hooks.tmap.clear(); hooks.syncTouch();
       showScreen(null); G.camSnap = true;
       setState('countdown');
@@ -63,6 +63,7 @@ export function enterPhase(ph, d) {
   }
 }
 function placeCars(grid) {
+  const exits = activeExits().sort(() => Math.random() - 0.5); let bi = 0;     // bots se dividem entre as saídas ativas da Mega Pista
   for (const c of cars) {
     const slot = grid[c.pid] !== undefined ? grid[c.pid] : 0;
     const sl = GRID_SLOTS[slot % GRID_SLOTS.length];
@@ -75,6 +76,7 @@ function placeCars(grid) {
       buf: null, netTs: 0, netOff: undefined, jit: undefined, interp: undefined, cpx: tmpW.x, cpz: tmpW.z, kickCool: 0
     });
     c.ai.lane = sl[1] * 0.5;
+    c.ai.exit = exits.length ? exits[bi++ % exits.length] : 0;
     // erros sorteados por peça para os bots (caos estilo Make Way)
     c.ai.err = c.bot && isHost() ? track.map(p => {
       const k = 1.25 - c.ai.skill;

@@ -1,19 +1,25 @@
 // IA dos bots.
 import { G } from './state.js';
 import { clamp, wrapA } from './utils.js';
-import { CAR_R, PH, PROFILES } from './config.js';
-import { obstacles, pieceAt, pieceStart, track, trackPoint } from './track.js';
+import { CAR_R, MEGA, PH, PROFILES } from './config.js';
+import { obstacles, pieceAt, pieceStart, succIdx, track, trackPoint } from './track.js';
 import { respawn } from './physics.js';
 import { cars } from './cars.js';
 
 // ------------------------------------------------------------------- IA
 const tmpA = {};
+const nxt = (i, c) => { const n = succIdx(i, 0, c.ai.exit); return n >= 0 ? track[n] : undefined; };          // próxima peça no ramo escolhido
 function obsHalf(t) { return t === 'spinner' ? 3.2 : t === 'oil' ? 2.3 : t === 'bumper' ? 1.45 : t === 'kicker' ? 1.6 : 1.25; }
 function laneFor(c, sG) {
-  const i = pieceAt(sG), p = track[i], s = sG - pieceStart[i], ai = c.ai;
+  const i = pieceAt(sG, c.pi, c.ai.exit), p = track[i], s = sG - pieceStart[i], ai = c.ai;
   const wob = Math.sin(G.R.t * ai.wf + ai.ph) * ai.wob;
   const er = ai.err && ai.err[i];
   if (er && er.lane !== undefined && s > 6 && s < p.len - 4) return er.lane;
+  if (p.special === 'mega') {                                  // vai para a saída escolhida antes dos bumpers (s = 46)
+    const t = clamp((s - 12) / 22, 0, 1), k = ai.exit === undefined ? 1 : ai.exit;
+    return -MEGA.shift + (MEGA.exitV[k] + MEGA.shift) * t * t * (3 - 2 * t);
+  }
+  if (p.type === 'serpentina') return wob * 0.3;
   // desvia de obstáculos próximos (ou mira no mini boost)
   let near = null;
   for (const o of obstacles) if (o.pi === i && Math.abs(o.s - s) < 7.5) { near = o; break; }
@@ -35,7 +41,7 @@ function laneFor(c, sG) {
   if (PROFILES[p.type]) return wob * 0.3;
   if (p.type === 'chicane') { if (s < 5) return 2.6; if (s < 19) return 3.0; if (s < 33) return -3.0; if (s < 47) return 3.0; return 0; }
   if (p.turn) {
-    const nx = track[i + 1];
+    const nx = nxt(i, c);
     if (nx && (nx.type === 'bridge' || nx.type === 'holes')) return -p.turn * 2.2 + wob * 0.2;   // curva antes de peça estreita: abre e alinha
     return -p.turn * 1.3 + wob * 0.5;
   }
@@ -43,11 +49,11 @@ function laneFor(c, sG) {
   return ai.lane + wob;
 }
 function speedLimitAt(c, sG) {
-  const i = pieceAt(sG), p = track[i], er = c.ai.err && c.ai.err[i];
+  const i = pieceAt(sG, c.pi, c.ai.exit), p = track[i], er = c.ai.err && c.ai.err[i];
   if (er && er.slow) return er.slow;
   let lim = 99;
-  const nx = track[i + 1];
-  const n2 = track[i + 2], haz = t => !!t && (t.type === 'bridge' || t.type === 'holes' || t.type === 'ice' || t.type === 'wind' || t.type === 'narrow');
+  const nx = nxt(i, c);
+  const n2 = nx ? nxt(track.indexOf(nx), c) : undefined, haz = t => !!t && (t.type === 'bridge' || t.type === 'holes' || t.type === 'ice' || t.type === 'wind' || t.type === 'narrow');
   if (p.turn) lim = haz(nx) ? 15 + c.ai.skill * 1.5 : haz(n2) ? 16.5 + c.ai.skill * 1.5 : 17.5 + c.ai.skill * 2.2;
   else if (p.type === 'bridge') lim = 16 + c.ai.skill * 2.5;
   else if (p.type === 'ice') lim = 15.5 + c.ai.skill * 2;
@@ -55,7 +61,9 @@ function speedLimitAt(c, sG) {
   else if (p.type === 'wind') lim = 20 + c.ai.skill * 2;
   else if (p.type === 'bumps') lim = 22;
   else if (p.type === 'chicane') lim = 14 + c.ai.skill * 2;
-  if (!p.turn && nx && nx.turn && (haz(n2) || haz(track[i + 3]))) lim = Math.min(lim, 18);    // reta antes de curva que antecede perigo: já alivia
+  else if (p.type === 'serpentina') lim = 15.5 + c.ai.skill * 2;
+  else if (p.special === 'mega') lim = (c.ai.exit === 0 || c.ai.exit === 3) ? 15 + c.ai.skill * 1.5 : 18.5 + c.ai.skill * 1.5;
+  if (!p.turn && nx && nx.turn && haz(n2)) lim = Math.min(lim, 18);    // reta antes de curva que antecede perigo: já alivia
   for (const o of obstacles) if (o.pi === i && o.type === 'spinner') lim = Math.min(lim, 18);
   return lim;
 }
@@ -86,13 +94,13 @@ export function aiDrive(c, dt, inp) {
   // sem muro (ponte/buracos): não mira na curva seguinte antes de sair da peça (senão corta pelo abismo)
   const Pc = track[c.pi];
   if (Pc && (Pc.type === 'bridge' || Pc.type === 'holes')) look = Math.min(look, Math.max(3, Pc.len - (sG - pieceStart[c.pi]) + 1.5));
-  const Pn = track[c.pi + 1];
+  const Pn = nxt(c.pi, c);
   if (Pc && Pc.turn && Pn && (Pn.type === 'bridge' || Pn.type === 'holes')) look = Math.min(look, 6.5);
   // sem muretas: perto da borda e indo para fora (e sem "erro" sorteado nesta peça), mira o centro da pista
   let lane = laneFor(c, sG + look);
   const Q = c.Q, planned = c.ai.err && c.ai.err[c.pi];
   if (c.grounded && Q && Q.hw && !planned && Math.abs(Q.v) > Q.hw - 1.5 && (c.vx * Q.rx + c.vz * Q.rz) * Math.sign(Q.v) > 0) lane = 0;
-  trackPoint(sG + look, lane, tmpA);
+  trackPoint(sG + look, lane, tmpA, c.pi, c.ai.exit);
   const err = wrapA(Math.atan2(tmpA.z - c.z, tmpA.x - c.x) - c.a);
   const slick = Pc && (Pc.type === 'ice' || Pc.type === 'wind');
   inp.steer = clamp(err * (slick ? 1.6 : 2.4), -1, 1);                       // gelo/vento: menos esterço brusco
@@ -105,7 +113,7 @@ export function aiDrive(c, dt, inp) {
   else { inp.throttle = 0.5; inp.brake = 0; }
   // guarda de borda forte (sem muretas): muito perto da borda e indo para fora -> tira o pé e contra-esterça ao máximo
   if (c.grounded && Q && Q.hw && !planned && Math.abs(Q.v) > Q.hw - 0.9 && (c.vx * Q.rx + c.vz * Q.rz) * Math.sign(Q.v) > 0) {
-    trackPoint(sG + look, 0, tmpA);
+    trackPoint(sG + look, 0, tmpA, c.pi, c.ai.exit);
     inp.steer = clamp(wrapA(Math.atan2(tmpA.z - c.z, tmpA.x - c.x) - c.a) * 5, -1, 1);
     inp.throttle = 0.25; inp.brake = 0; inp.drift = false;
   }

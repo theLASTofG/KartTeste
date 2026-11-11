@@ -5,7 +5,7 @@ import { $, clamp, esc, lerp, rnd } from './utils.js';
 import { ITEMS, PALETTE } from './config.js';
 import { SFX } from './audio.js';
 import { camera, H, W } from './scene.js';
-import { canPlace, obstacles, slotGroup, track } from './track.js';
+import { canPlace, freeExits, megaIndex, obstacles, slotGroup, track } from './track.js';
 import { freeSlots } from './obstacles.js';
 import { isHost, NET, playerById } from './cars.js';
 import { showScreen, toast } from './hud.js';
@@ -69,18 +69,21 @@ export function renderBuild() {
   bar.dataset.mode = mode;
   $('placeChips').innerHTML = G.players.map(p => `<span class="chip ${G.placed[p.id] === 'ok' ? 'ok' : G.placed[p.id] === 'no' ? 'no' : ''}" style="${G.placed[p.id] ? '' : 'border:1px solid ' + p.color}">${esc(p.name)}${G.placed[p.id] === 'ok' ? ' ✓' : G.placed[p.id] === 'no' ? ' ✗' : ''}</span>`).join('');
   $('placeIcon').innerHTML = d ? d.svg : '';
-  if (mode === 'piece') $('placeTxt').innerHTML = `<b>${d.name}</b><br>${canPlace(it.type) ? 'Encaixe no fim da pista antes dos outros!' : '⚠ Não cabe agora — volte às cartas e escolha outra.'}`;
+  const exitMode = mode === 'piece' && megaIndex() >= 0 && freeExits().some(k => canPlace(it.type, k));
+  if (mode === 'piece') $('placeTxt').innerHTML = `<b>${d.name}</b><br>${!canPlace(it.type) ? '⚠ Não cabe agora — volte às cartas e escolha outra.' : exitMode ? 'Toque numa <span style="color:#ffd23f">saída colorida</span> da Mega Pista (ou ENCAIXAR = primeira livre)' : 'Encaixe no fim da pista antes dos outros!'}`;
   else if (mode === 'obs') $('placeTxt').innerHTML = `<b>${d.name}</b><br>Toque num <span style="color:#00e5ff">espaço brilhante</span>`;
   else if (mode === 'done') $('placeTxt').innerHTML = G.placed[G.myId] === 'ok' ? `<b>${d ? d.name : 'Peça'}</b> colocada! ✓` : '<b>Sem carta nesta rodada</b>';
-  setSlotMode(mode === 'obs');
+  setSlotMode(mode === 'obs' || exitMode, exitMode ? 'exit' : 'slot');
+  if (exitMode) for (const g of slotGroup.children) if (g.userData.kind === 'exit') g.visible = canPlace(it.type, +g.children[0].userData.key[1]);
 }
 const raycaster = new THREE.Raycaster(), ndc = new THREE.Vector2();
 export function tryPlaceAt(x, y) {
-  if (buildMode() !== 'obs' || !slotGroup.visible) return;
+  const bm = buildMode();
+  if ((bm !== 'obs' && bm !== 'piece') || !slotGroup.visible) return;
   ndc.set(x / W * 2 - 1, -(y / H) * 2 + 1);
   camera.updateMatrixWorld(); slotGroup.updateMatrixWorld(true);   // marcadores recém-criados ainda sem matriz de mundo
   raycaster.setFromCamera(ndc, camera);
-  const hits = raycaster.intersectObjects(slotGroup.children, true).filter(h => h.object.userData.key);
+  const hits = raycaster.intersectObjects(slotGroup.children, true).filter(h => h.object.userData.key && h.object.parent.visible);
   const hit = hits.find(h => h.object.userData.plate) || hits[0];        // placa tem prioridade sobre o feixe de outra zona
   if (hit) { SFX.grab(); toHost({ t: 'place', key: hit.object.userData.key }); }
 }

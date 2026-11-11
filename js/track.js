@@ -2,7 +2,8 @@
 import * as THREE from 'three';
 import { G, hooks } from './state.js';
 import { clamp, lerp, store, wrapA } from './utils.js';
-import { BARRIERS, bridgeHW, bumpH, bumpSlope, CELL, DIRS, FINISH_S, GRID_SLOTS, HOLES, HW, PAD, PROFILES, profileSeg, PT, RAMP_PADS, RC, SIDE_WALLS, SLOTS, WALL_H } from './config.js';
+import { BARRIERS, bridgeHW, MEGA, bumpH, bumpSlope, CELL, DIRS, FINISH_S, GRID_SLOTS, HOLES, HW, PAD, PROFILES, profileSeg, PT, RAMP_PADS, RC, SIDE_WALLS, SLOTS, WALL_H } from './config.js';
+import { megaBuild, megaQuery, megaWorld, serpBuild, serpQuery, serpWorld, SERP_LEN } from './pieces-special.js';
 import { box, disposeGroup, M, scene, sector, straightBase, strip } from './scene.js';
 
 // ------------------------------------------------------------- peças
@@ -27,11 +28,28 @@ class Piece {
     else for (let k = 0; k < this.def.cells; k++) this.cells.push([ci + dx * k, cj + dz * k]);
     const last = this.cells[this.cells.length - 1], ed = DIRS[this.exitDir];
     this.next = [last[0] + ed[0], last[1] + ed[1]];
+    this.special = this.def.special || null;
+    this.branch = -1; this.auto = false; this.prev = -1; this.nextIdx = []; this.exitIdx = null;
+    if (this.special === 'serp') {                     // 2x2 células: vai, sobe em S, volta 180° ao lado e sai no sentido oposto
+      const rx = this.rx, rz = this.rz;
+      this.len = SERP_LEN; this.exitDir = (dir + 2) % 4;
+      this.cells = [[ci, cj], [ci + dx, cj + dz], [ci + rx, cj + rz], [ci + dx + rx, cj + dz + rz]];
+      this.next = [ci + rx - dx, cj + rz - dz];
+    } else if (this.special === 'mega') {              // 3 (comprimento) x 4 (largura) células; saídas à frente nas colunas -1..2
+      const rx = this.rx, rz = this.rz;
+      this.len = MEGA.len; this.exitDir = dir;
+      this.cells = [];
+      for (let row = 0; row < 3; row++) for (let col = -1; col <= 2; col++) this.cells.push([ci + dx * row + rx * col, cj + dz * row + rz * col]);
+      this.exitCells = [0, 1, 2, 3].map(k => [ci + dx * 3 + rx * (k - 1), cj + dz * 3 + rz * (k - 1)]);
+      this.next = this.exitCells[1];
+    }
     this.slots = (SLOTS[type] || []).map(([s, v]) => ({ s, v }));
     this.windDir = ((ci + cj) & 1) ? 1 : -1;         // lado do vento: determinístico pela posição (igual para todos)
     this.group = null;
   }
   world(s, v, o) {
+    if (this.special === 'serp') return serpWorld(this, s, v, o);
+    if (this.special === 'mega') return megaWorld(this, s, v, o);
     if (this.turn) {
       const th = s / RC, ang = this.a0 + th * this.turn, d = RC - v * this.turn;
       o.x = this.cx + Math.cos(ang) * d; o.z = this.cz + Math.sin(ang) * d; o.a = this.a + th * this.turn;
@@ -39,6 +57,8 @@ class Piece {
     return o;
   }
   query(x, z, o) {
+    if (this.special === 'serp') return serpQuery(this, x, z, o);
+    if (this.special === 'mega') return megaQuery(this, x, z, o);
     if (this.turn) {
       const qx = x - this.cx, qz = z - this.cz, d = Math.hypot(qx, qz) || 1e-6;
       const th = wrapA(Math.atan2(qz, qx) - this.a0) * this.turn;
@@ -71,6 +91,7 @@ class Piece {
     return o;
   }
   build() {
+    if (this.special) { this.group = this.special === 'serp' ? serpBuild(this) : megaBuild(this); return this.group; }
     const g = new THREE.Group();
     g.position.set(this.ex, 0, this.ez); g.rotation.y = -this.a;
     const t = this.type, L = this.len;
@@ -215,57 +236,132 @@ G.presetKey = store.get('preset', 'curta');
 if (!PRESETS[G.presetKey]) G.presetKey = 'curta';
 const key = (i, j) => i + ',' + j;
 export let dropAnims = [];
+// ---- tipos da rede: peças da cadeia principal + "x{k}:{tipo}" = peça encaixada na saída k da Mega Pista (a chegada de cada saída é implícita)
+const EXIT_TOKEN = /^x([0-3]):(\w+)$/;
 function layoutTypes(types) {
-  const arr = []; let ci = 0, cj = 0, dir = 0;
-  for (const t of types) { const p = new Piece(t, ci, cj, dir); arr.push(p); ci = p.next[0]; cj = p.next[1]; dir = p.exitDir; }
+  const arr = [], ex = [null, null, null, null], main = [];
+  for (const t of types) { const m = EXIT_TOKEN.exec(t); if (m) ex[+m[1]] = m[2]; else main.push(t); }
+  let ci = 0, cj = 0, dir = 0;
+  for (const t of main) {
+    const p = new Piece(t, ci, cj, dir); p.prev = arr.length - 1; arr.push(p);
+    ci = p.next[0]; cj = p.next[1]; dir = p.exitDir;
+    if (p.special === 'mega') break;                                  // depois da Mega Pista só existem as 4 saídas
+  }
+  const mega = arr[arr.length - 1];
+  if (mega && mega.special === 'mega') {
+    const mi = arr.length - 1; mega.exitIdx = [];
+    for (let k = 0; k < 4; k++) {
+      const [c0, c1] = mega.exitCells[k]; let fi = mi, nx = [c0, c1], nd = mega.dir;
+      if (ex[k] && PT[ex[k]] && ex[k] !== 'megablock') {
+        const x = new Piece(ex[k], c0, c1, mega.dir); x.branch = k; x.prev = mi; mega.exitIdx[k] = arr.length; arr.push(x);
+        fi = arr.length - 1; nx = x.next; nd = x.exitDir;
+      } else mega.exitIdx[k] = arr.length;
+      const f = new Piece('finish', nx[0], nx[1], nd); f.branch = k; f.auto = true; f.prev = fi; arr.push(f);
+    }
+  }
+  arr.forEach((p, i) => { p.nextIdx = p.special === 'mega' && p.exitIdx ? p.exitIdx.slice() : (arr[i + 1] && arr[i + 1].prev === i ? [i + 1] : []); });
   return arr;
 }
 function recalcTrack() {
-  pieceStart = []; let s = 0;
-  for (const p of track) { pieceStart.push(s); s += p.len; }
-  finishGlobal = pieceStart[track.length - 1] + FINISH_S;
+  pieceStart = []; let s = 0, br = -1;
+  track.forEach((p, i) => {
+    if (p.branch !== br) { br = p.branch; if (br >= 0) s = pieceStart[p.prev] + track[p.prev].len; }   // cada ramo recomeça no fim da Mega Pista
+    pieceStart.push(s); s += p.len;
+  });
+  finishGlobal = 0;
+  track.forEach((p, i) => { if (p.type === 'finish') finishGlobal = Math.max(finishGlobal, pieceStart[i] + FINISH_S); });
   occupied = new Set();
   for (const p of track) for (const c of p.cells) occupied.add(key(c[0], c[1]));
 }
-export const trackTypes = () => track.map(p => p.type);
+// tokens enviados pela rede: chegadas implícitas (auto) não entram; peças dos ramos viram "x{k}:{tipo}"
+export const trackTypes = () => track.filter(p => !p.auto).map(p => p.branch >= 0 ? 'x' + p.branch + ':' + p.type : p.type);
 export function addDrop(g, delay, piece) { g.position.y += 30; dropAnims.push({ g, t: -delay, dur: 0.7, y0: g.position.y, yEnd: g.position.y - 30, piece, landed: false }); }
-// aplica a pista (tipos em sequência) + obstáculos; anima peças/obstáculos novos
+const sig = p => p.type + '|' + p.ci + '|' + p.cj + '|' + p.dir + '|' + p.branch + '|' + p.auto;
+// aplica a pista (tipos em sequência) + obstáculos; reaproveita o prefixo idêntico e anima peças/obstáculos novos
 export function applyTrack(types, obsList, animate) {
-  const cur = trackTypes();
-  const same = cur.length === types.length && cur.every((t, i) => t === types[i]);
-  if (!same) {
-    const cb = cur.slice(0, -1), nb = types.slice(0, -1);
-    const prefix = cur.length > 0 && cb.length < nb.length && cb.every((t, i) => t === nb[i]);
-    if (prefix) {
-      const fin = track.pop(); disposeGroup(fin.group);
-      const all = layoutTypes(types);
-      for (let i = track.length; i < all.length; i++) {
-        const p = all[i], g = p.build(); trackRoot.add(g); track.push(p);
-        if (animate) addDrop(g, (i - cb.length) * 0.12, p);
-      }
-    } else {
-      for (const p of track) disposeGroup(p.group);
-      for (const o of obstacles) disposeGroup(o.group);
-      obstacles = [];
-      track = layoutTypes(types);
-      for (const p of track) trackRoot.add(p.build());
+  const all = layoutTypes(types);
+  let keep = 0; while (keep < track.length && keep < all.length && sig(track[keep]) === sig(all[keep])) keep++;
+  if (keep !== track.length || keep !== all.length) {
+    for (let i = keep; i < track.length; i++) disposeGroup(track[i].group);
+    obstacles = obstacles.filter(o => { if (o.pi < keep) return true; disposeGroup(o.group); return false; });
+    for (let i = 0; i < keep; i++) all[i].group = track[i].group;
+    track = all;
+    for (let i = keep; i < track.length; i++) {
+      const p = track[i], g = p.build(); trackRoot.add(g);
+      if (animate) addDrop(g, (i - keep) * 0.12, p);
     }
     recalcTrack();
   }
   hooks.syncObstacles(obsList || [], animate);
   hooks.rebuildSlots();
 }
-export function canPlace(type) {
-  const fin = track[track.length - 1];
-  const p = new Piece(type, fin.ci, fin.cj, fin.dir);
-  const occ = new Set(occupied); occ.delete(key(fin.ci, fin.cj));
+// ---- ramos (Mega Pista): sucessor/antecessor de uma peça e saída escolhida
+export const megaIndex = () => track.findIndex(p => p.special === 'mega');
+export function exitOfV(v) { return clamp(Math.round((v - MEGA.exitV[0]) / (MEGA.exitV[1] - MEGA.exitV[0])), 0, 3); }
+// próxima peça (índice) a partir de pi; na Mega Pista, a saída é escolhida pela posição lateral v (ou pelo número exitK)
+export function succIdx(pi, v, exitK) {
+  const p = track[pi]; if (!p) return -1;
+  if (p.special === 'mega' && p.exitIdx) return p.exitIdx[exitK !== undefined && exitK >= 0 ? exitK : exitOfV(v)];
+  return p.nextIdx.length ? p.nextIdx[0] : -1;
+}
+export const prevIdx = pi => track[pi] ? track[pi].prev : -1;
+// saídas "ativas" (com pista encaixada); sem nenhuma encaixada, as 4 levam direto à chegada
+export function activeExits() {
+  const m = megaIndex(); if (m < 0) return [];
+  const a = [0, 1, 2, 3].filter(k => track[track[m].exitIdx[k]].type !== 'finish');
+  return a.length ? a : [0, 1, 2, 3];
+}
+export function freeExits() {
+  const m = megaIndex(); if (m < 0) return [];
+  return [0, 1, 2, 3].filter(k => track[track[m].exitIdx[k]].type === 'finish');
+}
+export function exitPos(k, o) { const m = track[megaIndex()]; return m.world(MEGA.len, MEGA.exitV[k], o); }
+// ---- encaixe
+function fitsAt(type, c0, c1, dir, occ) {
+  const p = new Piece(type, c0, c1, dir);
   for (const c of p.cells) if (occ.has(key(c[0], c[1]))) return false;
   if (occ.has(key(p.next[0], p.next[1]))) return false;
+  return p;
+}
+export function canPlace(type, exitK = -1) {
+  const m = megaIndex();
+  if (m >= 0) {                                                        // com Mega Pista: só nas saídas livres (1 peça por saída)
+    if (type === 'megablock') return false;
+    const mp = track[m];
+    return freeExits().some(k => {
+      if (exitK >= 0 && k !== exitK) return false;
+      const occ = new Set(occupied);
+      const f = track[mp.exitIdx[k]]; occ.delete(key(f.ci, f.cj));
+      const p = fitsAt(type, mp.exitCells[k][0], mp.exitCells[k][1], mp.dir, occ);
+      if (!p) return false;
+      const fp = new Piece('finish', p.next[0], p.next[1], p.exitDir);
+      return !occ.has(key(fp.ci, fp.cj)) && !p.cells.some(q => q[0] === fp.ci && q[1] === fp.cj);
+    });
+  }
+  const fin = track[track.length - 1];
+  const occ = new Set(occupied); occ.delete(key(fin.ci, fin.cj));
+  const p = fitsAt(type, fin.ci, fin.cj, fin.dir, occ);
+  if (!p) return false;
   for (const c of p.cells) occ.add(key(c[0], c[1]));
+  if (p.special === 'mega') return p.exitCells.every(c => !occ.has(key(c[0], c[1])));     // as 4 chegadas iniciais precisam caber
   const f = new Piece('finish', p.next[0], p.next[1], p.exitDir);
   occ.add(key(f.ci, f.cj));
   const nx = [f.next, ...[1, 3].map(t => { const d = DIRS[(f.dir + t) % 4]; return [f.ci + d[0], f.cj + d[1]]; })];
   return nx.some(c => !occ.has(key(c[0], c[1])));
 }
-export function pieceAt(sG) { let i = track.length - 1; while (i > 0 && pieceStart[i] > sG) i--; return i; }
-export function trackPoint(sG, v, o) { const i = pieceAt(sG), p = track[i]; return p.world(clamp(sG - pieceStart[i], 0, p.len), v, o); }
+// peça à frente por distância global; hint = índice de uma peça próxima (do carro) e exitK = saída escolhida pelo bot
+export function pieceAt(sG, hint, exitK) {
+  if (hint !== undefined && hint >= 0 && track[hint]) {
+    let i = hint, guard = 0;
+    while (guard++ < 12) {
+      const n = succIdx(i, 0, exitK);
+      if (sG >= pieceStart[i] + track[i].len && n >= 0) i = n;
+      else if (sG < pieceStart[i] && track[i].prev >= 0) i = track[i].prev;
+      else break;
+    }
+    return i;
+  }
+  let i = track.length - 1; while (i > 0 && (pieceStart[i] > sG || track[i].branch > 0)) i--;
+  return i;
+}
+export function trackPoint(sG, v, o, hint, exitK) { const i = pieceAt(sG, hint, exitK), p = track[i]; return p.world(clamp(sG - pieceStart[i], 0, p.len), v, o); }

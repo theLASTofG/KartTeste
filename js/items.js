@@ -8,7 +8,7 @@ import { CAR_R, POWER } from './config.js';
 import { SFX } from './audio.js';
 import { disposeObject3D, keepResource, scene, texGlow } from './scene.js';
 import { burst } from './fx.js';
-import { obstacles, track } from './track.js';
+import { obstacles, prevIdx, succIdx, track } from './track.js';
 import { carById, cars, isHost, myCar, NET, playerById } from './cars.js';
 import { toast, updateBoard } from './hud.js';
 import { broadcast, toHost } from './net.js';
@@ -229,11 +229,10 @@ export function updateItems(dt) {
     if (!race || o.ttl <= 0) { despawnObj(o.id); broadcast({ t: 'item_despawn', kind: 'obj', id: o.id }); continue; }
     let P = track[o.pi]; P.query(o.x, o.z, QQ);
     for (let k = 0; k < 3; k++) {
-      if (QQ.s > P.len && o.pi < track.length - 1) { o.pi++; P = track[o.pi]; P.query(o.x, o.z, QQ); }
-      else if (QQ.s < 0 && o.pi > 0) { o.pi--; P = track[o.pi]; P.query(o.x, o.z, QQ); }
-      else break;
+      const n = QQ.s > P.len ? succIdx(o.pi, QQ.v) : QQ.s < 0 ? prevIdx(o.pi) : -1;
+      if (n >= 0 && n !== o.pi) { o.pi = n; P = track[n]; P.query(o.x, o.z, QQ); } else break;
     }
-    if (Math.abs(QQ.v) > QQ.hw + 0.8 || (QQ.s > P.len && o.pi >= track.length - 1)) {       // saiu da pista
+    if (Math.abs(QQ.v) > QQ.hw + 0.8 || (QQ.s > P.len && succIdx(o.pi, QQ.v) < 0)) {       // saiu da pista
       despawnObj(o.id); broadcast({ t: 'item_despawn', kind: 'obj', id: o.id }); continue;
     }
     const R = (o.k === 'frost' ? POWER.frost.radius : POWER.peel.radius) + CAR_R * 0.6;

@@ -1,10 +1,10 @@
 // Física arcade dos carros: passo, contato com pista/mureta, obstáculos e colisões.
 import { G, hooks } from './state.js';
 import { clamp, lerp, rnd, wrapA } from './utils.js';
-import { BARRIERS, CAR_R, DRIFT, MAX_DEATHS, FINISH_S, GRAV, PAD, PH, POWER, profileSeg, RAMP_PADS, WALL_H, WIND_ACC } from './config.js';
+import { BARRIERS, CAR_R, DRIFT, MAX_DEATHS, MEGA, FINISH_S, GRAV, PAD, PH, POWER, profileSeg, RAMP_PADS, WALL_H, WIND_ACC } from './config.js';
 import { SFX } from './audio.js';
 import { burst } from './fx.js';
-import { obstacles, pieceStart, tmpW, track } from './track.js';
+import { obstacles, pieceStart, prevIdx, succIdx, tmpW, track } from './track.js';
 import { cars, isHost } from './cars.js';
 import { toast } from './hud.js';
 
@@ -63,7 +63,7 @@ function pushOut(c, nx, nz, over, dt, bounce = 0.35) {
   return 0;
 }
 // peças onde NÃO se salva checkpoint (o renascimento cairia de novo)
-const NO_CHECKPOINT = new Set(['start', 'finish', 'holes', 'bridge', 'jump', 'bigjump', 'doublejump']);
+const NO_CHECKPOINT = new Set(['start', 'finish', 'holes', 'bridge', 'jump', 'bigjump', 'doublejump', 'serpentina', 'megablock']);
 // renasce no último checkpoint seguro: centro da peça, alinhado, parado e invulnerável por 2 s
 export function respawnAtCheckpoint(c) {
   const idx = clamp(c.checkpointIdx || 0, 0, track.length - 1), P0 = track[idx];
@@ -255,15 +255,35 @@ function boxPushLocal(c, Q, cs, cv, hs, hv, dt) {
   if (d < 1e-4) { if (Math.abs(ds) / hs > Math.abs(dv) / hv) { es = Math.sign(ds) || 1; ev = 0; } else { es = 0; ev = Math.sign(dv) || 1; } } else { es /= d; ev /= d; }
   pushOut(c, Q.fx * es + Q.rx * ev, Q.fz * es + Q.rz * ev, CAR_R - d, dt);
 }
+// conteúdo fixo da Mega Pista: barreiras entre as saídas, bumpers de mola e pisos turbo (v centrado; lv = v + shift)
+function megaContact(c, Q, dt) {
+  const lv = Q.v + MEGA.shift;
+  if (c.y > Q.h - 0.7 && c.y < Q.h + 1.6) {
+    const gs = (MEGA.gapS[0] + MEGA.gapS[1]) / 2, gh = (MEGA.gapS[1] - MEGA.gapS[0]) / 2;
+    for (const [l0, l1] of MEGA.gaps) boxPushLocal(c, Q, gs, (l0 + l1) / 2 - MEGA.shift, gh, (l1 - l0) / 2, dt);
+    for (const b of MEGA.bumpers) {
+      const ds = Q.s - b.s, dl = lv - b.l, d = Math.hypot(ds, dl);
+      if (d < b.r + CAR_R) {
+        const es = d < 1e-4 ? 1 : ds / d, el = d < 1e-4 ? 0 : dl / d;
+        pushOut(c, Q.fx * es + Q.rx * el, Q.fz * es + Q.rz * el, b.r + CAR_R - d, dt, 1.15);
+        c.vx *= 1.08; c.vz *= 1.08;                         // mola: devolve com um pouco mais de energia
+      }
+    }
+  }
+  if (c.grounded && c.alive && c.padCool <= 0) for (const z of MEGA.pads) if (Q.s > z.s0 && Q.s < z.s1 && lv > z.l0 && lv < z.l1) {
+    giveBoost(c, PAD.pow, PAD.dur, PAD.kick); c.padCool = 0.6;
+    if (c.isLocal) { SFX.pad(); toast('BOOST!', '#a6ff3b', 0.6); G.shake = Math.max(G.shake, 0.15); }
+    break;
+  }
+}
 export function trackContact(c, dt) {
   let Pc = track[c.pi], Q = c.Q;
   Pc.query(c.x, c.z, Q);
   // troca de peça só com o carro lateralmente sobre a pista: fora da borda, nenhuma outra peça "captura" o carro
   for (let k = 0; k < 3; k++) {
     if (c.voidFall || Math.abs(Q.v) > Q.hw + 0.25) break;
-    if (Q.s > Pc.len && c.pi < track.length - 1) { c.pi++; Pc = track[c.pi]; Pc.query(c.x, c.z, Q); }
-    else if (Q.s < 0 && c.pi > 0) { c.pi--; Pc = track[c.pi]; Pc.query(c.x, c.z, Q); }
-    else break;
+    const n = Q.s > Pc.len ? succIdx(c.pi, Q.v) : Q.s < 0 ? prevIdx(c.pi) : -1;      // na Mega Pista a saída vem da posição lateral
+    if (n >= 0 && n !== c.pi) { c.pi = n; Pc = track[n]; Pc.query(c.x, c.z, Q); } else break;
   }
   if (c.grounded && c.alive && !c.voidFall && c.pi > (c.checkpointIdx || 0) && !NO_CHECKPOINT.has(Pc.type)) { c.checkpointIdx = c.pi; c.checkpointS = 3; }
   if (c.grounded) {
@@ -307,6 +327,7 @@ export function trackContact(c, dt) {
       if (Pc.type === 'finish' && Q.s > Pc.len - 0.8 - CAR_R) pushOut(c, -Q.fx, -Q.fz, Q.s - (Pc.len - 0.8 - CAR_R), dt);
     }
   }
+  if (Pc.type === 'megablock') megaContact(c, Q, dt);
   if (Pc.type === 'chicane' && c.y > Q.h - 0.5 && c.y < Q.h + 1.5) for (const b of BARRIERS) boxPushLocal(c, Q, b.s, (b.v0 + b.v1) / 2, 0.6, (b.v1 - b.v0) / 2, dt);
   obstacleContact(c, dt);
   c.padCool -= dt; c.hitCool -= dt;
@@ -319,7 +340,7 @@ export function trackContact(c, dt) {
     giveBoost(c, 0.5, 1.3, 5); c.padCool = 0.8;
     if (c.isLocal) { SFX.boost(2); toast('MEGA TURBO!', '#ff2e88', 0.8); G.shake = Math.max(G.shake, 0.25); }
   }
-  if (Pc.type === 'finish' && Q.s >= FINISH_S && !c.finished && c.pi === track.length - 1 && c.alive && !c.voidFall) {
+  if (Pc.type === 'finish' && Q.s >= FINISH_S && !c.finished && c.alive && !c.voidFall) {
     c.finished = true; c.finishT = G.R.t;
     burst(c.x, c.y + 1, c.z, 30, 1, 0.85, 0.3, 9, 0.8, 8);
     if (isHost()) hooks.hostRegisterFinish(c);

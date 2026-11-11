@@ -1,8 +1,9 @@
 // Obstáculos e espaços (slots) onde podem ser colocados.
 import * as THREE from 'three';
-import { hooks } from './state.js';
+import { G, hooks } from './state.js';
+import { MEGA } from './config.js';
 import { box, disposeGroup, M } from './scene.js';
-import { addDrop, obstacles, slotGroup, tmpW, track, trackRoot } from './track.js';
+import { addDrop, exitPos, freeExits, megaIndex, obstacles, slotGroup, tmpW, track, trackRoot } from './track.js';
 
 // ---------------------------------------------------------- obstáculos
 const matBoxGlass = new THREE.MeshBasicMaterial({ color: 0x00e5ff, transparent: true, opacity: 0.32, depthWrite: false });
@@ -74,6 +75,9 @@ export function freeSlots() {
 // marcadores 3D de TODAS as zonas livres: placa + feixe vertical (fácil de achar e tocar de longe)
 const slotPlate = new THREE.PlaneGeometry(4.2, 4.2), slotBeam = new THREE.CylinderGeometry(0.45, 0.45, 14, 10, 1, true);
 export const beamMat = new THREE.MeshBasicMaterial({ color: 0x00e5ff, transparent: true, opacity: 0.28, blending: THREE.AdditiveBlending, depthWrite: false });
+const exitPlate = new THREE.PlaneGeometry(11, 11);
+const exitMats = MEGA.colors.map(c => { const m = M.slot.clone(); m.color.setHex(c); m.opacity = 0.95; return m; });
+const exitBeamMats = MEGA.colors.map(c => { const m = beamMat.clone(); m.color.setHex(c); return m; });
 export function rebuildSlots() {
   for (const g of [...slotGroup.children]) slotGroup.remove(g);
   for (const k of freeSlots()) {
@@ -83,6 +87,16 @@ export function rebuildSlots() {
     const plate = new THREE.Mesh(slotPlate, M.slot); plate.rotation.x = -Math.PI / 2; plate.rotation.z = -tmpW.a; plate.position.y = 0.07;
     const beam = new THREE.Mesh(slotBeam, beamMat); beam.position.y = 7;
     plate.userData.key = beam.userData.key = k; plate.userData.plate = true;
+    grp.userData.kind = 'slot'; grp.visible = (G.slotKind || 'slot') === 'slot';
+    grp.add(plate, beam); slotGroup.add(grp);
+  }
+  if (megaIndex() >= 0) for (const k of freeExits()) {                      // saídas livres da Mega Pista (cada uma com a cor do arco)
+    exitPos(k, tmpW);
+    const grp = new THREE.Group(); grp.position.set(tmpW.x, 0, tmpW.z);
+    const plate = new THREE.Mesh(exitPlate, exitMats[k]); plate.rotation.x = -Math.PI / 2; plate.rotation.z = -tmpW.a; plate.position.y = 0.09;
+    const beam = new THREE.Mesh(slotBeam, exitBeamMats[k]); beam.position.y = 7; beam.scale.set(2.2, 1, 2.2);
+    plate.userData.key = beam.userData.key = 'x' + k; plate.userData.plate = true;
+    grp.userData.kind = 'exit'; grp.visible = G.slotKind === 'exit';
     grp.add(plate, beam); slotGroup.add(grp);
   }
   slotGroup.visible = hooks.BC.active;

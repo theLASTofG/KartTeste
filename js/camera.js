@@ -4,7 +4,7 @@ import { G } from './state.js';
 import { $, clamp, lerp, rnd, TAU, wrapA } from './utils.js';
 import { CELL } from './config.js';
 import { camera, fxg, H, portrait, scene, sun, W } from './scene.js';
-import { slotGroup, tmpW, track } from './track.js';
+import { exitPos, freeExits, slotGroup, tmpW, track } from './track.js';
 import { freeSlots } from './obstacles.js';
 import { cars, myCar } from './cars.js';
 import { cmpRace } from './hud.js';
@@ -20,7 +20,9 @@ function bcClamp() {
 function bcManual() { if (!BC.manual) { BC.x = BC.ax; BC.z = BC.az; BC.d = BC.autoD; BC.manual = true; } }
 // enquadramento inicial perto das zonas livres (começa pelas mais novas, no fim da pista)
 function focusSlots() {
-  const pts = freeSlots().map(k => { const [pi, si] = k.split(':').map(Number), p = track[pi], sl = p.slots[si]; p.world(sl.s, sl.v, tmpW); return { x: tmpW.x, z: tmpW.z, pi }; });
+  const pts = G.slotKind === 'exit'
+    ? freeExits().map(k => { exitPos(k, tmpW); return { x: tmpW.x, z: tmpW.z, pi: 0 }; })
+    : freeSlots().map(k => { const [pi, si] = k.split(':').map(Number), p = track[pi], sl = p.slots[si]; p.world(sl.s, sl.v, tmpW); return { x: tmpW.x, z: tmpW.z, pi }; });
   if (!pts.length) { BC.manual = false; return; }
   pts.sort((u, v) => v.pi - u.pi);
   let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9;
@@ -32,9 +34,13 @@ function focusSlots() {
   BC.x = (x0 + x1) / 2; BC.z = (z0 + z1) / 2; BC.d = Math.max(32, Math.max(x1 - x0, (z1 - z0) * 1.3) * 0.9 + 26);
   BC.manual = true; bcClamp();
 }
-export function setSlotMode(on) {
+export function setSlotMode(on, kind = 'slot') {
+  const kchanged = G.slotKind !== kind;
+  G.slotKind = kind;
   slotGroup.visible = on;
+  for (const g of slotGroup.children) g.visible = g.userData.kind === kind;
   $('camHint').classList.toggle('show', on);
+  if (on && BC.active && kchanged) focusSlots();
   if (on && !BC.active) { BC.active = true; focusSlots(); }
   if (!on && BC.active) { BC.active = false; BC.manual = false; PTRS.clear(); G.pinch = null; }
 }

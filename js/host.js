@@ -3,7 +3,7 @@ import { G, HST, hooks } from './state.js';
 import { clamp, r2, rnd, TAU } from './utils.js';
 import { ITEMS, PTS } from './config.js';
 import { themeKey } from './scene.js';
-import { applyTrack, canPlace, finishGlobal, PRESETS, trackTypes } from './track.js';
+import { applyTrack, canPlace, finishGlobal, freeExits, megaIndex, PRESETS, track, trackTypes } from './track.js';
 import { freeSlots, obsData } from './obstacles.js';
 import { cars, playerById, plist, syncCars } from './cars.js';
 import { placeToast } from './hud.js';
@@ -102,9 +102,22 @@ export function hostPlace(pid, slotKey, auto) {
   const it = G.tray.find(i => i.id === G.holds[pid]); if (!it) return;
   let ok = false;
   if (ITEMS[it.type].kind === 'piece') {
-    ok = canPlace(it.type);
-    if (ok) { const t = trackTypes(); t.splice(t.length - 1, 0, it.type); applyTrack(t, obsData(), true); }
-    else sendTo(pid, { t: 'msg', text: 'NÃO COUBE NO FIM DA PISTA!', color: '#ff2e55', deny: true });
+    const m = megaIndex();
+    if (m < 0) {                                                  // pista linear: encaixa antes da chegada (a Mega Pista substitui a chegada)
+      ok = canPlace(it.type);
+      if (ok) { const t = trackTypes(); if (it.type === 'megablock') t.splice(t.length - 1, 1, 'megablock'); else t.splice(t.length - 1, 0, it.type); applyTrack(t, obsData(), true); }
+    } else {                                                      // com Mega Pista: 1 peça por saída (0..3), escolhida no mapa ou a primeira que couber
+      let k = slotKey && /^x[0-3]$/.test(slotKey) ? +slotKey[1] : -1;
+      if (k >= 0 && !canPlace(it.type, k)) k = -1;
+      if (k < 0) k = freeExits().find(e => canPlace(it.type, e)) ?? -1;
+      if (k >= 0) {
+        const at = track[m].exitIdx[k];                           // a peça entra antes da chegada da saída: índices seguintes sobem 1
+        const list = obsData().map(o => { const [pi, si] = o.key.split(':').map(Number); return pi >= at ? { ...o, key: (pi + 1) + ':' + si } : o; });
+        const t = trackTypes(); t.push('x' + k + ':' + it.type);
+        applyTrack(t, list, true); ok = true;
+      }
+    }
+    if (!ok) sendTo(pid, { t: 'msg', text: 'NÃO COUBE NA PISTA!', color: '#ff2e55', deny: true });
   } else {
     const free = freeSlots();
     if (!slotKey || !free.includes(slotKey)) {
