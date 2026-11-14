@@ -1,0 +1,66 @@
+// Pistas iniciais que o host escolhe no lobby (dados puros: sem dependência de three/DOM, validadas por tools/check-presets.mjs).
+// types: sequência de peças (começa em 'start', termina em 'finish'; "x{k}:{tipo}" = peça encaixada na saída k da Mega Pista)
+// obs: obstáculos { key: 'índiceDaPeça:índiceDoSlot', type, ph, spd }; diff: 1 fácil · 2 médio · 3 difícil
+// cross: a pista usa dois andares que se cruzam (liga "CRUZAR PISTA" sozinha ao escolher)
+const O = (key, type, ph = 0, spd = 1.7) => ({ key, type, ph, spd });
+
+export const INITIAL_TYPES = ['start', 'straight', 'straight', 'finish'];
+
+export const PRESETS = {
+  curta: { name: 'CURTA', diff: 1, desc: 'Reta simples: monte o resto na hora.', types: INITIAL_TYPES, obs: [] },
+  media: { name: 'MÉDIA', diff: 2, desc: 'Curvas, turbo e um salto.',
+    types: ['start', 'straight', 'curveL', 'boost', 'curveR', 'jump', 'straight', 'finish'],
+    obs: [O('1:2', 'mboost'), O('6:0', 'block')] },
+  caos: { name: 'CAÓTICA', diff: 3, desc: 'Ponte, gelo, vento e obstáculos.',
+    types: ['start', 'bumps', 'curveR', 'bridge', 'curveL', 'ice', 'wind', 'curveL', 'holes', 'straight', 'finish'],
+    obs: [O('2:0', 'bumper'), O('5:2', 'spinner', 0.7, 1.6), O('9:0', 'piston', 1.3, 1.5), O('9:1', 'oil')] },
+
+  oval: { name: 'OVAL TURBO', diff: 1, desc: 'Um anel rápido com dois turbos. Ótima pra aquecer.',
+    types: ['start', 'boost', 'curveR', 'straight', 'curveR', 'boost', 'curveR', 'finish'],
+    obs: [O('3:2', 'itembox')] },
+  sprint: { name: 'SPRINT', diff: 1, desc: 'Reta turbinada com caixas de poder.',
+    types: ['start', 'boost', 'boost', 'straight', 'boost', 'straight', 'finish'],
+    obs: [O('1:0', 'itembox'), O('1:1', 'itembox'), O('3:2', 'mboost'), O('5:0', 'kicker'), O('5:1', 'oil')] },
+  zigue: { name: 'ZIGUE-ZAGUE', diff: 2, desc: 'Escadinha de curvas: direita, esquerda, direita...',
+    types: ['start', 'straight', 'curveR', 'curveL', 'curveR', 'curveL', 'curveR', 'curveL', 'finish'],
+    obs: [O('1:2', 'mboost'), O('3:0', 'bumper'), O('5:0', 'oil'), O('7:0', 'itembox')] },
+  grampo: { name: 'GRAMPOS', diff: 2, desc: 'Três retornos de 180°: freie na hora certa.',
+    types: ['start', 'straight', 'curveR', 'curveR', 'straight', 'curveL', 'curveL', 'straight', 'curveR', 'curveR', 'finish'],
+    obs: [O('1:2', 'itembox'), O('4:0', 'block'), O('7:1', 'oil'), O('7:2', 'mboost')] },
+  gelo: { name: 'VALE GELADO', diff: 2, desc: 'Gelo em reta e em curva. Pouco atrito!',
+    types: ['start', 'ice', 'curveIceR', 'ice', 'curveIceL', 'ice', 'boost', 'finish'],
+    obs: [O('1:2', 'itembox'), O('3:0', 'block'), O('3:1', 'oil'), O('5:2', 'bumper')] },
+  vento: { name: 'TEMPESTADE', diff: 2, desc: 'Rajadas laterais e lombadas.',
+    types: ['start', 'wind', 'curveR', 'wind', 'curveR', 'wind', 'curveL', 'bumps', 'finish'],
+    obs: [O('3:0', 'oil'), O('5:0', 'spinner', 0.4, 1.4)] },
+  saltos: { name: 'FESTIVAL DE SALTOS', diff: 3, desc: 'Salto curto, triplo, duplo e mega salto.',
+    types: ['start', 'straight', 'minijump', 'straight', 'tripjump', 'curveR', 'doublejump', 'curveR', 'bigjump', 'finish'],
+    obs: [O('1:2', 'itembox'), O('4:0', 'mboost'), O('4:2', 'itembox')] },
+  pontes: { name: 'PONTES DO ABISMO', diff: 3, desc: 'Pontes estreitas e quebradas sobre o vazio.',
+    types: ['start', 'straight', 'bridge', 'curveR', 'holes', 'curveL', 'bridge', 'chicane', 'finish'],
+    obs: [O('1:2', 'itembox')] },
+  tunel: { name: 'TÚNEL DE CAOS', diff: 2, desc: 'Chicanes e lombadas em linha reta.',
+    types: ['start', 'chicane', 'bumps', 'chicane', 'boost', 'bumps', 'finish'],
+    obs: [O('4:0', 'itembox'), O('4:1', 'itembox')] },
+  carnaval: { name: 'CARNAVAL', diff: 3, desc: 'Reta curta, obstáculos pra todo lado.',
+    types: ['start', 'straight', 'straight', 'straight', 'straight', 'straight', 'finish'],
+    obs: [O('1:0', 'block'), O('1:1', 'bumper'), O('1:2', 'itembox'), O('2:0', 'spinner', 0.2, 1.8), O('2:2', 'oil'),
+      O('3:0', 'piston', 0.5, 1.4), O('3:1', 'mboost'), O('4:0', 'bumper'), O('4:1', 'block'), O('4:2', 'spinner', 1.1, -1.6), O('5:0', 'oil'), O('5:1', 'piston', 2.1, 1.7)] },
+  torre: { name: 'TORRE', diff: 2, desc: 'Espiral que sobe 6 m; a chegada fica lá em cima.',
+    types: ['start', 'straight', 'spiralup', 'straight', 'straight', 'curveR', 'straight', 'curveR', 'jump', 'finish'],
+    obs: [O('2:1', 'itembox'), O('4:0', 'mboost')] },
+  serpente: { name: 'SERPENTE', diff: 2, desc: 'Serpentina elevada em S e retorno ao lado.',
+    types: ['start', 'straight', 'straight', 'serpentina', 'straight', 'boost', 'straight', 'curveL', 'straight', 'finish'],
+    obs: [O('3:0', 'itembox'), O('1:2', 'mboost'), O('8:2', 'block')] },
+  torredupla: { name: 'TORRE DUPLA', diff: 3, desc: 'Duas espirais: termina 12 m acima do chão.',
+    types: ['start', 'straight', 'spiralup', 'straight', 'curveL', 'straight', 'spiralup', 'straight', 'straight', 'finish'],
+    obs: [O('2:1', 'itembox'), O('6:2', 'itembox')] },
+  doisandares: { name: 'DOIS ANDARES', diff: 3, desc: 'A pista passa por cima dela mesma. Caiu? Pode cair na de baixo!', cross: true,
+    types: ['start', 'straight', 'straight', 'curveR', 'spiralup', 'straight', 'straight', 'finish'],
+    obs: [O('1:2', 'itembox'), O('5:0', 'mboost')] },
+  maratona: { name: 'MARATONA', diff: 3, desc: 'Pista longa com de tudo um pouco.',
+    types: ['start', 'boost', 'jump', 'curveR', 'bumps', 'curveR', 'chicane', 'curveL', 'ice', 'curveR', 'wind', 'curveL', 'holes', 'curveR', 'bigjump', 'finish'],
+    obs: [O('1:0', 'itembox'), O('1:1', 'itembox'), O('5:0', 'spinner', 0.9, 1.5), O('8:2', 'bumper'), O('10:0', 'oil')] },
+  mega: { name: 'MEGA ARENA', diff: 3, desc: 'Plataforma gigante com 4 saídas: gelo, turbo, lombadas e chicane.',
+    types: ['start', 'boost', 'megablock', 'x0:ice', 'x1:boost', 'x2:bumps', 'x3:chicane', 'finish'], obs: [] }
+};

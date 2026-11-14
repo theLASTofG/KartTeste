@@ -5,6 +5,7 @@ import { clamp, lerp, store, wrapA } from './utils.js';
 import { BARRIERS, bridgeHW, EXIT_TYPES, MEGA, SERP, bumpH, bumpSlope, CELL, DIRS, FINISH_S, GRID_SLOTS, HOLES, HW, PAD, PROFILES, profileSeg, PT, RAMP_PADS, RC, SIDE_WALLS, SLOTS, WALL_H } from './config.js';
 import { funnelBuild, funnelQuery, funnelWorld, FUNNEL_LEN, megaBuild, megaQuery, megaWorld, serpBuild, serpQuery, serpWorld, SERP_LEN, spiralBuild, spiralQuery, spiralWorld, SPIRAL_LEN } from './pieces-special.js';
 import { box, disposeGroup, M, scene, sector, straightBase, strip } from './scene.js';
+import { INITIAL_TYPES, PRESETS } from './presets.js';
 
 // ------------------------------------------------------------- peças
 export const tmpW = {};
@@ -104,6 +105,7 @@ class Piece {
       wl = wr = false;
       for (const hl of HOLES) if (s > hl.s0 && s < hl.s1 && o.v > hl.v0 && o.v < hl.v1) { floor = false; break; }
     }
+    if (this.def.ice) ice = true;                       // curvas de gelo
     if (!SIDE_WALLS) wl = wr = false;
     o.hw = hw; o.h = h; o.slope = slope; o.wallL = wl; o.wallR = wr; o.ice = ice; o.wind = wind;
     o.floor = floor && Math.abs(o.v) <= hw;
@@ -130,7 +132,7 @@ class Piece {
     const t = this.type, L = this.len;
     if (this.turn) {
       const tn = this.turn, cz = RC * tn, a0 = -tn * Math.PI / 2, a1 = 0, rO = RC + HW;
-      sector(cz, RC - HW, RC + HW, a0, a1, 0, 1, M.floor, g);
+      sector(cz, RC - HW, RC + HW, a0, a1, 0, 1, this.def.ice ? M.ice : M.floor, g);
       sector(cz, RC + HW - 0.22, RC + HW, a0, a1, 0.06, 0.06, M.edge, g, false);
       sector(cz, RC - HW, RC - HW + 0.22, a0, a1, 0.06, 0.06, M.edgeY, g, false);
       if (SIDE_WALLS) {
@@ -257,15 +259,7 @@ let occMap = new Map();                           // célula -> peças que passa
 export let obstacles = [];                       // {key,type,pi,si,x,z,y,a,s,v,ph,spd,group,bar,pulse}
 export const trackRoot = new THREE.Group(); scene.add(trackRoot);
 export const slotGroup = new THREE.Group(); scene.add(slotGroup);
-export const INITIAL_TYPES = ['start', 'straight', 'straight', 'finish'];
-// pistas iniciais que o host escolhe no lobby
-export const PRESETS = {
-  curta: { name: 'CURTA', types: INITIAL_TYPES, obs: [] },
-  media: { name: 'MÉDIA', types: ['start', 'straight', 'curveL', 'boost', 'curveR', 'jump', 'straight', 'finish'],
-    obs: [{ key: '1:2', type: 'mboost', ph: 0, spd: 1.7 }, { key: '6:0', type: 'block', ph: 0, spd: 1.7 }] },
-  caos: { name: 'CAÓTICA', types: ['start', 'bumps', 'curveR', 'bridge', 'curveL', 'ice', 'wind', 'curveL', 'holes', 'straight', 'finish'],
-    obs: [{ key: '2:0', type: 'bumper', ph: 0, spd: 1.7 }, { key: '5:2', type: 'spinner', ph: 0.7, spd: 1.6 }, { key: '9:0', type: 'piston', ph: 1.3, spd: 1.5 }, { key: '9:1', type: 'oil', ph: 0, spd: 1.7 }] }
-};
+export { INITIAL_TYPES, PRESETS };                   // dados em js/presets.js
 G.allowCross = store.get('cross', false);          // opção do host: a pista pode se cruzar/encontrar com ela mesma
 G.presetKey = store.get('preset', 'curta');
 if (!PRESETS[G.presetKey]) G.presetKey = 'curta';
@@ -333,6 +327,23 @@ const sig = p => p.type + '|' + p.ci + '|' + p.cj + '|' + p.dir + '|' + p.branch
 // assinaturas (para o host remapear obstáculos quando a pista ganha/perde peças no meio)
 export const pieceSigs = () => track.map(sig);
 export const layoutSigs = types => layoutTypes(types).map(sig);
+// miniatura SVG da pista (vista de cima, uma célula = quadradinho colorido por tipo; andares mais altos ficam mais claros)
+const PREVIEW_COL = { start: '#a6ff3b', finish: '#ffd23f', boost: '#4df3ff', ice: '#9be8ff', curveIceL: '#9be8ff', curveIceR: '#9be8ff', wind: '#bdf3ff', bumps: '#ff9a1f',
+  jump: '#ff9a1f', minijump: '#ff9a1f', tripjump: '#ff9a1f', doublejump: '#ff9a1f', bigjump: '#ff2e88', bridge: '#c471ff', holes: '#c471ff', chicane: '#ff6b6b',
+  serpentina: '#7dff6b', spiralup: '#7dff6b', megablock: '#ff2e88', megafunnel: '#ff2e88' };
+export function presetPreview(key) {
+  const P = PRESETS[key]; if (!P) return '';
+  const arr = layoutTypes(P.types), cs = [];
+  for (const p of arr) for (const c of p.cells) cs.push([c[0], c[1], p]);
+  const x0 = Math.min(...cs.map(c => c[0])), x1 = Math.max(...cs.map(c => c[0])), z0 = Math.min(...cs.map(c => c[1])), z1 = Math.max(...cs.map(c => c[1]));
+  const N = 14, G2 = 2, W = (x1 - x0 + 1) * N, H = (z1 - z0 + 1) * N;
+  let out = `<svg viewBox="0 0 ${W} ${H}" width="${Math.min(W, 150)}" height="${Math.min(H, 90)}" preserveAspectRatio="xMidYMid meet">`;
+  for (const [ci, cj, p] of cs.sort((a, b) => a[2].baseH - b[2].baseH)) {
+    const lift = Math.min(0.5, p.baseH / 24);
+    out += `<rect x="${(ci - x0) * N + G2 / 2}" y="${(cj - z0) * N + G2 / 2}" width="${N - G2}" height="${N - G2}" rx="3" fill="${PREVIEW_COL[p.type] || '#8fa0c8'}" ${lift ? `stroke="#fff" stroke-opacity="${lift + 0.3}" stroke-width="2"` : ''} fill-opacity="${p.turn ? 0.7 : 0.95}"/>`;
+  }
+  return out + '</svg>';
+}
 // aplica a pista (tipos em sequência) + obstáculos; reaproveita o prefixo idêntico e anima peças/obstáculos novos
 export function applyTrack(types, obsList, animate) {
   const all = layoutTypes(types);

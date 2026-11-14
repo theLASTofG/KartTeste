@@ -3,10 +3,10 @@ import { G } from './state.js';
 import { $, store } from './utils.js';
 import { SFX } from './audio.js';
 import { onResize } from './scene.js';
-import { isHost, myCar } from './cars.js';
+import { isHost, isMP, myCar } from './cars.js';
 import { toast } from './hud.js';
 import { respawn } from './physics.js';
-import { setStatus } from './net.js';
+import { sendEmote, setStatus } from './net.js';
 import { BC, cycleSpectate, isSpectating, panBy, pinchInfo, PTRS, zoomBy } from './camera.js';
 import { pickCard, tryPlaceAt } from './build-ui.js';
 import { act, pauseGame, resume } from './phases.js';
@@ -49,6 +49,10 @@ window.addEventListener('keydown', e => {
     const dg = /^(Digit|Numpad)([0-9])$/.exec(e.code);
     if (dg) { const n = +dg[2]; pickCard(n === 0 ? 9 : n - 1); return; }
     if (e.code === 'Escape' || e.code === 'Backspace') { act('backcards'); return; }
+  }
+  if (isMP() && (G.state === 'race' || G.state === 'countdown' || G.state === 'results' || G.state === 'lobby')) {
+    const em = /^(Digit|Numpad)([1-4])$/.exec(e.code);
+    if (em) { sendEmote(+em[2] - 1); return; }
   }
   if (G.state === 'race' && isSpectating() && (e.code === 'Tab' || e.code === 'ArrowRight' || e.code === 'ArrowLeft')) { e.preventDefault(); cycleSpectate(e.code === 'ArrowLeft' ? -1 : 1); return; }
   if (e.code === 'Tab' && G.state === 'race') e.preventDefault();

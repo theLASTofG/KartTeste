@@ -4,10 +4,10 @@ import { $, clamp, esc, rnd, store } from './utils.js';
 import { fmtPts, GRID_SLOTS, HW, MAXP, PH, SIDE_WALLS, TARGET_OPTS } from './config.js';
 import { SFX } from './audio.js';
 import { applyTheme, themeKey, THEMES } from './scene.js';
-import { activeExits, applyTrack, finishGlobal, INITIAL_TYPES, obstacles, PRESETS, tmpW, track, trackTypes } from './track.js';
+import { activeExits, applyTrack, finishGlobal, INITIAL_TYPES, obstacles, PRESETS, presetPreview, tmpW, track, trackTypes } from './track.js';
 import { applyBots, cars, isHost, isMP, NET, plist, syncCars } from './cars.js';
 import { centerText, showScreen, toast, updateBoard } from './hud.js';
-import { createRoom, hostLobbyChanged, joinRoom, leaveRoom, startSolo, toHost } from './net.js';
+import { createRoom, hostKick, hostLobbyChanged, joinRoom, leaveRoom, startSolo, toHost } from './net.js';
 import { setSlotMode } from './camera.js';
 import { applyTray, buildMode, showChampion, showResults } from './build-ui.js';
 import { hostAfterResults, hostEnter, hostStartMatch } from './host.js';
@@ -82,7 +82,8 @@ function placeCars(grid) {
     c.ai.err = c.bot && isHost() ? track.map(p => {
       const k = 1.25 - c.ai.skill;
       if (p.type === 'bridge' && Math.random() < 1.1 * k) return { lane: (Math.random() < 0.5 ? -1 : 1) * rnd(1.6, 3.2) };
-      if (p.type === 'jump' && Math.random() < 0.6 * k) return { slow: rnd(9, 15) };
+      if ((p.type === 'jump' || p.type === 'minijump') && Math.random() < 0.6 * k) return { slow: rnd(9, 15) };
+      if (p.type === 'tripjump' && Math.random() < 0.5 * k) return { slow: rnd(10, 14) };
       if (p.turn && Math.random() < 0.55 * k) return { lane: p.turn * (SIDE_WALLS ? rnd(4.4, 6.5) : rnd(2.4, HW - 1.6)) };   // sem mureta, nunca mira fora da pista
       if (p.type === 'holes' && Math.random() < 0.8 * k) return { lane: rnd(-1.2, 1.2) };
       if (p.type === 'wind' && Math.random() < 0.7 * k) return { lane: p.windDir * rnd(1.5, 3) };
@@ -126,8 +127,14 @@ export function act(a) {
       G.TARGET = TARGET_OPTS[j]; store.set('target', G.TARGET); hostLobbyChanged();
     } break;
     case 'cross': if (isHost() && G.state === 'lobby') { G.allowCross = !G.allowCross; store.set('cross', G.allowCross); hostLobbyChanged(); } break;
-    case 'preset': if (isHost() && G.state === 'lobby') {
-      const ks = Object.keys(PRESETS); G.presetKey = ks[(ks.indexOf(G.presetKey) + 1) % ks.length]; store.set('preset', G.presetKey); hostLobbyChanged();
+    case 'presetprev': case 'presetnext': case 'presetrand': if (isHost() && G.state === 'lobby') {
+      const ks = Object.keys(PRESETS), i = Math.max(0, ks.indexOf(G.presetKey));
+      let k;
+      if (a === 'presetrand') { do k = ks[Math.floor(Math.random() * ks.length)]; while (k === G.presetKey && ks.length > 1); }
+      else k = ks[(i + (a === 'presetnext' ? 1 : ks.length - 1)) % ks.length];
+      G.presetKey = k; store.set('preset', k);
+      if (PRESETS[k].cross && !G.allowCross) { G.allowCross = true; store.set('cross', true); toast('CRUZAR PISTA ligado (a pista usa 2 andares)', '#ffd23f', 1.6); }
+      hostLobbyChanged();
     } break;
     case 'theme': if (isHost() && G.state === 'lobby') {
       const ks = Object.keys(THEMES); applyTheme(ks[(ks.indexOf(themeKey) + 1) % ks.length]); store.set('theme', themeKey); hostLobbyChanged();
@@ -158,12 +165,21 @@ export function renderLobby() {
   $('lobbyWait').style.display = isHost() ? 'none' : '';
   $('botN').textContent = G.players.filter(p => p.bot).length;
   $('targetN').textContent = fmtPts(G.TARGET);
-  $('presetBtn').textContent = 'PISTA INICIAL: ' + PRESETS[G.presetKey].name;
+  const PR = PRESETS[G.presetKey], stars = '★'.repeat(PR.diff || 1) + '☆'.repeat(3 - (PR.diff || 1));
+  $('presetN').textContent = PR.name;
+  $('trackName').innerHTML = esc(PR.name) + '<span class="st">' + stars + '</span>';
+  $('trackDesc').textContent = (PR.desc || '') + ' · ' + PR.types.filter(t => t !== 'start' && t !== 'finish').length + ' peças';
+  $('trackPrev').innerHTML = presetPreview(G.presetKey);
   $('themeBtn').textContent = 'TEMA: ' + THEMES[themeKey].name;
   $('crossBtn').textContent = 'CRUZAR PISTA: ' + (G.allowCross ? 'SIM' : 'NÃO');
   if (!$('lobbyWait').dataset.rejoin) $('lobbyWait').textContent = 'Aguardando o host começar... Meta: ' + fmtPts(G.TARGET) + ' pts · Pista: ' + PRESETS[G.presetKey].name + ' · Tema: ' + THEMES[themeKey].name;
   $('lobbyList').innerHTML = G.players.map(p => `<div class="pl"><span class="sw" style="background:${p.color}"></span><span>${esc(p.name)}${p.id === G.myId ? ' <span style="opacity:.6">(você)</span>' : ''}</span>
-    ${p.id === 0 && !p.bot ? '<span class="hostb">HOST</span>' : ''}<span class="dv">${p.bot ? '🤖 BOT' : p.device === 'mobile' ? '📱 CELULAR' : '💻 PC'}</span></div>`).join('') +
+    ${p.id === 0 && !p.bot ? '<span class="hostb">HOST</span>' : ''}<span class="dv">${p.bot ? '🤖 BOT' : p.device === 'mobile' ? '📱 CELULAR' : '💻 PC'}</span>${NET.role === 'host' && !p.bot && p.id !== G.myId ? `<button class="kick" data-kick="${p.id}" title="Remover da sala">✕</button>` : ''}</div>`).join('') +
     `<div class="note">${G.players.length}/${MAXP} pilotos${NET.role === 'host' ? ' · Mande o código ou o link para seus amigos' : ''}</div>`;
 }
 document.addEventListener('visibilitychange', () => { if (document.hidden && hooks.uiActive() && !isMP()) pauseGame(); });
+// host remove um jogador da sala (só no lobby)
+$('lobbyList').addEventListener('click', e => {
+  const b = e.target.closest && e.target.closest('[data-kick]');
+  if (b && NET.role === 'host' && G.state === 'lobby') { SFX.click(); hostKick(+b.dataset.kick); }
+});

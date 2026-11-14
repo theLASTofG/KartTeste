@@ -238,3 +238,14 @@ body.building #lives,body.building #specTxt{display:none}
 #specTxt{font-size:11px;color:#bfe9ff;min-height:0;margin-top:2px}
 body.spectating #info{pointer-events:auto;cursor:pointer}
 #board .sb.dead{opacity:.45}
+
+/* lobby: pista escolhida (todos veem) + expulsar jogador */
+#trackInfo{display:flex;align-items:center;gap:12px;max-width:460px;margin:12px auto 0;padding:8px 12px;background:rgba(255,255,255,.06);border-radius:12px;text-align:left}
+#trackPrev{flex:0 0 auto;min-width:60px;display:flex;align-items:center;justify-content:center}
+#trackPrev svg{display:block;max-width:150px}
+#trackInfo .tn{font-weight:900;font-size:15px;letter-spacing:.5px}
+#trackInfo .tn .st{color:var(--gold);letter-spacing:2px;margin-left:6px;font-size:13px}
+#trackInfo .td{font-size:12px;opacity:.78;font-weight:700;margin-top:2px}
+.cnt .pn{min-width:130px;text-align:center;font-size:14px}
+.pl .kick{margin-left:6px;width:26px;height:26px;border-radius:8px;border:2px solid rgba(255,46,85,.6);background:rgba(255,46,85,.15);color:#ff6b86;font-weight:900;line-height:1;cursor:pointer}
+.pl .kick:hover{background:rgba(255,46,85,.4)}

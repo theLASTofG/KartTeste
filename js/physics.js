@@ -1,7 +1,7 @@
 // Física arcade dos carros: passo, contato com pista/mureta, obstáculos e colisões.
 import { G, hooks } from './state.js';
 import { clamp, lerp, rnd, wrapA } from './utils.js';
-import { BARRIERS, CAR_R, DRIFT, MAX_DEATHS, MEGA, FINISH_S, GRAV, PAD, PH, POWER, profileSeg, RAMP_PADS, WALL_H, WIND_ACC } from './config.js';
+import { BARRIERS, CAR_R, CELL, DRIFT, MAX_DEATHS, MEGA, FINISH_S, GRAV, PAD, PH, POWER, profileSeg, RAMP_PADS, WALL_H, WIND_ACC } from './config.js';
 import { SFX } from './audio.js';
 import { burst } from './fx.js';
 import { obstacles, pieceStart, prevIdx, succIdx, tmpW, track } from './track.js';
@@ -63,7 +63,7 @@ function pushOut(c, nx, nz, over, dt, bounce = 0.35) {
   return 0;
 }
 // peças onde NÃO se salva checkpoint (o renascimento cairia de novo)
-const NO_CHECKPOINT = new Set(['start', 'finish', 'holes', 'bridge', 'jump', 'bigjump', 'doublejump', 'serpentina', 'spiralup', 'megablock']);
+const NO_CHECKPOINT = new Set(['start', 'finish', 'holes', 'bridge', 'jump', 'bigjump', 'doublejump', 'minijump', 'tripjump', 'serpentina', 'spiralup', 'megablock']);
 // renasce no último checkpoint seguro: centro da peça, alinhado, parado e invulnerável por 2 s
 export function respawnAtCheckpoint(c) {
   const idx = clamp(c.checkpointIdx || 0, 0, track.length - 1), P0 = track[idx];
@@ -89,11 +89,43 @@ function fallDeath(c) {
     if (c.isLocal) { SFX.fall(); toast('Eliminado! (' + MAX_DEATHS + '/' + MAX_DEATHS + ' quedas)', '#ff2e55', 2); G.R.spectateT = 1.6; }
   }
 }
-// queda livre (voidFall): só gravidade + inércia. Nada reposiciona, empurra ou captura o carro; morre abaixo de y = -20.
+// Pouso em OUTRA peça: quem salta/cai para cima de uma peça diferente da atual (um trecho já percorrido ao lado, outro andar
+// mais baixo, "cruzar pista") pousa nela em vez de atravessar o piso e ir para o vazio. Chamada em todo frame no ar (trackContact)
+// e na queda livre. Só considera peças diferentes da atual, só dentro do trecho real da peça (0..len) e só atravessando o piso
+// de cima para baixo — mesmo critério do pouso normal.
+const LQ = {};
+function catchLowerTrack(c, prevY, dt) {
+  if (!c.alive || c.vy > 0) return false;
+  const ci = Math.round(c.x / CELL), cj = Math.round(c.z / CELL);
+  let best = -1, bestH = -Infinity, bestSlope = 0;
+  for (let i = 0; i < track.length; i++) {
+    const p = track[i];
+    if (i === c.pi || !p.cells.some(k => k[0] === ci && k[1] === cj)) continue;
+    p.query(c.x, c.z, LQ);
+    if (!LQ.floor || LQ.s < 0 || LQ.s > p.len) continue;
+    const tol = 0.28 + Math.abs(LQ.slope) * (Math.hypot(c.vx, c.vz) * dt * 1.8 + 0.15);
+    if (prevY >= LQ.h - tol && c.y <= LQ.h + 0.05 && LQ.h > bestH) { best = i; bestH = LQ.h; bestSlope = LQ.slope; }
+  }
+  if (best < 0) return false;
+  const impact = Math.max(0, -c.vy);
+  c.pi = best; track[best].query(c.x, c.z, c.Q);
+  c.y = bestH; c.vy = 0; c.grounded = true; c.voidFall = false; c.airT = 0; c.squash = 0.22; c.prevSlope = bestSlope;
+  c.tumbleX = c.tumbleZ = 0;
+  c.s = c.Q.s; c.v = c.Q.v; c.prog = pieceStart[best] + clamp(c.Q.s, 0, track[best].len);
+  if (impact > 6) {
+    burst(c.x, c.y + 0.2, c.z, 12, 0.7, 0.8, 1, 5, 0.4, 8);
+    if (c.isLocal) { SFX.land(impact); G.shake = Math.max(G.shake, clamp(impact / 40, 0.1, 0.4)); }
+  }
+  return true;
+}
+// queda livre (voidFall): só gravidade + inércia. Nada reposiciona nem empurra o carro; só uma peça de andar mais baixo
+// logo abaixo dele pode pegá-lo (catchLowerTrack). Morre abaixo de y = -20.
 function freeFall(c, dt) {
   c.grounded = false;
+  const prevY = c.y;
   c.vy -= GRAV * dt; c.x += c.vx * dt; c.y += c.vy * dt; c.z += c.vz * dt; c.airT += dt;
   c.tumbleX += dt * 3.1; c.tumbleZ += dt * 2.3;
+  if (catchLowerTrack(c, prevY, dt)) return;
   if (c.y < baseOf(c) - 20 && c.alive) fallDeath(c);        // limite do abismo relativo ao andar da peça atual
 }
 const baseOf = c => (track[c.pi] && track[c.pi].baseH) || 0;
@@ -326,6 +358,8 @@ export function trackContact(c, dt) {
         burst(c.x, c.y + 0.2, c.z, 12, 0.7, 0.8, 1, 5, 0.4, 8);
         if (c.isLocal) { SFX.land(impact); G.shake = Math.max(G.shake, clamp(impact / 40, 0.1, 0.4)); }
       }
+    } else if (catchLowerTrack(c, prevY, dt)) {
+      return;                                                   // voou/caiu para cima de OUTRA peça (já percorrida, vizinha ou de outro andar): pousa nela
     } else if (c.y < Q.h - tol && c.vy <= 0) {
       c.voidFall = true; c.drifting = false; c.driftT = 0; c.driftLevel = 0; c.boostT = 0; c.boostPow = 0;
       c.s = Q.s; c.v = Q.v; c.prog = pieceStart[c.pi] + clamp(Q.s, 0, Pc.len);

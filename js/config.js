@@ -28,7 +28,10 @@ export const PAD = { pow: 0.42, dur: 1.0, kick: 4, s0: 8, s1: 18, hv: 3.6 };
 export const PROFILES = {
   jump: [[0, 18, 'ramp', 0, 3], [18, 29, 'gap'], [29, 52, 'flat']],
   bigjump: [[0, 24, 'ramp', 0, 5], [24, 44, 'gap'], [44, 78, 'flat']],
-  doublejump: [[0, 12, 'ramp', 0, 2.4], [12, 21, 'gap'], [21, 40, 'flat'], [40, 52, 'ramp', 0, 2.4], [52, 61, 'gap'], [61, 78, 'flat']]
+  doublejump: [[0, 12, 'ramp', 0, 2.4], [12, 21, 'gap'], [21, 40, 'flat'], [40, 52, 'ramp', 0, 2.4], [52, 61, 'gap'], [61, 78, 'flat']],
+  // Salto Curto: 1 célula, rampinha + buraco pequeno | Salto Triplo: 3 rampinhas seguidas (3 células)
+  minijump: [[0, 9, 'ramp', 0, 1.8], [9, 14, 'gap'], [14, 26, 'flat']],
+  tripjump: [[0, 8, 'ramp', 0, 1.6], [8, 13, 'gap'], [13, 26, 'flat'], [26, 34, 'ramp', 0, 1.6], [34, 39, 'gap'], [39, 52, 'flat'], [52, 60, 'ramp', 0, 1.6], [60, 65, 'gap'], [65, 78, 'flat']]
 };
 export const RAMP_PADS = { bigjump: [2, 12] };                // Mega Salto tem turbo embutido na rampa
 export const profileSeg = (t, s) => { const p = PROFILES[t]; if (!p) return null; for (const g of p) if (s < g[1]) return g; return p[p.length - 1]; };
@@ -47,6 +50,8 @@ export const PT = {
   curveL: { cells: 1, curve: -1 }, curveR: { cells: 1, curve: 1 }, jump: { cells: 2 }, bridge: { cells: 2 },
   bumps: { cells: 1 }, ice: { cells: 1 }, wind: { cells: 1 }, holes: { cells: 2 }, bigjump: { cells: 3 },
   chicane: { cells: 2 }, doublejump: { cells: 3 },
+  minijump: { cells: 1 }, tripjump: { cells: 3 },
+  curveIceL: { cells: 1, curve: -1, ice: true }, curveIceR: { cells: 1, curve: 1, ice: true },     // curvas de gelo: pouco atrito, freie antes
   serpentina: { cells: 4, special: 'serp' },        // ocupa 2x2 células: sobe em S, retorna 180° e desce (sai ao lado, no sentido oposto)
   megafunnel: { cells: 8, special: 'funnel' },        // automática: junta as 4 faixas da Mega Pista numa pista só (nunca vira carta)
   spiralup: { cells: 2, special: 'spiral', dh: 6 },  // meia-volta subindo +6 m: as peças seguintes (e a chegada) ficam no andar de cima
@@ -57,6 +62,7 @@ export const SLOTS = {
   straight: [[8, -2.6], [8, 2.6], [18, 0]], boost: [[22.5, -2.6], [22.5, 2.6]],
   curveL: [[RC * Math.PI / 4, 0]], curveR: [[RC * Math.PI / 4, 0]], jump: [[40, -2.4], [40, 2.4]],
   ice: [[8, -2.6], [8, 2.6], [18, 0]], wind: [[13, 0]], bigjump: [[66, -2.4], [66, 2.4]], doublejump: [[30, -2.4], [30, 2.4], [70, 0]],
+  minijump: [[20, 0]], tripjump: [[19, 0], [45, 0], [71, 0]], curveIceL: [[RC * Math.PI / 4, 0]], curveIceR: [[RC * Math.PI / 4, 0]],
   start: [], finish: [], bridge: [], bumps: [], holes: [], chicane: [],
   serpentina: [[22, 0], [58, 0], [100, 0]], spiralup: [[8, 0], [34, 0], [58, 0]],
   megablock: [[16, -27], [16, 1], [34, -39], [34, 13], [50, -13], [62, 0]]       // v lateral já no eixo do bloco (centro = coluna do meio)
@@ -80,7 +86,7 @@ export const MEGA = {
   funnelLen: 52, funnelPad: { s0: 34, s1: 46, l0: -5.5, l1: 5.5 }   // funil: 4 faixas -> 1 pista central, piso turbo na saída
 };
 // cartas aceitas nas 4 saídas (retas, sem curva, até 2 células; as de 1 célula ganham um trecho reto automático)
-export const EXIT_TYPES = ['straight', 'boost', 'bumps', 'ice', 'wind', 'bridge', 'holes', 'chicane', 'jump'];
+export const EXIT_TYPES = ['straight', 'boost', 'bumps', 'ice', 'wind', 'bridge', 'holes', 'chicane', 'jump', 'minijump'];
 export const ITEMS = {
   straight: { kind: 'piece', name: 'Reta', w: 0.9, svg: ROAD + '<path d="M32 8 V20 M32 28 V40 M32 48 V58" stroke="#fff" stroke-width="3"/>' },
   boost: { kind: 'piece', name: 'Reta Turbo', w: 1.0, svg: ROAD + '<path d="M24 42 L32 32 L40 42 M24 28 L32 18 L40 28" stroke="#a6ff3b" stroke-width="4.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>' },
@@ -98,6 +104,10 @@ export const ITEMS = {
   megablock: { kind: 'piece', name: 'Mega Pista 4x', w: 1.0, svg: '<rect x="6" y="26" width="52" height="34" rx="4" fill="#2b3048" stroke="#00e5ff" stroke-width="2"/><rect x="26" y="50" width="12" height="14" fill="#2b3048" stroke="#00e5ff" stroke-width="2"/><g fill="none" stroke-width="5" stroke-linecap="round"><path d="M10 26 V6" stroke="#00e5ff"/><path d="M24 26 V6" stroke="#ff2e88"/><path d="M40 26 V6" stroke="#a6ff3b"/><path d="M54 26 V6" stroke="#ffd23f"/></g><circle cx="32" cy="38" r="4" fill="#ff2e88"/><circle cx="18" cy="40" r="3" fill="#9be8ff"/><circle cx="46" cy="40" r="3" fill="#9be8ff"/>' },
   chicane: { kind: 'piece', name: 'Chicane', w: 0.9, svg: ROAD + '<path d="M18 16 H38 M26 32 H46 M18 48 H38" stroke="#ff2e88" stroke-width="5"/><path d="M42 58 L42 44 L22 40 L22 24 L42 20 L42 6" stroke="#a6ff3b" stroke-width="2" stroke-dasharray="3 3" fill="none"/>' },
   doublejump: { kind: 'piece', name: 'Salto Duplo', w: 0.7, svg: '<path d="M0 52 L12 44 L12 56 L0 56Z M32 52 L44 44 L44 56 L32 56Z" fill="#ff9a1f"/><rect x="20" y="50" width="10" height="6" fill="#2b3048"/><rect x="52" y="50" width="12" height="6" fill="#2b3048"/><path d="M12 42 Q18 26 22 48 M44 42 Q50 26 54 48" stroke="#fff" stroke-width="2" stroke-dasharray="3 3" fill="none"/>' },
+  minijump: { kind: 'piece', name: 'Salto Curto', w: 1.0, svg: '<path d="M2 50 L18 42 L18 54 L2 54Z" fill="#ffb347"/><rect x="34" y="48" width="28" height="6" fill="#2b3048" stroke="#00e5ff" stroke-width="1.5"/><path d="M18 40 Q26 24 34 46" stroke="#fff" stroke-width="2.5" stroke-dasharray="4 4" fill="none"/>' },
+  tripjump: { kind: 'piece', name: 'Salto Triplo', w: 0.6, svg: '<path d="M0 52 L8 46 L8 56 L0 56Z M22 52 L30 46 L30 56 L22 56Z M44 52 L52 46 L52 56 L44 56Z" fill="#ff9a1f"/><rect x="12" y="52" width="8" height="4" fill="#2b3048"/><rect x="34" y="52" width="8" height="4" fill="#2b3048"/><rect x="56" y="52" width="8" height="4" fill="#2b3048"/><path d="M8 44 Q14 30 20 50 M30 44 Q36 30 42 50 M52 44 Q58 30 64 50" stroke="#fff" stroke-width="2" stroke-dasharray="3 3" fill="none"/>' },
+  curveIceL: { kind: 'piece', name: 'Curva de Gelo Esq.', w: 0.7, svg: '<path d="M32 64 L32 44 A14 14 0 0 0 18 30 L0 30" stroke="#9be8ff" stroke-width="24" fill="none"/><path d="M32 64 L32 44 A14 14 0 0 0 18 30 L0 30" stroke="#fff" stroke-width="2" stroke-dasharray="5 5" fill="none"/><path d="M44 14 V30 M36 22 H52" stroke="#fff" stroke-width="3"/>' },
+  curveIceR: { kind: 'piece', name: 'Curva de Gelo Dir.', w: 0.7, svg: '<path d="M32 64 L32 44 A14 14 0 0 1 46 30 L64 30" stroke="#9be8ff" stroke-width="24" fill="none"/><path d="M32 64 L32 44 A14 14 0 0 1 46 30 L64 30" stroke="#fff" stroke-width="2" stroke-dasharray="5 5" fill="none"/><path d="M20 14 V30 M12 22 H28" stroke="#fff" stroke-width="3"/>' },
   kicker: { kind: 'obs', name: 'Rampinha', w: 0.9, svg: '<path d="M8 50 L56 50 L56 24 Z" fill="#ff9a1f"/><path d="M14 46 L50 46" stroke="#fff" stroke-width="3"/><path d="M50 18 Q56 6 62 14" stroke="#fff" stroke-width="2.5" fill="none"/>' },
   piston: { kind: 'obs', name: 'Pistão', w: 0.8, svg: '<rect x="20" y="10" width="24" height="30" fill="#ff2020"/><rect x="16" y="44" width="32" height="10" fill="#e8ecff"/><path d="M32 4 V10 M24 2 L32 8 L40 2" stroke="#fff" stroke-width="2.5" fill="none"/>' },
   block: { kind: 'obs', name: 'Bloco', w: 1.1, svg: '<rect x="14" y="14" width="36" height="36" rx="3" fill="#ff2020"/><rect x="14" y="25" width="36" height="6" fill="#fff"/>' },

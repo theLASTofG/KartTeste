@@ -57,8 +57,9 @@ function speedLimitAt(c, sG) {
   if (er && er.slow) return er.slow;
   let lim = 99;
   const nx = nxt(i, c);
-  const n2 = nx ? nxt(track.indexOf(nx), c) : undefined, haz = t => !!t && (t.type === 'bridge' || t.type === 'holes' || t.type === 'ice' || t.type === 'wind' || t.type === 'narrow');
-  if (p.turn) lim = haz(nx) ? 15 + c.ai.skill * 1.5 : haz(n2) ? 16.5 + c.ai.skill * 1.5 : 17.5 + c.ai.skill * 2.2;
+  const n2 = nx ? nxt(track.indexOf(nx), c) : undefined, haz = t => !!t && (t.type === 'bridge' || t.type === 'holes' || t.type === 'ice' || t.type === 'wind' || t.type === 'narrow' || !!(t.def && t.def.ice));
+  if (p.turn && p.def.ice) lim = 13.5 + c.ai.skill * 2;
+  else if (p.turn) lim = haz(nx) ? 15 + c.ai.skill * 1.5 : haz(n2) ? 16.5 + c.ai.skill * 1.5 : 17.5 + c.ai.skill * 2.2;
   else if (p.type === 'bridge') lim = 16 + c.ai.skill * 2.5;
   else if (p.type === 'ice') lim = 15.5 + c.ai.skill * 2;
   else if (p.type === 'holes') lim = 16 + c.ai.skill * 2;
@@ -108,7 +109,7 @@ export function aiDrive(c, dt, inp) {
   if (c.grounded && Q && Q.hw && !planned && Math.abs(Q.v) > Q.hw - 1.5 && (c.vx * Q.rx + c.vz * Q.rz) * Math.sign(Q.v) > 0) lane = 0;
   trackPoint(sG + look, lane, tmpA, c.pi, c.ai.exit);
   const err = wrapA(Math.atan2(tmpA.z - c.z, tmpA.x - c.x) - c.a);
-  const slick = Pc && (Pc.type === 'ice' || Pc.type === 'wind');
+  const slick = Pc && (Pc.type === 'ice' || Pc.type === 'wind' || Pc.def.ice);
   inp.steer = clamp(err * (slick ? 1.6 : 2.4), -1, 1);                       // gelo/vento: menos esterço brusco
   let target = PH.maxSpeed;
   for (let d = 0; d <= 20; d += 4) { const lim = speedLimitAt(c, sG + d + 2); target = Math.min(target, Math.sqrt(lim * lim + 2 * 32 * d)); }

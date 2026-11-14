@@ -19,6 +19,12 @@ export function toHostFast(msg) {
   const c = NET.hostFast && NET.hostFast.open ? NET.hostFast : NET.host;
   if (c && c.open) { try { c.send(msg); } catch (e) { } }
 }
+// reação rápida (teclas 1–4): vai ao host, que repassa para todos
+export function sendEmote(e) { if (NET.role === 'host' || NET.role === 'client') toHost({ t: 'emote', e }); }
+function showEmote(pid, e) {
+  const p = playerById(pid); if (!p || !EMOTES[e]) return;
+  toast(p.name + ': ' + EMOTES[e], p.color, 1.6);
+}
 export function sendTo(pid, msg) { if (pid === G.myId) { onClientMsg(msg); return; } for (const v of NET.conns.values()) if (v.pid === pid && v.conn.open) v.conn.send(msg); }
 export function toHost(msg) {
   if (NET.role === 'client') { if (NET.host && NET.host.open) NET.host.send(msg); }
@@ -38,6 +44,15 @@ const myToken = (() => {
   catch (e) { return Math.random().toString(36).slice(2); }
 })();
 const HTOK = {};                              // host: pid -> token (não é enviado aos outros jogadores)
+const HBAN = new Set();                       // host: tokens de quem foi removido da sala (não volta)
+const HEMO = {};                              // host: pid -> último emote (limite de spam)
+export const EMOTES = ['👍 BOA!', '😂 HAHA', '😡 AI!', '🏁 VAMOS!'];
+// nome já usado na sala? vira "Nome (2)", "Nome (3)"... sempre cabendo em 12 caracteres
+function uniqueName(nm) {
+  if (!G.players.some(p => p.name === nm)) return nm;
+  for (let n = 2; n < 20; n++) { const suf = ' (' + n + ')', c = nm.slice(0, 12 - suf.length) + suf; if (!G.players.some(p => p.name === c)) return c; }
+  return nm;
+}
 function genCode() { const A = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; let s = ''; for (let i = 0; i < 5; i++) s += A[Math.floor(Math.random() * A.length)]; return s; }
 export function setStatus(t) { $('status').textContent = t || ''; }
 function readName() { G.myName = ($('nameInp').value || '').trim().slice(0, 12) || G.myName; store.set('name', G.myName); }
@@ -75,8 +90,9 @@ function onHostConn(conn) {
     if (e) e.fast = conn; else NET.fastPending.set(conn.peer, conn);
     conn.on('data', msg => {
       if (!msg) return;
+      const en = NET.conns.get(conn.peer); if (en) en.last = performance.now();          // qualquer pacote (inclusive ping) prova que o jogador está vivo
       if (msg.t === 'ping') { try { conn.send({ t: 'pong', c: msg.c }); } catch (e) { } return; }
-      const en = NET.conns.get(conn.peer); if (en && msg.t === 'st') hostHandle(en.pid, msg);
+      if (en && msg.t === 'st') hostHandle(en.pid, msg);
     });
     conn.on('error', () => { });
     return;
@@ -84,14 +100,20 @@ function onHostConn(conn) {
   conn.on('data', msg => {
     if (!msg || typeof msg !== 'object') return;
     if (msg.t === 'hello') {
-      const back = msg.token && G.players.find(p => HTOK[p.id] === msg.token && !p.connected);
-      if (back) { hostRejoin(conn, back); return; }
+      if (msg.token && HBAN.has(String(msg.token).slice(0, 40))) { conn.send({ t: 'full', reason: 'Você foi removido desta sala pelo host.' }); setTimeout(() => conn.close(), 400); return; }
+      let back = msg.token && G.players.find(p => HTOK[p.id] === msg.token);
+      if (back && back.connected) {                         // a conexão antiga ainda "parece viva" (rede caiu sem avisar): derruba ela
+        for (const [peer, v] of [...NET.conns]) if (v.pid === back.id) { NET.conns.delete(peer); try { v.conn.close(); } catch (e) { } }
+        playerLeft(back.id);                                // lobby: sai da lista e entra de novo abaixo · partida: vira bot e reassume a vaga
+        back = G.players.find(p => HTOK[p.id] === msg.token && !p.connected);
+      }
+      if (back && !back.connected) { hostRejoin(conn, back); return; }
       if (G.state !== 'lobby') { conn.send({ t: 'full', reason: 'Partida já em andamento. Aguarde terminar.' }); setTimeout(() => conn.close(), 400); return; }
       if (G.players.filter(p => !p.bot).length >= MAXP) { conn.send({ t: 'full', reason: 'Sala cheia (máx. ' + MAXP + ').' }); setTimeout(() => conn.close(), 400); return; }
       const id = G.nextId++;
-      NET.conns.set(conn.peer, { conn, pid: id, fast: NET.fastPending.get(conn.peer) || null });
+      NET.conns.set(conn.peer, { conn, pid: id, fast: NET.fastPending.get(conn.peer) || null, last: performance.now() });
       NET.fastPending.delete(conn.peer);
-      const nm = String(msg.name || 'Piloto').slice(0, 12);
+      const nm = uniqueName(String(msg.name || 'Piloto').trim().slice(0, 12) || 'Piloto');
       G.players.splice(G.players.filter(p => !p.bot).length, 0, { id, name: nm, color: freeColor(), device: msg.device === 'mobile' ? 'mobile' : 'pc', bot: false, score: 0, connected: true });
       if (msg.token) HTOK[id] = String(msg.token).slice(0, 40);
       if (G.players.length > MAXP) { const bi = G.players.map(p => p.bot).lastIndexOf(true); if (bi >= 0) { G.players.splice(bi, 1); G.botCount = Math.max(0, G.botCount - 1); } }
@@ -101,14 +123,14 @@ function onHostConn(conn) {
       return;
     }
     const e = NET.conns.get(conn.peer);
-    if (e) hostHandle(e.pid, msg);
+    if (e) { e.last = performance.now(); hostHandle(e.pid, msg); }
   });
   conn.on('close', () => { const e = NET.conns.get(conn.peer); NET.conns.delete(conn.peer); if (e) playerLeft(e.pid); });
   conn.on('error', () => { });
 }
 // jogador que caiu e voltou: reassume a vaga (o bot devolve o carro na próxima rodada)
 function hostRejoin(conn, p) {
-  NET.conns.set(conn.peer, { conn, pid: p.id, fast: NET.fastPending.get(conn.peer) || null });
+  NET.conns.set(conn.peer, { conn, pid: p.id, fast: NET.fastPending.get(conn.peer) || null, last: performance.now() });
   NET.fastPending.delete(conn.peer);
   p.connected = true; p.name = p.name.replace(/ 🤖$/, '');
   const racing = G.state === 'countdown' || G.state === 'race';
@@ -129,6 +151,20 @@ function playerLeft(pid) {
   if (G.state === 'lobby') G.players = G.players.filter(x => x.id !== pid);
   else { p.bot = true; p.connected = false; toast(p.name + ' saiu (virou bot)', '#ff9a1f', 1.8); p.name = p.name + ' 🤖'; const c = carById.get(pid); if (c) c.ai.err = null; }
   hostLobbyChanged();
+}
+// host remove um jogador (só no lobby): ele volta pro título com o aviso e o token dele fica bloqueado nesta sala
+export function hostKick(pid) {
+  const p = playerById(pid);
+  if (NET.role !== 'host' || !p || p.bot || pid === G.myId || G.state !== 'lobby') return;
+  for (const [peer, v] of [...NET.conns]) if (v.pid === pid) {
+    if (HTOK[pid]) HBAN.add(HTOK[pid]);
+    try { v.conn.send({ t: 'full', reason: 'Você foi removido da sala pelo host.' }); } catch (e) { }
+    NET.conns.delete(peer);
+    setTimeout(() => { try { v.conn.close(); } catch (e) { } try { if (v.fast) v.fast.close(); } catch (e) { } }, 400);
+    break;
+  }
+  playerLeft(pid);
+  toast(p.name + ' removido', '#ff9a1f', 1.2);
 }
 export function hostLobbyChanged() {
   syncCars();
@@ -199,7 +235,7 @@ function onClientMsg(msg) {
   switch (msg.t) {
     case 'welcome':
       clearTimeout(NET.joinTimer);
-      NET.role = 'client'; G.myId = msg.id; NET.code = msg.code; NET.retries = 0; setStatus('');
+      NET.role = 'client'; G.myId = msg.id; NET.code = msg.code; NET.retries = 0; NET.pongAt = performance.now(); setStatus('');
       if (msg.rejoin) {
         const lw = $('lobbyWait'); lw.dataset.rejoin = '1'; lw.textContent = 'Reconectado! Você volta a correr na próxima rodada.';
         toast('RECONECTADO!', '#a6ff3b', 1.4);
@@ -228,6 +264,7 @@ function onClientMsg(msg) {
     case 'item_granted': case 'item_state': case 'item_spawn': case 'item_despawn': case 'item_effect': hooks.itemClientMsg(msg); break;
     case 'tray': hooks.applyTray(msg.tray); break;
     case 'track': applyTrack(msg.types, msg.obs, true); G.placed = msg.placed || {}; hooks.renderBuild(); break;
+    case 'emote': showEmote(msg.pid, msg.e); break;
     case 'msg': toast(msg.text, msg.color || '#fff', 1.6); if (msg.deny) SFX.deny(); break;
     case 'full':
       clearTimeout(NET.joinTimer);
@@ -244,6 +281,12 @@ function hostHandle(pid, msg) {
     case 'place': hooks.hostPlace(pid, msg.key); break;
     case 'unpick': hooks.hostUnpick(pid); break;
     case 'item_pickup': case 'item_use': hooks.itemHostMsg(pid, msg); break;
+    case 'emote': {
+      const e = msg.e | 0, now = performance.now();
+      if (e < 0 || e >= EMOTES.length || now - (HEMO[pid] || 0) < 1200) break;
+      HEMO[pid] = now; showEmote(pid, e); broadcast({ t: 'emote', pid, e });
+      break;
+    }
   }
 }
 // ---- estado de carro na rede
@@ -319,3 +362,16 @@ export function updateRemote(c, dt) {
   if (!c.alive) { c.tumbleX = (c.tumbleX || 0) + dt * 3.1; c.tumbleZ = (c.tumbleZ || 0) + dt * 2.3; }
 }
 setInterval(() => { if (NET.role === 'client') toHostFast({ t: 'ping', c: Math.round(performance.now()) }); updateNetHud(); }, 1500);
+// vigia de conexão: o host solta quem sumiu sem avisar (vira bot na corrida); o cliente tenta reconectar se o host calar
+setInterval(() => {
+  const now = performance.now();
+  if (NET.role === 'host') {
+    const lim = G.state === 'lobby' ? 40000 : 15000;
+    for (const [peer, v] of [...NET.conns]) if (now - (v.last || now) > lim) {
+      NET.conns.delete(peer); try { v.conn.close(); } catch (e) { }
+      playerLeft(v.pid);
+    }
+  } else if (NET.role === 'client' && !NET.leaving && NET.pongAt && now - NET.pongAt > 15000 && NET.lastCode) {
+    NET.pongAt = 0; tryReconnect(NET.lastCode);
+  }
+}, 2000);
