@@ -81,6 +81,7 @@ export const SFX = (() => {
     level(l) { tone(500 + l * 260, 0.12, 'square', 0.06); tone(750 + l * 390, 0.14, 'square', 0.05, 0, 0.06); },
     hop() { tone(240, 0.09, 'triangle', 0.08, 420); },
     thump(v) { const k = clamp(v / 14, 0.2, 1); noise(0.18, 0.35 * k, 900, 120, 'lowpass', 1); tone(90, 0.15, 'sine', 0.3 * k, 40); },
+    geyser(v = 1) { noise(1.2, 0.3 * v, 500, 3500, 'bandpass', 0.7); noise(0.9, 0.22 * v, 2500, 600, 'highpass', 0.8, 0.15); tone(110, 0.8, 'sawtooth', 0.07 * v, 260); },
     boing() { tone(180, 0.35, 'sine', 0.3, 620); tone(360, 0.25, 'triangle', 0.1, 900); },
     splat() { noise(0.4, 0.3, 1200, 200, 'lowpass', 2); tone(140, 0.3, 'sine', 0.15, 60); },
     jump() { noise(0.5, 0.15, 400, 2500, 'bandpass', 1.5); tone(200, 0.35, 'triangle', 0.08, 500); },

@@ -3,6 +3,7 @@
 import { PRESETS } from '../js/presets.js';
 import { DIRS, EXIT_TYPES, ITEMS, MEGA, PT, PROFILES, SLOTS } from '../js/config.js';
 
+const PRESET_ONLY_OBS = ['geyser'];            // obstáculos que só existem em pistas prontas (sem carta)
 const EXIT_TOKEN = /^x([0-3]):(\w+)$/;
 function mk(type, ci, cj, dir, baseH) {
   const def = PT[type]; if (!def) throw new Error('tipo desconhecido: ' + type);
@@ -72,7 +73,7 @@ for (const [key, P] of Object.entries(PRESETS)) {
       const [pi, si] = o.key.split(':').map(Number), p = arr[pi];
       if (!p) errs.push(`obstáculo ${o.key}: peça inexistente`);
       else if (si >= p.nslots) errs.push(`obstáculo ${o.key}: ${p.type} só tem ${p.nslots} espaço(s)`);
-      if (!ITEMS[o.type] || ITEMS[o.type].kind !== 'obs') errs.push(`obstáculo ${o.key}: tipo inválido ${o.type}`);
+      if (!PRESET_ONLY_OBS.includes(o.type) && (!ITEMS[o.type] || ITEMS[o.type].kind !== 'obs')) errs.push(`obstáculo ${o.key}: tipo inválido ${o.type}`);
     }
     const seen = new Set(); for (const o of P.obs) { if (seen.has(o.key)) errs.push('obstáculo repetido ' + o.key); seen.add(o.key); }
     const xs = [...occ.keys()].map(k => k.split(',').map(Number));

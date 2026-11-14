@@ -10,6 +10,8 @@ import { centerText, showScreen, toast, updateBoard } from './hud.js';
 import { announceNow, createRoom, hostKick, hostLobbyChanged, joinRoom, leaveRoom, startSolo, toHost } from './net.js';
 import { closeRoomAnnouncement } from './rooms.js';
 import { setSlotMode } from './camera.js';
+import { applyFree, clearFree, freeOnRoundEnd } from './freeobs.js';
+import { confirmFree, endFree } from './freeplace.js';
 import { applyTray, buildMode, showChampion, showResults } from './build-ui.js';
 import { hostAfterResults, hostEnter, hostStartMatch } from './host.js';
 import { resetItems } from './items.js';
@@ -21,7 +23,7 @@ export function setState(s) {
 }
 function hidePhaseUI() {
   $('tray').classList.remove('show'); $('placebar').classList.remove('show'); $('phaseHdr').classList.remove('show');
-  setSlotMode(false); G.menuOpen = false;
+  setSlotMode(false); G.menuOpen = false; endFree();
 }
 // executada em TODOS os peers com os dados enviados pelo host
 export function enterPhase(ph, d) {
@@ -29,6 +31,9 @@ export function enterPhase(ph, d) {
   G.phaseT = 0; G.phaseDur = d.dur || 0;
   resetItems();                                    // itens/caixas/projéteis nunca atravessam rodadas
   hidePhaseUI();
+  G.lookBack = false;
+  // armadilhas livres: reveladas no início da rodada, expiram ao fim dela; em qualquer outra fase não há nenhuma
+  if (ph === 'countdown') applyFree(d.free); else if (ph === 'results') freeOnRoundEnd(); else clearFree();
   if (d.target) G.TARGET = d.target;
   if (d.cross !== undefined) G.allowCross = !!d.cross;
   if (d.theme && d.theme !== themeKey) applyTheme(d.theme);
@@ -134,6 +139,7 @@ export function act(a) {
       if (a === 'presetrand') { do k = ks[Math.floor(Math.random() * ks.length)]; while (k === G.presetKey && ks.length > 1); }
       else k = ks[(i + (a === 'presetnext' ? 1 : ks.length - 1)) % ks.length];
       G.presetKey = k; store.set('preset', k);
+      if (PRESETS[k].theme && themeKey !== PRESETS[k].theme) { applyTheme(PRESETS[k].theme); store.set('theme', themeKey); }
       if (PRESETS[k].cross && !G.allowCross) { G.allowCross = true; store.set('cross', true); toast('CRUZAR PISTA ligado (a pista usa 2 andares)', '#ffd23f', 1.6); }
       hostLobbyChanged();
     } break;
@@ -154,12 +160,13 @@ export function act(a) {
     case 'continue': if (isHost() && G.state === 'results') hostAfterResults(); break;
     case 'resume': resume(); break;
     case 'again': if (isHost() && G.state === 'champion') { if (NET.role === 'solo') hostStartMatch(); else { for (const p of G.players) p.score = 0; hostEnter('lobby', { players: plist() }); } } break;
+    case 'placefree': if (G.state === 'pick' && buildMode() === 'free') confirmFree(); break;
     case 'placepiece': if (G.state === 'pick' && buildMode() === 'piece') toHost({ t: 'place' }); break;
     case 'backcards': if (G.state === 'pick' && (buildMode() === 'piece' || buildMode() === 'obs')) { SFX.click(); toHost({ t: 'unpick' }); } break;
   }
 }
 export function goTitle() {
-  resetItems(); hidePhaseUI(); $('confetti').style.display = 'none';
+  clearFree(); resetItems(); hidePhaseUI(); $('confetti').style.display = 'none';
   G.R = null; setState('title'); showScreen('title'); SFX.update(0, 0, false, 0, false, 0);
   for (const c of cars) c.mesh.root.visible = false;
   if (trackTypes().join() !== INITIAL_TYPES.join() || obstacles.length) { applyTrack(['start', 'finish'], [], false); applyTrack(INITIAL_TYPES, [], false); }

@@ -362,6 +362,24 @@ export function applyTrack(types, obsList, animate) {
   hooks.syncObstacles(obsList || [], animate);
   hooks.rebuildSlots();
 }
+// ---- posicionamento livre: o ponto (x,z) está sobre a superfície da pista e é permitido?
+// Retorna { pi, y, slope, fx, fz, s, v } da peça mais próxima da altura yHint, ou null. Proibido: largada, chegada, borda, fora de peça
+// e em cima da boca de um gêiser.
+const FQ = {};
+export function freeSpot(x, z, yHint = 0) {
+  const ci = Math.round(x / CELL), cj = Math.round(z / CELL);
+  let best = null;
+  for (let i = 0; i < track.length; i++) {
+    const p = track[i];
+    if (p.type === 'start' || p.type === 'finish' || !p.cells.some(k => k[0] === ci && k[1] === cj)) continue;
+    p.query(x, z, FQ);
+    if (!FQ.floor || FQ.s < 3 || FQ.s > p.len - 3 || Math.abs(FQ.v) > FQ.hw - 0.6) continue;
+    if (!best || Math.abs(FQ.h - yHint) < Math.abs(best.y - yHint)) best = { pi: i, y: FQ.h, slope: FQ.slope, fx: FQ.fx, fz: FQ.fz, s: FQ.s, v: FQ.v };
+  }
+  if (!best) return null;
+  for (const o of obstacles) if (o.type === 'geyser' && Math.hypot(o.x - x, o.z - z) < 3.6 && Math.abs(o.y - best.y) < 1.5) return null;
+  return best;
+}
 // ---- ramos (Mega Pista): sucessor/antecessor de uma peça e saída escolhida
 export const megaIndex = () => track.findIndex(p => p.special === 'mega');
 export function exitOfV(v) { return clamp(Math.round((v - MEGA.exitV[0]) / (MEGA.exitV[1] - MEGA.exitV[0])), 0, 3); }

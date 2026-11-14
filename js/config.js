@@ -18,6 +18,28 @@ export const PH = {
   maxSpeed: 27, maxRev: 8, accel: 30, brake: 44, revAccel: 16, coast: 2.4, coastK: 0.17,        // solta o acelerador: perde velocidade mais suave
   turn: 2.7, grip: 12, gripDrift: 3.8, gripOil: 1.4, overDecay: 2.2, boostAccel: 70, airTurn: 0.5
 };
+// Gêiser: ciclo determinístico de 3 fases pelo relógio da rodada (ph = defasagem em segundos). Só a fase 1 (erupção) lança o carro.
+export const GEY = { warn: 1.1, erupt: 1.8, rest: 2.5, radius: 2.1, height: 15, launch: 13 };
+GEY.cycle = GEY.warn + GEY.erupt + GEY.rest;
+// out = { st: 0 aviso | 1 erupção | 2 repouso, k: progresso 0..1 da fase }
+export function geyserState(ph, tc, out) {
+  let t = (tc + ph) % GEY.cycle; if (t < 0) t += GEY.cycle;
+  if (t < GEY.warn) { out.st = 0; out.k = t / GEY.warn; }
+  else if (t < GEY.warn + GEY.erupt) { out.st = 1; out.k = (t - GEY.warn) / GEY.erupt; }
+  else { out.st = 2; out.k = (t - GEY.warn - GEY.erupt) / GEY.rest; }
+  return out;
+}
+// Armadilhas livres: Bola de Demolição (pêndulo) e Barreira. L = corrente, R = raio da esfera, H = altura do pivô, maxAng = amplitude (rad)
+export const WRECK = { L: 6.5, R: 1.3, H: 7.8, maxAng: 1.08, hit: 2.2, knock: 17, cool: 0.9, barrierLen: 7.4, barrierW: 0.9 };
+// Corredor de Gêiseres (armadilha livre, 1 rodada): 70 m de comprimento x ~13 m de largura, ~30 gêiseres em 3 trechos.
+// [u ao longo do corredor, w lateral, ph defasagem em s]: slalom (pares alternados) -> centro + bordas -> onda sequencial (1,0 s entre gêiseres).
+export const GSTRIP = { len: 70, w: 13, list: [] };
+{
+  const L = GSTRIP.list, cyc = GEY.cycle;
+  for (let k = 0; k < 3; k++) { const u = -31.5 + k * 7, a = k % 2; L.push([u, -2.6, a ? 2.7 : 0], [u, 2.6, a ? 0 : 2.7]); }                            // slalom
+  for (let k = 0; k < 3; k++) { const u = -10.5 + k * 7; L.push([u, -4.6, (k * 1.8) % cyc], [u, 0, (k * 1.8 + 2.7) % cyc], [u, 4.6, (k * 1.8 + 1.35) % cyc]); }   // centro + bordas
+  [14, 22.75, 31.5].forEach((u, r) => [-5.2, -2.6, 0, 2.6, 5.2].forEach((w, j) => L.push([u, w, ((r % 2 ? 4 - j : j) * 1.0 + r * 0.6) % cyc])));        // onda
+}
 export const JUMP = { vy: 9.5, cool: 1.0 };                     // pulo: ~1,7 m de altura, ~0,7 s no ar, recarga de 1 s
 // ajuda de borda (pistas sem mureta): perto da borda, a velocidade PARA FORA é amortecida; batida forte/arremesso ainda derruba
 export const EDGE = { band: 1.4, k: 9, maxOut: 10 };
@@ -120,6 +142,9 @@ export const ITEMS = {
   curveIceL: { kind: 'piece', name: 'Curva de Gelo Esq.', w: 0.7, svg: '<path d="M32 64 L32 44 A14 14 0 0 0 18 30 L0 30" stroke="#9be8ff" stroke-width="24" fill="none"/><path d="M32 64 L32 44 A14 14 0 0 0 18 30 L0 30" stroke="#fff" stroke-width="2" stroke-dasharray="5 5" fill="none"/><path d="M44 14 V30 M36 22 H52" stroke="#fff" stroke-width="3"/>' },
   curveIceR: { kind: 'piece', name: 'Curva de Gelo Dir.', w: 0.7, svg: '<path d="M32 64 L32 44 A14 14 0 0 1 46 30 L64 30" stroke="#9be8ff" stroke-width="24" fill="none"/><path d="M32 64 L32 44 A14 14 0 0 1 46 30 L64 30" stroke="#fff" stroke-width="2" stroke-dasharray="5 5" fill="none"/><path d="M20 14 V30 M12 22 H28" stroke="#fff" stroke-width="3"/>' },
   mine: { kind: 'obs', name: 'Mina', w: 0.9, svg: '<circle cx="32" cy="34" r="17" fill="#2a2a38" stroke="#ff5a2a" stroke-width="3"/><circle cx="32" cy="34" r="6" fill="#ff2020"/><path d="M32 12V20M32 48V56M10 34H18M46 34H54M16 18L22 24M42 44L48 50M48 18L42 24M22 44L16 50" stroke="#ff5a2a" stroke-width="3" stroke-linecap="round"/>' },
+  wrecking: { kind: 'free', name: 'Bola de Demolição', w: 1.0, svg: '<path d="M8 8H56" stroke="#e8ecff" stroke-width="5"/><path d="M32 8L46 36" stroke="#9aa3b8" stroke-width="3"/><circle cx="48" cy="44" r="11" fill="#4a505e" stroke="#ff5a1a" stroke-width="3"/><path d="M40 36L36 32M56 36L60 32M58 46H64M38 52L34 56" stroke="#ff5a1a" stroke-width="3" stroke-linecap="round"/><ellipse cx="22" cy="58" rx="10" ry="3" fill="#000" opacity=".4"/>' },
+  barrier: { kind: 'free', name: 'Barreira', w: 0.9, svg: '<rect x="6" y="26" width="52" height="14" rx="2" fill="#ffd23f" stroke="#111" stroke-width="2"/><path d="M12 26L22 40M26 26L36 40M40 26L50 40" stroke="#111" stroke-width="4"/><circle cx="6" cy="33" r="4" fill="#ff5a1a"/><circle cx="58" cy="33" r="4" fill="#ff5a1a"/>' },
+  geyserstrip: { kind: 'free', name: 'Corredor de Gêiseres', w: 0.8, svg: '<rect x="4" y="22" width="56" height="20" rx="3" fill="#2b2420" stroke="#ff6a1a" stroke-width="2"/><g fill="#7fdcff"><rect x="10" y="8" width="5" height="22" rx="2" opacity=".85"/><rect x="29" y="4" width="5" height="26" rx="2" opacity=".85"/><rect x="48" y="10" width="5" height="20" rx="2" opacity=".85"/></g><g fill="#ff9a1f"><ellipse cx="12.5" cy="38" rx="5" ry="2.5"/><ellipse cx="31.5" cy="30" rx="5" ry="2.5"/><ellipse cx="50.5" cy="38" rx="5" ry="2.5"/></g>' },
   kicker: { kind: 'obs', name: 'Rampinha', w: 0.9, svg: '<path d="M8 50 L56 50 L56 24 Z" fill="#ff9a1f"/><path d="M14 46 L50 46" stroke="#fff" stroke-width="3"/><path d="M50 18 Q56 6 62 14" stroke="#fff" stroke-width="2.5" fill="none"/>' },
   piston: { kind: 'obs', name: 'Pistão', w: 0.8, svg: '<rect x="20" y="10" width="24" height="30" fill="#ff2020"/><rect x="16" y="44" width="32" height="10" fill="#e8ecff"/><path d="M32 4 V10 M24 2 L32 8 L40 2" stroke="#fff" stroke-width="2.5" fill="none"/>' },
   block: { kind: 'obs', name: 'Bloco', w: 1.1, svg: '<rect x="14" y="14" width="36" height="36" rx="3" fill="#ff2020"/><rect x="14" y="25" width="36" height="6" fill="#fff"/>' },
@@ -150,18 +175,25 @@ export const POWER = {
       svg: '<path d="M10 40C14 18 40 10 54 28C46 24 40 30 38 38C32 34 20 36 10 40Z" fill="#ffd23f" stroke="#b07a00" stroke-width="3"/><circle cx="46" cy="48" r="5" fill="#ff2e88"/>' },
     pulse: { name: 'Pulso Elétrico', w: 15, color: '#c084ff',
       svg: '<path d="M36 6L16 36H30L26 58L48 26H34Z" fill="#ffe14d" stroke="#8a4dff" stroke-width="3" stroke-linejoin="round"/>' },
+    shield: { name: 'Escudo Protetor', w: 16, color: '#4df3ff',
+      svg: '<path d="M32 6L54 14V32C54 46 44 56 32 60C20 56 10 46 10 32V14Z" fill="#12384a" stroke="#4df3ff" stroke-width="4" stroke-linejoin="round"/><path d="M32 16L44 21V32C44 40 39 46 32 50C25 46 20 40 20 32V21Z" fill="#4df3ff" opacity=".35"/>' },
+    storm: { name: 'Raio Supremo', w: 4, color: '#d9b8ff',
+      svg: '<path d="M14 24C6 24 4 14 12 12C14 4 26 4 30 10C38 6 48 12 46 20C54 22 54 32 46 32H16C10 32 8 26 14 24Z" fill="#6a4a9a" stroke="#c084ff" stroke-width="3"/><path d="M34 30L24 46H32L28 60L44 40H35L40 30Z" fill="#ffe14d" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>' },
     // poderes raros: mudam a POSIÇÃO do carro (o dono aplica; o host decide e avisa todos)
     wings: { name: 'Asas', w: 12, color: '#7dffb0',
       svg: '<path d="M6 40C14 18 30 14 34 30C26 28 18 32 6 40Z M58 40C50 18 34 14 30 30C38 28 46 32 58 40Z" fill="#e8fff2" stroke="#2dd67a" stroke-width="3" stroke-linejoin="round"/><circle cx="32" cy="38" r="6" fill="#2dd67a"/>' },
-    skip: { name: 'Atalho x3', w: 8, color: '#ffa94d',
-      svg: '<path d="M8 14L24 32L8 50Z M26 14L42 32L26 50Z M44 14L60 32L44 50Z" fill="#ffa94d" stroke="#b25a00" stroke-width="2.5" stroke-linejoin="round"/>' },
+    skip: { name: 'Atalho', w: 8, color: '#ffa94d',
+      svg: '<path d="M18 12L50 32L18 52Z" fill="#ffa94d" stroke="#b25a00" stroke-width="3" stroke-linejoin="round"/>' },
     swap: { name: 'Troca de Lugar', w: 6, color: '#ff6bd6',
       svg: '<path d="M10 22H44M34 12L46 22L34 32" stroke="#ff6bd6" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M54 42H20M30 32L18 42L30 52" stroke="#4df3ff" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>' }
   },
-  frost: { speed: 46, ttl: 2.4, radius: 1.7, freeze: 0.7, slow: 1.5, slowMul: 0.6, steerMul: 0.55, immune: 1.2 },
+  // homing: cone de aquisição à frente (alcance m, ângulo °), curva máxima (°/s), tempo máximo de rastreio (s) e ângulo de quebra (°)
+  frost: { speed: 46, ttl: 2.4, radius: 1.7, freeze: 0.7, slow: 1.5, slowMul: 0.6, steerMul: 0.55, immune: 1.2, homing: { range: 40, cone: 45, maxTurn: 75, maxTime: 1.8, breakAngle: 75 } },
   peel: { ttl: 14, radius: 1.5, back: 3.0, spin: 1.0, kick: 4.5, spinRate: 9, immune: 0.8 },
   pulse: { stun: 0.8, immune: 2.0 },
   wings: { dur: 4.5, lift: 3.2, speedMul: 1.12, grace: 2.0 },        // voa por cima de buracos/obstáculos; se acabar sobre o vazio, ganha até 2 s para achar chão
-  skip: { steps: 3, s: 4, inv: 1.5 },                                // teleporta 3 peças à frente (para na chegada), invulnerável 1,5 s
+  skip: { steps: 1, s: 4, inv: 1.5 },                                // teleporta 1 peça à frente (para na chegada), invulnerável 1,5 s
+  shield: { dur: 4.5 },                                              // bolha de 4,5 s ou até absorver 1 poder inimigo
+  storm: { warn: 0.45, stun: 3.0 },                                 // aviso de 0,45 s e depois atordoa TODOS os rivais por 3 s (o Escudo anula)
   swap: { inv: 1.3, immune: 2.0 }                                    // troca de posição com o carro logo à frente
 };

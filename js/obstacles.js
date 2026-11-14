@@ -1,7 +1,7 @@
 // Obstáculos e espaços (slots) onde podem ser colocados.
 import * as THREE from 'three';
 import { G, hooks } from './state.js';
-import { MEGA } from './config.js';
+import { GEY, MEGA } from './config.js';
 import { box, disposeGroup, M } from './scene.js';
 import { addDrop, endPos, exitPos, freeExits, megaIndex, obstacles, slotGroup, tmpW, track, trackRoot } from './track.js';
 
@@ -13,6 +13,22 @@ const matBoxRing = new THREE.MeshBasicMaterial({ color: 0x00e5ff });
 const geoMineBase = new THREE.CylinderGeometry(0.95, 1.1, 0.28, 14), geoMineLight = new THREE.SphereGeometry(0.3, 10, 8), geoMineSpike = new THREE.ConeGeometry(0.14, 0.5, 6);
 const matMineBase = new THREE.MeshLambertMaterial({ color: 0x2a2a38, emissive: 0x120a08 }), matMineSpike = new THREE.MeshLambertMaterial({ color: 0x6a3a2a });
 export const matMineOn = new THREE.MeshBasicMaterial({ color: 0xff2a1a }), matMineOff = new THREE.MeshBasicMaterial({ color: 0x5a0e0a });
+// gêiser: cratera de basalto + brilho que muda de cor + coluna de água/vapor (animados em main.js)
+const geoGeyRing = new THREE.RingGeometry(1.1, 2.0, 28), geoGeyPit = new THREE.CircleGeometry(1.1, 22), geoGeyGlow = new THREE.CircleGeometry(2.9, 28);
+const geoGeyCol = new THREE.CylinderGeometry(1.0, 1.9, GEY.height, 16, 1, true), geoGeyRock = new THREE.BoxGeometry(0.7, 0.45, 0.55);
+const matGeyPit = new THREE.MeshBasicMaterial({ color: 0x060302 }), matGeyRock = new THREE.MeshLambertMaterial({ color: 0x2b2420 });
+// cratera + brilho + coluna de um gêiser no ponto local (lx,lz) do grupo g. lite = menos pedras (corredores têm dezenas de gêiseres)
+export function buildGeyserParts(g, lx, lz, lite) {
+  const pit = new THREE.Mesh(geoGeyPit, matGeyPit); pit.rotation.x = -Math.PI / 2; pit.position.set(lx, 0.045, lz); g.add(pit);
+  const ring = new THREE.Mesh(geoGeyRing, new THREE.MeshBasicMaterial({ color: 0x00e5ff })); ring.rotation.x = -Math.PI / 2; ring.position.set(lx, 0.05, lz); g.add(ring);
+  const glow = new THREE.Mesh(geoGeyGlow, new THREE.MeshBasicMaterial({ color: 0x00e5ff, transparent: true, opacity: 0.2, blending: THREE.AdditiveBlending, depthWrite: false }));
+  glow.rotation.x = -Math.PI / 2; glow.position.set(lx, 0.06, lz); g.add(glow);
+  const n = lite ? 4 : 9;
+  for (let k = 0; k < n; k++) { const r = new THREE.Mesh(geoGeyRock, matGeyRock), an = k / n * Math.PI * 2; r.position.set(lx + Math.cos(an) * 2.15, 0.2, lz + Math.sin(an) * 2.15); r.rotation.y = -an; if (!lite) r.castShadow = true; g.add(r); }
+  const col = new THREE.Mesh(geoGeyCol, new THREE.MeshBasicMaterial({ color: 0xcdf6ff, transparent: true, opacity: 0.0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+  col.position.set(lx, 0, lz); col.scale.y = 0.001; col.visible = false; g.add(col);
+  return { ring, glow, col };
+}
 export const obsData = () => obstacles.map(o => ({ key: o.key, type: o.type, ph: o.ph, spd: o.spd }));
 function makeObstacle(type, k, ph, spd) {
   const [pi, si] = k.split(':').map(Number);
@@ -51,6 +67,9 @@ function makeObstacle(type, k, ph, spd) {
     cube.add(new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1.72, 1.72, 1.72)), matBoxEdge));
     cube.add(new THREE.Mesh(new THREE.OctahedronGeometry(0.55, 0), matBoxCore));
     o.bar = cube;
+  } else if (type === 'geyser') {
+    const gp = buildGeyserParts(g, 0, 0, false);
+    o.ring = gp.ring; o.glow = gp.glow; o.col = gp.col; o.bar = gp.col; o.gst = -1;
   } else if (type === 'mine') {
     const b = new THREE.Mesh(geoMineBase, matMineBase); b.position.y = 0.14; b.castShadow = true; g.add(b);
     for (let k = 0; k < 4; k++) { const sp = new THREE.Mesh(geoMineSpike, matMineSpike); const an = k * Math.PI / 2 + Math.PI / 4; sp.position.set(Math.cos(an) * 0.62, 0.36, Math.sin(an) * 0.62); sp.rotation.set(Math.sin(an) * 0.5, 0, -Math.cos(an) * 0.5); g.add(sp); }

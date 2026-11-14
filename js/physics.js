@@ -1,11 +1,12 @@
 // Física arcade dos carros: passo, contato com pista/mureta, obstáculos e colisões.
 import { G, hooks } from './state.js';
 import { clamp, lerp, rnd, wrapA } from './utils.js';
-import { BARRIERS, CAR_R, CELL, DRIFT, EDGE, JUMP, MAX_DEATHS, MEGA, FINISH_S, GRAV, PAD, PH, POWER, profileSeg, RAMP_PADS, WALL_H, WIND_ACC } from './config.js';
+import { BARRIERS, CAR_R, CELL, DRIFT, EDGE, GEY, geyserState, GSTRIP, JUMP, WRECK, MAX_DEATHS, MEGA, FINISH_S, GRAV, PAD, PH, POWER, profileSeg, RAMP_PADS, WALL_H, WIND_ACC } from './config.js';
 import { SFX } from './audio.js';
 import { burst } from './fx.js';
 import { obstacles, pieceStart, prevIdx, succIdx, tmpW, track } from './track.js';
 import { cars, isHost } from './cars.js';
+import { freeObs, wreckBall } from './freeobs.js';
 import { toast } from './hud.js';
 
 // ------------------------------------------------------------ física
@@ -223,11 +224,32 @@ export function stepCar(c, inp, dt) {
 export function obsClock() { return G.R && G.state === 'race' ? G.R.t : G.clockT; }
 // pistão: sobe e desce em ciclo (determinístico pelo relógio da corrida)
 export function pistonLift(o, tc) { return clamp((Math.sin(tc * Math.abs(o.spd) * 1.2 + o.ph) + 0.15) * 2.2, 0, 1); }
+const GS = { st: 0, k: 0 }, WBp = { x: 0, y: 0, z: 0, vx: 0, vz: 0, th: 0 };
+// impacto do gêiser em erupção: impulso vertical forte, perda de embalo e desestabilização
+function geyserHit(c, gx, gy, gz) {
+  c.geyCool = 1.0; c.grounded = false; c.airT = 0; c.vy = Math.max(c.vy, GEY.launch); c.vx *= 0.72; c.vz *= 0.72;
+  c.kick += (Math.random() < 0.5 ? -1 : 1) * rnd(3, 5);
+  if (c.drifting) endDrift(c, false);
+  burst(gx, gy + 0.4, gz, 30, 0.7, 0.9, 1, 9, 0.7, 6);
+  if (c.isLocal) { SFX.boing(); G.shake = Math.max(G.shake, 0.4); toast('GÊISER!', '#7fdcff', 0.8); }
+}
+// corredor: ~30 gêiseres numa armadilha só; testa cada um (só na altura do carro, com corte por círculo envolvente)
+function stripContact(c, o, tc) {
+  if (c.y > o.y + 2.8 || c.y < o.y - 0.9 || (c.geyCool || 0) > 0) return;
+  const bx = c.x - o.x, bz = c.z - o.z, R = GSTRIP.len / 2 + 5;
+  if (bx * bx + bz * bz > R * R) return;
+  for (const s of o.gs) {
+    const dx = c.x - s.x, dz = c.z - s.z;
+    if (dx * dx + dz * dz > GEY.radius * GEY.radius || geyserState(s.ph, tc, GS).st !== 1) continue;
+    geyserHit(c, s.x, s.y, s.z); return;
+  }
+}
 function obstacleContact(c, dt) {
-  c.mineCool = Math.max(0, (c.mineCool || 0) - dt);
+  c.mineCool = Math.max(0, (c.mineCool || 0) - dt); c.geyCool = Math.max(0, (c.geyCool || 0) - dt); c.ballCool = Math.max(0, (c.ballCool || 0) - dt);
   if (c.invuln > 0) return;                                 // renascendo: atravessa obstáculos por 2 s (não é lançado de novo)
   const tc = obsClock();
-  for (const o of obstacles) {
+  for (const list of [obstacles, freeObs]) for (const o of list) {
+    if (o.type === 'geyserstrip') { stripContact(c, o, tc); continue; }
     const dx = c.x - o.x, dz = c.z - o.z;
     if (dx * dx + dz * dz > 64) continue;
     if (c.y > o.y + 2.8 || c.y < o.y - 0.9) continue;
@@ -266,6 +288,37 @@ function obstacleContact(c, dt) {
         if (c.oilT <= 0.05) { c.kick += (Math.random() < 0.5 ? -1 : 1) * rnd(1.5, 2.8); if (c.drifting) endDrift(c, false); if (c.isLocal) { SFX.splat(); toast('ÓLEO!', '#9a7cff', 0.7); } }
         c.oilT = 0.9;
       }
+    } else if (o.type === 'wrecking') {
+      // esfera 3D contra o carro; impulso na direção em que a bola se move (ou radial se estiver quase parada) + perda de controle
+      wreckBall(o, tc, WBp);
+      const ex = c.x - WBp.x, ey = (c.y + 0.5) - WBp.y, ez = c.z - WBp.z, dist = Math.hypot(ex, ey, ez);
+      for (const sd of [-3.4, 3.4]) {                                        // postes do pórtico (colisão simples)
+        const px = o.x - Math.sin(o.a) * sd, pz = o.z + Math.cos(o.a) * sd, d = Math.hypot(c.x - px, c.z - pz);
+        if (d < 0.5 + CAR_R && d > 1e-4) pushOut(c, (c.x - px) / d, (c.z - pz) / d, 0.5 + CAR_R - d, dt);
+      }
+      if (dist > WRECK.R + CAR_R * 0.9 || (c.ballCool || 0) > 0) continue;
+      c.ballCool = WRECK.cool;
+      const sp = Math.hypot(WBp.vx, WBp.vz);
+      let nx, nz;
+      if (sp > 0.8) { nx = WBp.vx / sp; nz = WBp.vz / sp; } else { const h = Math.hypot(ex, ez) || 1; nx = ex / h; nz = ez / h; }
+      const K = WRECK.knock + sp * 0.9;
+      c.vx = nx * K + c.vx * 0.25; c.vz = nz * K + c.vz * 0.25; c.vy = Math.max(c.vy, 5.5); c.grounded = false; c.airT = 0;
+      c.stunT = Math.max(c.stunT || 0, 0.7); c.kick += (Math.random() < 0.5 ? -1 : 1) * rnd(4, 7);
+      if (c.drifting) endDrift(c, false);
+      burst(WBp.x, WBp.y, WBp.z, 36, 1, 0.7, 0.3, 14, 0.7, 10);
+      if (c.isLocal) { SFX.thump(34); SFX.land(30); G.shake = Math.max(G.shake, 0.95); toast('PANCADA!', '#ff9a1f', 0.9); }
+    } else if (o.type === 'barrier') {
+      if (c.y > o.y + 1.45) continue;                                         // dá para pular por cima (pulo ~1,7 m)
+      const u = dx * ca + dz * sa, w = -dx * sa + dz * ca, hu = WRECK.barrierLen / 2, hw = WRECK.barrierW / 2 + 0.05;
+      const cu = clamp(u, -hu, hu), cw = clamp(w, -hw, hw);
+      let eu = u - cu, ew = w - cw, d = Math.hypot(eu, ew);
+      if (d >= CAR_R) continue;
+      if (d < 1e-4) { if (Math.abs(u) / hu > Math.abs(w) / hw) { eu = Math.sign(u) || 1; ew = 0; } else { eu = 0; ew = Math.sign(w) || 1; } } else { eu /= d; ew /= d; }
+      pushOut(c, eu * ca - ew * sa, eu * sa + ew * ca, CAR_R - d, dt, 0.45);
+    } else if (o.type === 'geyser') {
+      // só a erupção (fase 1) atinge: lança para cima, corta o embalo horizontal e desestabiliza. Aviso e repouso não machucam.
+      if ((c.geyCool || 0) > 0 || dx * dx + dz * dz > GEY.radius * GEY.radius || geyserState(o.ph, tc, GS).st !== 1) continue;
+      geyserHit(c, o.x, o.y, o.z);
     } else if (o.type === 'mine') {
       if (c.y > o.y + 1.1 || (c.mineCool || 0) > 0 || dx * dx + dz * dz > 1.6 * 1.6) continue;       // pulando/voando por cima passa; recarga de 0,8 s por carro
       c.mineCool = 0.8; o.pulse = 0.45;

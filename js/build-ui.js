@@ -11,8 +11,9 @@ import { isHost, NET, playerById } from './cars.js';
 import { showScreen, toast } from './hud.js';
 import { toHost } from './net.js';
 import { setSlotMode } from './camera.js';
+import { confirmFree, setPointer, syncFree } from './freeplace.js';
 // carta utilizável agora? (peça cabe no fim da pista / ainda há espaço livre para obstáculo)
-export function itemEnabled(type) { return ITEMS[type].kind === 'piece' ? canPlace(type) : freeSlots().length > 0; }
+export function itemEnabled(type) { const k = ITEMS[type].kind; return k === 'piece' ? canPlace(type) : k === 'obs' ? freeSlots().length > 0 : true; }   // armadilha livre: sempre há onde
 
 // ------------------------------------------------------ UI de montagem
 export function applyTray(t) {
@@ -24,7 +25,7 @@ function myItem() { return G.tray.find(i => i.id === G.holds[G.myId]); }
 // modo da minha tela na montagem: cartas | encaixar peça | posicionar obstáculo | pronto
 export function buildMode() {
   const it = myItem();
-  return G.placed[G.myId] ? 'done' : !it ? 'cards' : ITEMS[it.type].kind === 'obs' ? 'obs' : 'piece';
+  return G.placed[G.myId] ? 'done' : !it ? 'cards' : ITEMS[it.type].kind === 'obs' ? 'obs' : ITEMS[it.type].kind === 'free' ? 'free' : 'piece';
 }
 const KEY_LABEL = i => i === 9 ? '0' : String(i + 1);
 function renderTray() {
@@ -36,7 +37,7 @@ function renderTray() {
       const d = ITEMS[it.type];
       return `<button class="item" data-id="${it.id}" style="--r:${it.rot}deg;--dl:${-k * 0.27}s">
         <span class="key">${KEY_LABEL(k)}</span><div class="who"></div><div class="in"><svg viewBox="0 0 64 64">${d.svg}</svg><div class="nm">${d.name}</div>
-        <div class="tg ${d.kind === 'piece' ? 'p' : 'o'}">${d.kind === 'piece' ? 'PISTA' : 'OBSTÁCULO'}</div></div></button>`;
+        <div class="tg ${d.kind === 'piece' ? 'p' : 'o'}">${d.kind === 'piece' ? 'PISTA' : d.kind === 'free' ? 'ARMADILHA' : 'OBSTÁCULO'}</div></div></button>`;
     }).join('');
     el.querySelectorAll('.item').forEach(b => b.addEventListener('click', () => pickCard(G.tray.findIndex(i => i.id === +b.dataset.id))));
   }
@@ -63,7 +64,7 @@ export function renderBuild() {
   const mode = buildMode(), it = myItem(), d = it && ITEMS[it.type];
   $('tray').classList.toggle('show', mode === 'cards');
   if (mode === 'cards') renderTray();
-  $('phaseTxt').textContent = { cards: 'RÁPIDO! ESCOLHA UMA CARTA (1–0)', piece: 'ENCAIXE SUA PEÇA!', obs: 'POSICIONE O OBSTÁCULO!', done: 'PRONTO! ESPERANDO OS OUTROS...' }[mode];
+  $('phaseTxt').textContent = { cards: 'RÁPIDO! ESCOLHA UMA CARTA (1–0)', piece: 'ENCAIXE SUA PEÇA!', obs: 'POSICIONE O OBSTÁCULO!', free: 'POSICIONE A ARMADILHA (SECRETA)!', done: 'PRONTO! ESPERANDO OS OUTROS...' }[mode];
   const bar = $('placebar');
   bar.classList.toggle('show', mode !== 'cards');
   bar.dataset.mode = mode;
@@ -72,13 +73,19 @@ export function renderBuild() {
   const exitMode = mode === 'piece' && megaIndex() >= 0 && canPlace(it.type);
   if (mode === 'piece') $('placeTxt').innerHTML = `<b>${d.name}</b><br>${!canPlace(it.type) ? '⚠ Não cabe agora — volte às cartas e escolha outra.' : exitMode ? 'Toque numa <span style="color:#ffd23f">saída colorida</span> da Mega Pista ou no <span style="color:#fff">marcador branco</span> (fim da pista). ENCAIXAR = 1ª saída livre que aceitar, senão o fim' : 'Encaixe no fim da pista antes dos outros!'}`;
   else if (mode === 'obs') $('placeTxt').innerHTML = `<b>${d.name}</b><br>Toque num <span style="color:#00e5ff">espaço brilhante</span>`;
+  else if (mode === 'free') $('placeTxt').innerHTML = `<b>${d.name}</b> <span style="opacity:.7">· secreta, vale 1 rodada</span><br><span style="color:#35ff7a">Verde</span> = pode · <span style="color:#ff3355">vermelho</span> = proibido. Gire de 0° a 360° e confirme.`;
   else if (mode === 'done') $('placeTxt').innerHTML = G.placed[G.myId] === 'ok' ? `<b>${d ? d.name : 'Peça'}</b> colocada! ✓` : '<b>Sem carta nesta rodada</b>';
-  setSlotMode(mode === 'obs' || exitMode, exitMode ? 'exit' : 'slot');
+  $('camHint').textContent = mode === 'free'
+    ? (G.myDevice === 'mobile' ? 'Arraste = mover a armadilha · slider/botões = girar · CONFIRMAR · 2 dedos = zoom' : 'Mouse = mirar · roda ou Q/E = girar · clique ou Enter = confirmar · Shift+roda = zoom')
+    : 'Arraste = mover · Pinça / roda = zoom · Toque curto num espaço brilhante = posicionar';
+  syncFree(mode, mode === 'free' && it ? it.type : null);
+  setSlotMode(mode === 'obs' || exitMode || mode === 'free', mode === 'free' ? 'free' : exitMode ? 'exit' : 'slot');
   if (exitMode) for (const g of slotGroup.children) if (g.userData.kind === 'exit') { const kk = g.children[0].userData.key; g.visible = canPlace(it.type, kk === 'end' ? -2 : +kk[1]); }
 }
 const raycaster = new THREE.Raycaster(), ndc = new THREE.Vector2();
-export function tryPlaceAt(x, y) {
+export function tryPlaceAt(x, y, kind) {
   const bm = buildMode();
+  if (bm === 'free') { setPointer(x, y); if (kind !== 'touch') confirmFree(); return; }          // toque só move o ghost; mouse: clique confirma
   if ((bm !== 'obs' && bm !== 'piece') || !slotGroup.visible) return;
   ndc.set(x / W * 2 - 1, -(y / H) * 2 + 1);
   camera.updateMatrixWorld(); slotGroup.updateMatrixWorld(true);   // marcadores recém-criados ainda sem matriz de mundo

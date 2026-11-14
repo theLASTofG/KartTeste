@@ -208,9 +208,10 @@ body.portrait.building #board{display:none}
 #placebar .pbtns{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 #placebar .pb{border:2px solid rgba(255,255,255,.3);background:rgba(255,255,255,.08);color:#fff;font-weight:900;font-size:12px;padding:10px 12px;border-radius:12px}
 #placebar .pb:active{background:rgba(255,255,255,.25)}
-#placebar .pb-piece,#placebar .pb-obs,#placebar .pb-back{display:none}
+#placebar .pb-piece,#placebar .pb-obs,#placebar .pb-back,#placebar .pb-free{display:none}
 #placebar[data-mode="piece"] .pb-piece,#placebar[data-mode="obs"] .pb-obs,
-#placebar[data-mode="piece"] .pb-back,#placebar[data-mode="obs"] .pb-back{display:inline-flex}
+#placebar[data-mode="piece"] .pb-back,#placebar[data-mode="obs"] .pb-back,#placebar[data-mode="free"] .pb-back,#placebar[data-mode="free"] button.pb-free{display:inline-flex}
+#placebar[data-mode="free"] input.pb-free{display:inline-block;width:150px;accent-color:#ffd23f;vertical-align:middle}
 #camHint{position:fixed;left:50%;top:calc(62px + var(--safeT));transform:translateX(-50%);z-index:16;display:none;font-size:12px;font-weight:800;
   background:rgba(10,8,30,.7);padding:5px 12px;border-radius:999px;pointer-events:none;max-width:94vw;text-align:center}
 #camHint.show{display:block}
@@ -264,3 +265,18 @@ body.spectating #info{pointer-events:auto;cursor:pointer}
 .rm .rc{font-size:12px;opacity:.85;white-space:nowrap}
 .rm .rj{border:0;border-radius:8px;padding:6px 10px;font-weight:900;background:var(--lime,#a6ff3b);color:#111;cursor:pointer;white-space:nowrap}
 .rm .rj:disabled{background:rgba(255,255,255,.14);color:#fff;opacity:.6;cursor:default}
+
+/* retrovisor, atordoamento, raio supremo e botao de olhar para tras */
+#rearHud{position:fixed;left:50%;top:calc(64px + var(--safeT));transform:translateX(-50%);z-index:12;display:none;padding:5px 14px;border-radius:999px;
+  background:rgba(10,8,30,.7);border:2px solid #4df3ff;color:#4df3ff;font-weight:900;font-size:13px;letter-spacing:1px;pointer-events:none}
+body.lookback #rearHud{display:block}
+#stunHud{position:fixed;left:50%;top:32%;transform:translate(-50%,-50%);z-index:13;display:none;padding:8px 22px;border-radius:14px;pointer-events:none;
+  background:rgba(40,10,70,.82);border:3px solid #c084ff;color:#f0dcff;font-weight:900;font-size:clamp(20px,4vw,34px);letter-spacing:2px;
+  text-shadow:0 0 12px #c084ff;animation:stunpulse .35s ease-in-out infinite alternate}
+@keyframes stunpulse{to{transform:translate(-50%,-50%) scale(1.06);box-shadow:0 0 28px rgba(192,132,255,.8)}}
+#stormFlash{position:fixed;inset:0;z-index:30;background:#e9dcff;opacity:0;pointer-events:none}
+body.stormflash #stormFlash{animation:stormf .45s ease-out}
+@keyframes stormf{0%{opacity:.85}100%{opacity:0}}
+#tBack{width:calc(var(--u)*1.0);height:calc(var(--u)*1.0);left:calc(2.5vw + var(--safeL));
+  bottom:calc(3.5vh + var(--safeB) + var(--u)*1.55 + 16px + var(--u)*1.15 + 12px);font-size:calc(var(--u)*.2);border-color:rgba(77,243,255,.8);background:rgba(77,243,255,.14)}
+#tBack.on{background:rgba(77,243,255,.45)}

@@ -4,6 +4,7 @@
 // item_spawn, item_despawn, item_effect). Nenhum item escreve x/y/z de um carro: só timers, velocidade e giro.
 import * as THREE from 'three';
 import { G } from './state.js';
+import { wrapA } from './utils.js';
 import { CAR_R, POWER } from './config.js';
 import { SFX } from './audio.js';
 import { disposeObject3D, keepResource, scene, texGlow } from './scene.js';
@@ -15,8 +16,19 @@ import { broadcast, sendTo, toHost } from './net.js';
 import { aiWantsItem } from './ai.js';
 
 // box: key -> (host) s restantes | (cliente) true; objs: id -> projétil/casca; seen: eventos de uso já processados
-export const IT = { box: {}, objs: new Map(), seen: new Set(), seq: 0, uid: 0, useLock: 0 };
+export const IT = { box: {}, objs: new Map(), seen: new Set(), seq: 0, uid: 0, useLock: 0, pending: [] };
+const D2R = Math.PI / 180;
 const QQ = {};
+
+// ---- marcador de Lock-On: mira vermelha sobre o alvo enquanto o MEU projétil teleguiado ainda rastreia
+const lockTex = (() => {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 128; const g = cv.getContext('2d');
+  g.strokeStyle = '#ff3355'; g.lineWidth = 8; g.beginPath(); g.arc(64, 64, 38, 0, 7); g.stroke(); g.lineWidth = 6;
+  for (const [a, b, c2, d] of [[64, 4, 64, 30], [64, 98, 64, 124], [4, 64, 30, 64], [98, 64, 124, 64]]) { g.beginPath(); g.moveTo(a, b); g.lineTo(c2, d); g.stroke(); }
+  return new THREE.CanvasTexture(cv);
+})();
+const lockSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: lockTex, transparent: true, depthTest: false, depthWrite: false, opacity: 0.9 }));
+lockSprite.renderOrder = 20; lockSprite.visible = false; lockSprite.scale.set(3.4, 3.4, 1); scene.add(lockSprite);
 
 // ------------------------------------------------------------------ util
 const carPos = c => c.owned ? c : { x: c.cpx ?? c.x, z: c.cpz ?? c.z };
@@ -30,12 +42,12 @@ function rollItem() {
 export function resetCarItems(c) {
   c.item = null; c.itemReadyAt = 0; c.itemRollEnd = 0; c.itemCool = 0; c.pickCool = 0;
   c.freezeT = 0; c.slowT = 0; c.stunT = 0; c.spinT = 0; c.spinDir = 1; c.immuneT = 0; c.lastHitBy = null; c.lastHitTimer = 0;
-  c.flyT = 0; c.flyOn = false; c.flyGrace = 0; c.jumpCool = 0;
+  c.flyT = 0; c.flyOn = false; c.flyGrace = 0; c.jumpCool = 0; c.shieldT = 0; c.shieldFlash = 0; c.threatT = 0;
 }
 // limpa TUDO (fim de rodada, nova rodada, sair da sala, host encerrando, desconexão definitiva)
 export function resetItems() {
   for (const o of IT.objs.values()) disposeObject3D(o.mesh);
-  IT.objs.clear(); IT.box = {}; IT.seen.clear(); IT.useLock = 0;
+  IT.objs.clear(); IT.box = {}; IT.seen.clear(); IT.useLock = 0; IT.pending.length = 0; lockSprite.visible = false;
   for (const c of cars) resetCarItems(c);
   for (const o of obstacles) if (o.type === 'itembox') o.group.visible = true;
 }
@@ -61,7 +73,8 @@ function makeMesh(k) {
 }
 function spawnObj(m) {
   if (IT.objs.has(m.id)) return;
-  const o = { id: m.id, k: m.k, owner: m.owner, x: m.x, y: m.y, z: m.z, a: m.a, sp: m.sp, ttl: m.ttl, pi: m.pi, age: 0, mesh: makeMesh(m.k) };
+  const o = { id: m.id, k: m.k, owner: m.owner, x: m.x, y: m.y, z: m.z, a: m.a, sp: m.sp, ttl: m.ttl, pi: m.pi, age: 0, tg: m.tg ?? -1, lockBroken: false, mesh: makeMesh(m.k) };
+  if (o.tg >= 0 && o.tg === G.myId && o.owner !== G.myId) toast('ALVO TRAVADO! Desvie, curve forte ou use o Escudo!', '#ff3355', 1.3);
   o.mesh.position.set(o.x, o.y, o.z); IT.objs.set(o.id, o);
 }
 function despawnObj(id, hit) {
@@ -69,7 +82,7 @@ function despawnObj(id, hit) {
   if (hit !== undefined && hit !== null) burst(o.x, o.y + 0.4, o.z, 14, 1, 1, 1, 7, 0.4, 6);
   disposeObject3D(o.mesh); IT.objs.delete(id);
 }
-const objInfo = o => ({ id: o.id, k: o.k, owner: o.owner, x: +o.x.toFixed(2), y: +o.y.toFixed(2), z: +o.z.toFixed(2), a: o.a, sp: o.sp, ttl: +o.ttl.toFixed(2), pi: o.pi });
+const objInfo = o => ({ id: o.id, k: o.k, owner: o.owner, x: +o.x.toFixed(2), y: +o.y.toFixed(2), z: +o.z.toFixed(2), a: o.a, sp: o.sp, ttl: +o.ttl.toFixed(2), pi: o.pi, tg: o.tg });
 
 // ------------------------------------------------------------- efeitos (todos os peers aplicam o mesmo item_effect)
 // teletransporte (Troca de Lugar / Atalho x3): só o DONO do carro muda x/y/z (todos os outros descartam o buffer e esperam o próximo pacote)
@@ -89,6 +102,30 @@ function applyWarp(c, m) {
 export function applyEffect(c, m) {
   if (!c) return;
   if (m.fx === 'warp') { applyWarp(c, m); return; }
+  if (m.fx === 'shield') {
+    c.shieldT = m.dur; c.shieldFlash = 0.3;
+    burst(c.x, c.y + 0.8, c.z, 18, 0.3, 0.9, 1, 7, 0.5, 2);
+    if (c.isLocal) { SFX.pad(); toast('ESCUDO ATIVO!', '#4df3ff', 1.2); }
+    return;
+  }
+  if (m.fx === 'block') {                                   // o escudo absorveu um poder: clarão na cúpula + som de bloqueio
+    c.shieldT = 0; c.shieldFlash = 0.45;
+    burst(c.x, c.y + 1, c.z, 30, 0.4, 0.95, 1, 11, 0.6, 3);
+    if (c.isLocal) { SFX.pad(); SFX.level(3); toast('BLOQUEADO!', '#4df3ff', 1.1); }
+    return;
+  }
+  if (m.fx === 'stormwarn') {                               // telegraph de 0,45 s: faíscas de alerta sobre cada rival
+    const spark = () => { for (const o of cars) if (o !== c && canRace(o)) burst(o.x, o.y + 4.5, o.z, 14, 0.75, 0.6, 1, 6, 0.4, -1); };
+    spark(); setTimeout(spark, 200); SFX.warn(); setTimeout(() => SFX.warn(), 150);
+    toast(c.isLocal ? 'RAIO SUPREMO!' : 'RAIO SUPREMO! Escudo agora!', '#c084ff', 0.9);
+    return;
+  }
+  if (m.fx === 'stormhit') {
+    document.body.classList.remove('stormflash'); void document.body.offsetWidth; document.body.classList.add('stormflash');
+    setTimeout(() => document.body.classList.remove('stormflash'), 500);
+    SFX.thump(40); G.shake = Math.max(G.shake, 0.8);
+    return;
+  }
   if (m.fx === 'fly') {
     c.flyT = m.dur; c.flyOn = true; c.flyGrace = 0;
     burst(c.x, c.y + 0.8, c.z, 20, 0.5, 1, 0.7, 8, 0.6, 2);
@@ -99,6 +136,7 @@ export function applyEffect(c, m) {
   if (m.fx === 'freeze') { c.freezeT = m.dur; c.slowT = m.dur + m.slow; }
   else if (m.fx === 'spin') { c.spinT = m.dur; c.spinDir = m.dir < 0 ? -1 : 1; }
   else if (m.fx === 'shock') c.stunT = m.dur;
+  else if (m.fx === 'stun') c.stunT = m.dur;
   c.drifting = false; c.driftT = 0; c.driftLevel = 0;
   if (c.owned && m.fx === 'spin') {                        // só velocidade/giro do próprio carro: nunca posição
     c.kick += c.spinDir * 6;
@@ -108,13 +146,17 @@ export function applyEffect(c, m) {
   burst(c.x, c.y + 0.7, c.z, 22, col[0], col[1], col[2], 9, 0.6, 5);
   if (c.isLocal) {
     if (m.fx === 'spin') SFX.splat(); else SFX.thump(14);
-    toast(m.fx === 'freeze' ? 'CONGELADO!' : m.fx === 'spin' ? 'DERRAPOU!' : 'CHOQUE!', m.fx === 'freeze' ? '#4df3ff' : m.fx === 'spin' ? '#ffd23f' : '#c084ff', 1);
+    toast(m.fx === 'freeze' ? 'CONGELADO!' : m.fx === 'spin' ? 'DERRAPOU!' : m.fx === 'stun' ? 'ATORDOADO!' : 'CHOQUE!', m.fx === 'freeze' ? '#4df3ff' : m.fx === 'spin' ? '#ffd23f' : '#c084ff', 1);
   }
 }
-function hostEffect(c, m, by) {                           // host: aplica local + avisa todos (by = autor, para o nocaute)
+const HARM = new Set(['freeze', 'spin', 'shock', 'stun']);
+// host: aplica local + avisa todos (by = autor, para o nocaute). Com Escudo ativo, qualquer efeito nocivo é ANULADO e consome o escudo (retorna false)
+function hostEffect(c, m, by) {
+  if (HARM.has(m.fx) && (c.shieldT || 0) > 0) { const b = { t: 'item_effect', fx: 'block', pid: c.pid }; broadcast(b); applyEffect(c, b); return false; }
   if (by !== undefined && by !== c.pid) { c.lastHitBy = by; c.lastHitTimer = 4; }
   m.t = 'item_effect'; m.pid = c.pid;
   broadcast(m); applyEffect(c, m);
+  return true;
 }
 function eligible(c, except) { return canRace(c) && c.pid !== except && !(c.immuneT > 0) && !(c.invuln > 0); }
 
@@ -131,10 +173,31 @@ export function hostPickup(pid, key) {
   IT.box[key] = POWER.boxRespawn;
   doGranted(m); broadcast(m);
 }
+// Soft homing: o rival mais próximo dentro do cone frontal (range m, cone °). -1 = sem alvo (o projétil vai reto).
+function acquireTarget(c) {
+  const Hm = POWER.frost.homing, p = carPos(c); let best = -1, bd = Hm.range;
+  for (const o of cars) {
+    if (o === c || !canRace(o)) continue;
+    const q = carPos(o), dx = q.x - p.x, dz = q.z - p.z, d = Math.hypot(dx, dz);
+    if (d > bd || d < 2 || Math.abs(wrapA(Math.atan2(dz, dx) - c.a)) > Hm.cone * D2R) continue;
+    best = o.pid; bd = d;
+  }
+  return best;
+}
+// rastreio com curva limitada: gira no máximo maxTurn °/s; perde a trava (segue reto) após maxTime s, se o alvo sair do ângulo de quebra ou morrer
+function homingStep(o, dt) {
+  const Hm = POWER.frost.homing, t = carById.get(o.tg);
+  if (o.age > Hm.maxTime || !t || !canRace(t)) { o.lockBroken = true; return; }
+  const p = carPos(t), diff = wrapA(Math.atan2(p.z - o.z, p.x - o.x) - o.a);
+  if (Math.abs(diff) > Hm.breakAngle * D2R) { o.lockBroken = true; return; }
+  const mx = Hm.maxTurn * D2R * dt;
+  o.a += Math.max(-mx, Math.min(mx, diff));
+  if (isHost()) t.threatT = 0.5;                            // a IA usa isso para decidir se ergue o Escudo
+}
 function execItem(c, item) {
   const P = POWER, p = carPos(c);
   if (item === 'frost') {
-    const m = { id: 'i' + (++IT.uid), k: 'frost', owner: c.pid, x: p.x + Math.cos(c.a) * (CAR_R + 1.2), y: c.y + 0.7, z: p.z + Math.sin(c.a) * (CAR_R + 1.2), a: c.a, sp: P.frost.speed, ttl: P.frost.ttl, pi: c.pi };
+    const m = { id: 'i' + (++IT.uid), k: 'frost', owner: c.pid, x: p.x + Math.cos(c.a) * (CAR_R + 1.2), y: c.y + 0.7, z: p.z + Math.sin(c.a) * (CAR_R + 1.2), a: c.a, sp: P.frost.speed, ttl: P.frost.ttl, pi: c.pi, tg: acquireTarget(c) };
     spawnObj(m); broadcast({ t: 'item_spawn', kind: 'obj', ...m }); return true;
   }
   if (item === 'peel') {
@@ -144,6 +207,12 @@ function execItem(c, item) {
     if (!QQ.floor) return false;                          // só solta sobre piso
     const m = { id: 'i' + (++IT.uid), k: 'peel', owner: c.pid, x, y: QQ.h + 0.05, z, a: c.a, sp: 0, ttl: P.peel.ttl, pi: c.pi };
     spawnObj(m); broadcast({ t: 'item_spawn', kind: 'obj', ...m }); return true;
+  }
+  if (item === 'shield') { hostEffect(c, { fx: 'shield', dur: P.shield.dur }); return true; }
+  if (item === 'storm') {
+    hostEffect(c, { fx: 'stormwarn', dur: P.storm.warn });
+    IT.pending.push({ t: P.storm.warn, by: c.pid });         // a queda do raio acontece depois do telegraph
+    return true;
   }
   if (item === 'wings') { hostEffect(c, { fx: 'fly', dur: P.wings.dur }); return true; }
   if (item === 'skip') {
@@ -156,7 +225,7 @@ function execItem(c, item) {
     return true;
   }
   if (item === 'swap') {
-    const ahead = cars.filter(o => o !== c && eligible(o, c.pid) && cmpRace(o, c) < 0).sort((a, b) => cmpRace(a, b));
+    const ahead = cars.filter(o => o !== c && eligible(o, c.pid) && !(o.shieldT > 0) && cmpRace(o, c) < 0).sort((a, b) => cmpRace(a, b));
     const t = ahead[ahead.length - 1];                    // o carro IMEDIATAMENTE à frente
     if (!t) { sendTo(c.pid, { t: 'msg', text: 'NINGUÉM À FRENTE!', color: '#ff6bd6', deny: true }); return false; }
     const A = carPos(c), B = carPos(t);
@@ -204,12 +273,12 @@ function doState(m) {
     IT.box = {}; for (const k in m.box) IT.box[k] = isHost() ? m.box[k] : true;
     for (const o of IT.objs.values()) disposeObject3D(o.mesh);
     IT.objs.clear(); for (const o of m.objs) spawnObj(o);
-    for (const k in m.fx) { const c = carById.get(+k), f = m.fx[k]; if (c) { c.freezeT = f.f; c.slowT = f.s; c.stunT = f.u; c.spinT = f.p; c.immuneT = f.i; } }
+    for (const k in m.fx) { const c = carById.get(+k), f = m.fx[k]; if (c) { c.freezeT = f.f; c.slowT = f.s; c.stunT = f.u; c.spinT = f.p; c.immuneT = f.i; c.shieldT = f.sh || 0; } }
   }
 }
 export function itemSnapshot() {
   const inv = {}, fx = {}, box = {};
-  for (const c of cars) { inv[c.pid] = c.item || null; fx[c.pid] = { f: +c.freezeT.toFixed(2), s: +c.slowT.toFixed(2), u: +c.stunT.toFixed(2), p: +c.spinT.toFixed(2), i: +c.immuneT.toFixed(2) }; }
+  for (const c of cars) { inv[c.pid] = c.item || null; fx[c.pid] = { f: +c.freezeT.toFixed(2), s: +c.slowT.toFixed(2), u: +c.stunT.toFixed(2), p: +c.spinT.toFixed(2), i: +c.immuneT.toFixed(2), sh: +(c.shieldT || 0).toFixed(2) }; }
   for (const k in IT.box) box[k] = IT.box[k];
   return { t: 'item_state', full: true, inv, box, fx, objs: [...IT.objs.values()].map(objInfo) };
 }
@@ -256,6 +325,7 @@ export function updateItems(dt) {
     c.freezeT = Math.max(0, c.freezeT - dt); c.slowT = Math.max(0, c.slowT - dt); c.stunT = Math.max(0, c.stunT - dt);
     c.spinT = Math.max(0, c.spinT - dt); c.immuneT = Math.max(0, c.immuneT - dt); c.itemCool = Math.max(0, c.itemCool - dt);
     c.flyT = Math.max(0, (c.flyT || 0) - dt); c.jumpCool = Math.max(0, (c.jumpCool || 0) - dt);
+    c.shieldT = Math.max(0, (c.shieldT || 0) - dt); c.shieldFlash = Math.max(0, (c.shieldFlash || 0) - dt); c.threatT = Math.max(0, (c.threatT || 0) - dt);
     c.lastHitTimer = Math.max(0, (c.lastHitTimer || 0) - dt);
     if (c.owned) c.invuln = Math.max(0, (c.invuln || 0) - dt);
   }
@@ -266,6 +336,7 @@ export function updateItems(dt) {
   const race = G.state === 'race' && G.R;
   for (const o of [...IT.objs.values()]) {
     o.age += dt; o.ttl -= dt;
+    if (o.k === 'frost' && o.tg >= 0 && !o.lockBroken) homingStep(o, dt);
     if (o.sp) { o.x += Math.cos(o.a) * o.sp * dt; o.z += Math.sin(o.a) * o.sp * dt; o.mesh.rotation.y += dt * 9; o.mesh.rotation.x += dt * 5; }
     else o.mesh.rotation.y += dt * 1.5;
     o.mesh.position.set(o.x, o.y, o.z);
@@ -290,9 +361,21 @@ export function updateItems(dt) {
       break;
     }
   }
+  { // Lock-On: só o dono do projétil vê a mira vermelha, enquanto o rastreio durar
+    let lt = null;
+    for (const o of IT.objs.values()) if (o.k === 'frost' && o.tg >= 0 && !o.lockBroken && o.owner === G.myId) { lt = carById.get(o.tg); break; }
+    lockSprite.visible = !!(lt && lt.alive);
+    if (lockSprite.visible) { lockSprite.position.set(lt.x, lt.y + 3, lt.z); lockSprite.scale.setScalar(3.2 + Math.sin(G.clockT * 14) * 0.5); }
+  }
   if (!race) return;
   for (const c of cars) if (c.owned) tryPickup(c, dt);
   if (!isHost()) return;
+  for (let i = IT.pending.length - 1; i >= 0; i--) {         // Raio Supremo: passou o aviso -> cai em TODOS os rivais ativos (Escudo anula)
+    const q = IT.pending[i]; if ((q.t -= dt) > 0) continue;
+    IT.pending.splice(i, 1);
+    const hit = { t: 'item_effect', fx: 'stormhit', pid: q.by }; broadcast(hit); applyEffect(carById.get(q.by), hit);
+    for (const o of cars) if (o.pid !== q.by && canRace(o)) hostEffect(o, { fx: 'stun', dur: POWER.storm.stun, imm: 0.5 }, q.by);
+  }
   for (const k in IT.box) if (typeof IT.box[k] === 'number' && (IT.box[k] -= dt) <= 0) { delete IT.box[k]; broadcast({ t: 'item_spawn', kind: 'box', id: k }); }
   for (const c of cars) if (c.owned && c.bot && c.item && c.itemCool <= 0 && G.R.t >= c.itemReadyAt && aiWantsItem(c, dt)) hostUse(c.pid, 'b' + (++IT.uid));
 }

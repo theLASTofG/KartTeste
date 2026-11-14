@@ -41,10 +41,14 @@
   <button class="tb" id="tBrake" data-btn="brake">FREIO<br>RÉ</button>
   <button class="tb" id="tDrift" data-btn="drift">DRIFT<br>TURBO</button>
   <button class="tb" id="tJump" data-tap="jump">PULO</button>
+  <button class="tb" id="tBack" data-btn="back" title="Olhar para trás (segure)">⟲<br>TRÁS</button>
   <button class="tb" id="tGas" data-btn="gas">ACELERAR</button>
   <button id="tAuto" data-tap="auto">AUTO-GAS</button>
 </div>
 
+<div id="stunHud"></div>
+<div id="rearHud">◄ OLHANDO PARA TRÁS</div>
+<div id="stormFlash"></div>
 <div id="phaseHdr"><div class="t" id="phaseTxt">PEGUE UMA PEÇA!</div><div class="tm"><i id="phaseBar"></i></div></div>
 <div id="tray"></div>
 <div id="placebar">
@@ -55,6 +59,10 @@
     <button class="pb pb-obs" data-cam="in">ZOOM +</button>
     <button class="pb pb-obs" data-cam="out">ZOOM −</button>
     <button class="pb pb-obs" data-cam="all">VER TUDO</button>
+    <input type="range" id="rotRange" class="pb-free" min="0" max="359" value="0" title="Girar 0–360°" aria-label="Girar">
+    <button class="pb pb-free" data-rot="-15">⟲ −15°</button>
+    <button class="pb pb-free" data-rot="15">+15° ⟳</button>
+    <button class="big lime pb-free" data-act="placefree">CONFIRMAR ✓</button>
     <button class="pb pb-back" data-act="backcards">VOLTAR ÀS CARTAS</button>
   </div>
 </div>
@@ -86,7 +94,7 @@
     </div>
     <div class="help">
       <div><b>PC</b><br><kbd>W</kbd>/<kbd>↑</kbd> acelerar · <kbd>S</kbd>/<kbd>↓</kbd> freio/ré · <kbd>A</kbd><kbd>D</kbd>/<kbd>←</kbd><kbd>→</kbd> virar<br>
-        <kbd>Espaço</kbd>/<kbd>Shift</kbd> drift (solte = TURBO) · <kbd>X</kbd>/<kbd>J</kbd> pular (+ drift e direção = hop-drift) · <kbd>Q</kbd> usar item · <kbd>R</kbd> reposicionar · <kbd>M</kbd> som · <kbd>F</kbd> tela cheia<br>
+        <kbd>Espaço</kbd>/<kbd>Shift</kbd> drift (solte = TURBO) · <kbd>C</kbd>/<kbd>V</kbd>/botão do meio (segurar) olhar pra trás · <kbd>X</kbd>/<kbd>J</kbd> pular (+ drift e direção = hop-drift) · <kbd>Q</kbd> usar item · <kbd>R</kbd> reposicionar · <kbd>M</kbd> som · <kbd>F</kbd> tela cheia<br>
         <kbd>1</kbd>–<kbd>4</kbd> reações rápidas pro multiplayer (👍 😂 😡 🏁)</div>
       <div><b>Montagem caótica</b><br>No fim de cada rodada aparecem peças e obstáculos espalhados na tela. <b>Seja rápido</b>: cada um pega o seu!
         Peças de pista encaixam no fim (quem encaixa primeiro escolhe a ordem). Obstáculos só vão nos <b>espaços brilhantes</b> da pista.</div>

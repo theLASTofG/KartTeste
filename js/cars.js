@@ -48,8 +48,10 @@ function makeCarMesh(color, isLocal) {
     marker = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.7, 4), new THREE.MeshBasicMaterial({ color: 0xffffff }));
     marker.rotation.x = Math.PI; marker.position.y = 2.3; root.add(marker);
   }
+  const shield = new THREE.Mesh(new THREE.SphereGeometry(2.2, 20, 14), new THREE.MeshBasicMaterial({ color: 0x4df3ff, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+  shield.position.y = 0.9; shield.visible = false; root.add(shield);
   root.visible = false;
-  return { root, body, wheels, flame, flameCore, mTail, marker, glow };
+  return { root, body, wheels, flame, flameCore, mTail, marker, glow, shield };
 }
 
 // ---------------------------------------------------- jogadores / rede

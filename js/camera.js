@@ -20,6 +20,7 @@ function bcClamp() {
 function bcManual() { if (!BC.manual) { BC.x = BC.ax; BC.z = BC.az; BC.d = BC.autoD; BC.manual = true; } }
 // enquadramento inicial perto das zonas livres (começa pelas mais novas, no fim da pista)
 function focusSlots() {
+  if (G.slotKind === 'free') { BC.manual = false; return; }                   // armadilha livre: vista geral da pista
   const pts = G.slotKind === 'exit'
     ? [...freeExits().map(k => { exitPos(k, tmpW); return { x: tmpW.x, z: tmpW.z, pi: 0 }; }), ...(megaIndex() >= 0 ? [(endPos(tmpW), { x: tmpW.x, z: tmpW.z, pi: 1 })] : [])]
     : freeSlots().map(k => { const [pi, si] = k.split(':').map(Number), p = track[pi], sl = p.slots[si]; p.world(sl.s, sl.v, tmpW); return { x: tmpW.x, z: tmpW.z, pi }; });
@@ -83,8 +84,14 @@ function camTarget() {
   if (p && p.finished && p.alive) { const t = specTarget(); return t || p; }
   return specTarget() || p || cars[0];
 }
+let lookBackPrev = false, quickT = 0;
 export function followCamera(dt) {
   const c = camTarget(); if (!c) return;
+  // retrovisor: segurar = a câmera passa para a FRENTE do carro olhando para trás; só a câmera gira, o controle do carro não muda
+  const lb = !!(G.lookBack && G.state === 'race' && c === myCar());
+  if (lb !== lookBackPrev) { lookBackPrev = lb; quickT = 0.15; document.body.classList.toggle('lookback', lb); }
+  quickT = Math.max(0, quickT - dt);
+  const sg = lb ? -1 : 1;
   const sp = Math.hypot(c.vx, c.vz);
   let yawT = c.a;
   if (sp > 4) yawT = c.a + wrapA(Math.atan2(c.vz, c.vx) - c.a) * 0.5;
@@ -92,12 +99,13 @@ export function followCamera(dt) {
   if (G.camSnap) camYaw = yawT;
   camYaw += wrapA(yawT - camYaw) * (1 - Math.exp(-dt * 4));
   const dist = (portrait ? 12 : 9.5) + sp * 0.07, hgt = (portrait ? 6.2 : 4.6) + sp * 0.03;
-  if (!falling) camDesired.set(c.x - Math.cos(camYaw) * dist, Math.max(c.y, 0) + hgt, c.z - Math.sin(camYaw) * dist);
-  vLook.set(c.x + Math.cos(camYaw) * 6, c.y + 1, c.z + Math.sin(camYaw) * 6);
+  if (!falling) camDesired.set(c.x - Math.cos(camYaw) * dist * sg, Math.max(c.y, 0) + hgt, c.z - Math.sin(camYaw) * dist * sg);
+  vLook.set(c.x + Math.cos(camYaw) * 6 * sg, c.y + 1, c.z + Math.sin(camYaw) * 6 * sg);
   if (falling) vLook.set(c.x, c.y, c.z);
   if (G.camSnap) { camera.position.copy(camDesired); camLook.copy(vLook); G.camSnap = false; scene.fog.near = 70; scene.fog.far = 270; }
-  camera.position.lerp(camDesired, 1 - Math.exp(-dt * 7));
-  camLook.lerp(vLook, 1 - Math.exp(-dt * 10));
+  const kq = quickT > 0 ? 1 - Math.exp(-dt * 70) : 0;                      // ~50 ms para virar a câmera
+  camera.position.lerp(camDesired, quickT > 0 ? kq : 1 - Math.exp(-dt * 7));
+  camLook.lerp(vLook, quickT > 0 ? kq : 1 - Math.exp(-dt * 10));
   G.shake = Math.max(0, G.shake - dt * 1.2);
   camera.position.x += rnd(-1, 1) * G.shake; camera.position.y += rnd(-1, 1) * G.shake * 0.6; camera.position.z += rnd(-1, 1) * G.shake;
   camera.lookAt(camLook);

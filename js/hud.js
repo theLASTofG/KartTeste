@@ -60,6 +60,7 @@ function updateLives(p) {
 export function updateHud() {
   const p = myCar(); if (!p) return;
   updateItemHud(p); updateLives(p);
+  { const sh = $('stunHud'); if (sh) { const t = p.stunT || 0; if (t > 0.05 && p.alive) { sh.style.display = 'block'; sh.textContent = '⚡ ATORDOADO ' + t.toFixed(1) + 's'; } else if (sh.style.display) sh.style.display = ''; } }
   { const jb = $('tJump'); if (jb) jb.classList.toggle('cool', (p.jumpCool || 0) > 0); }
   const rank = rankOf(p);
   if (G.lastHud.rank !== rank || G.lastHud.n !== cars.length) { $('pos').innerHTML = `${rank}<small>º/${cars.length}</small>`; $('pos').style.color = rank === 1 ? '#ffd23f' : '#fff'; G.lastHud.rank = rank; G.lastHud.n = cars.length; }

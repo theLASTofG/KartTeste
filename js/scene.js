@@ -166,6 +166,7 @@ const SCN = {};
 export const THEMES = {
   neon: { name: 'NEON', bg: 0x07031a, grid: [0xff2e88, 0x3a1a7a], cubes: [0x00e5ff, 0xff2e88, 0x7a3cff, 0xa6ff3b, 0xffd23f], ground: 0x3a1450, lava: false },
   gelo: { name: 'GELO', bg: 0x06141f, grid: [0x9be8ff, 0x1d4a66], cubes: [0xffffff, 0x9be8ff, 0x5ab8ff, 0xd8f6ff, 0x7fd0ff], ground: 0x1d4a66, lava: false },
+  basalto: { name: 'BASALTO', bg: 0x0e0806, grid: [0xff6a1a, 0x2a1208], cubes: [0x2b2420, 0x3a2e28, 0xff6a1a, 0x1a1412, 0xffa13a], ground: 0x2a1208, lava: true, floor: 0x2a2522, bridge: 0x3d3430 },
   lava: { name: 'LAVA', bg: 0x170402, grid: [0xff5a1a, 0x5a1408], cubes: [0xff3b1a, 0xff8a1f, 0xffd23f, 0x9a1a08, 0xff5a1a], ground: 0x5a1408, lava: true }
 };
 export let themeKey = 'neon';
@@ -179,6 +180,7 @@ export function applyTheme(k) {
   for (let i = 0; i < SCN.inst.count; i++) SCN.inst.setColorAt(i, col.setHex(T.cubes[i % T.cubes.length]).multiplyScalar(0.55));
   SCN.inst.instanceColor.needsUpdate = true;
   SCN.lava.visible = T.lava;
+  M.floor.color.setHex(T.floor || 0x232842); M.floorBridge.color.setHex(T.bridge || 0x3b3f5c);       // basalto: pista de rocha vulcânica
   document.querySelector('meta[name="theme-color"]').setAttribute('content', '#' + new THREE.Color(T.bg).getHexString());
 }
 

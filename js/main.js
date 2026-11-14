@@ -1,7 +1,7 @@
 // Ponto de entrada: laço principal, atualização da corrida, boot e registro dos hooks.
 import { G, hooks } from './state.js';
 import { $, clamp, lerp, rnd, store } from './utils.js';
-import { DRIFT, NET_DT, PH, SUBSTEP, TARGET_OPTS } from './config.js';
+import { DRIFT, GEY, geyserState, NET_DT, PH, SUBSTEP, TARGET_OPTS } from './config.js';
 import { SFX } from './audio.js';
 import { applyTheme, camera, H, M, renderer, scene, sun, texChevron, texChevron1, texWind, W } from './scene.js';
 import { burst, emit, updateParticles } from './fx.js';
@@ -13,15 +13,17 @@ import { carCollisions, giveBoost, obsClock, pistonLift, stepCar, trackContact }
 import { aiDrive } from './ai.js';
 import { broadcast, broadcastSnap, packCar, setStatus, toHost, toHostFast, updateRemote } from './net.js';
 import { BC, drawFx, isSpectating, specTarget, followCamera, overviewCamera, panBy, PTRS, zoomBy } from './camera.js';
+import { animateFree, applyFree, eachFreeGeyser, showOwnFree } from './freeobs.js';
+import { updateFree } from './freeplace.js';
 import { applyEffect, takedown, resetItems, hostPickup, hostUse, itemClientMsg, itemHostMsg, itemSnapshot, IT, updateItems, useItem } from './items.js';
 import { applyTray, buildMode, itemEnabled, pickCard, renderBuild, tryPlaceAt } from './build-ui.js';
-import { hostEndRound, hostPick, hostPlace, hostRegisterFinish, hostUnpick, hostUpdateBuild } from './host.js';
+import { hostEndRound, hostPick, hostPlace, hostPlaceFree, hostRegisterFinish, hostUnpick, hostUpdateBuild } from './host.js';
 import { act, enterPhase, goTitle, renderLobby, setState } from './phases.js';
 import './rooms.js';
 import { applyDevice, keys, readPlayerInput, refreshButtons, syncTouch, tmap, uiActive } from './input.js';
 
 // funções chamadas "de baixo para cima" (ver state.js)
-Object.assign(hooks, { applyTray, BC, enterPhase, goTitle, hostPick, hostPlace, hostRegisterFinish, hostUnpick, specTarget, takedown, itemClientMsg, itemHostMsg, itemSnapshot, rebuildSlots, renderBuild, renderLobby, syncObstacles, syncTouch, tmap, uiActive });
+Object.assign(hooks, { hostPlaceFree, freeApply: applyFree, freeOwn: showOwnFree, applyTray, BC, enterPhase, goTitle, hostPick, hostPlace, hostRegisterFinish, hostUnpick, specTarget, takedown, itemClientMsg, itemHostMsg, itemSnapshot, rebuildSlots, renderBuild, renderLobby, syncObstacles, syncTouch, tmap, uiActive });
 function update(dt) {
   G.clockT += dt;
   G.phaseT += dt;
@@ -32,6 +34,7 @@ function update(dt) {
   if (G.state === 'countdown' || G.state === 'race') { updateRace(dt); return; }
   if (isHost()) hostUpdateBuild();
   if (G.state === 'pick') {
+    updateFree(dt, keys);
     const k = G.phaseDur ? clamp(1 - G.phaseT / G.phaseDur, 0, 1) : 0;
     $('phaseBar').style.width = (k * 100) + '%';
     $('phaseBar').style.background = k < 0.3 ? '#ff2e55' : '#a6ff3b';
@@ -128,9 +131,44 @@ function updateDrops(dt) {
     }
   }
 }
+// emite ~rate partículas por segundo (parte fracionária sorteada)
+function emitRate(rate, dt, fn) { let n = rate * dt; const k = Math.floor(n); n -= k; for (let i = 0; i < k + (Math.random() < n ? 1 : 0); i++) fn(); }
+const GST = { st: 0, k: 0 };
+// gêiser: 0 aviso (cratera borbulha e esquenta: ciano -> laranja) · 1 erupção (coluna + jato) · 2 repouso (só fumaça suave)
+function animateGeyser(o, dt, tc) {
+  const s = geyserState(o.ph, tc, GST), st = s.st, k = s.k;
+  const cx = camera.position.x - o.x, cz = camera.position.z - o.z, near = cx * cx + cz * cz < 100 * 100;
+  if (st === 0) {
+    o.ring.material.color.setRGB(0.1 + 0.9 * k, 0.9 - 0.35 * k, 1 - 0.85 * k);
+    o.glow.material.color.copy(o.ring.material.color); o.glow.material.opacity = 0.2 + 0.55 * k + Math.sin(tc * (10 + 20 * k)) * 0.08;
+    o.glow.scale.setScalar(1 + 0.25 * k); o.col.visible = false;
+    if (near) emitRate(18 + 70 * k, dt, () => emit(o.x + rnd(-1.2, 1.2), o.y + 0.15, o.z + rnd(-1.2, 1.2), rnd(-0.6, 0.6), rnd(1.5, 3.5 + 3 * k), rnd(-0.6, 0.6), rnd(0.4, 0.8), 0.9, 0.95 - 0.3 * k, 1 - 0.7 * k, -0.5));
+  } else if (st === 1) {
+    o.ring.material.color.setRGB(1, 0.85, 0.6); o.glow.material.color.setRGB(0.7, 0.95, 1); o.glow.material.opacity = 0.7; o.glow.scale.setScalar(1.15);
+    const up = Math.min(1, k * 7) * (1 - Math.max(0, k - 0.8) * 3 * 0.6), h = GEY.height * Math.max(0.05, up);
+    o.col.visible = true; o.col.scale.set(0.9 + Math.sin(tc * 30 + o.ph) * 0.06, h / GEY.height, 0.9 + Math.cos(tc * 27) * 0.06);
+    o.col.position.y = h / 2; o.col.material.opacity = 0.5 * (1 - Math.max(0, k - 0.75) * 2);
+    if (near) {
+      emitRate(70, dt, () => emit(o.x + rnd(-0.6, 0.6), o.y + 0.5, o.z + rnd(-0.6, 0.6), rnd(-2.5, 2.5), rnd(13, 22), rnd(-2.5, 2.5), rnd(0.7, 1.2), 0.75, 0.92, 1, 14));
+      emitRate(25, dt, () => emit(o.x + rnd(-1.4, 1.4), o.y + rnd(2, 9), o.z + rnd(-1.4, 1.4), rnd(-1.5, 1.5), rnd(2, 6), rnd(-1.5, 1.5), rnd(0.6, 1.1), 0.95, 0.97, 1, -1));
+    }
+  } else {
+    o.ring.material.color.setRGB(0.28 + 0.1 * (1 - k), 0.14, 0.06); o.glow.material.color.setRGB(1, 0.4, 0.1); o.glow.material.opacity = 0.08 * (1 - k) + 0.04;
+    o.glow.scale.setScalar(1); o.col.visible = false;
+    if (near) emitRate(5, dt, () => emit(o.x + rnd(-1, 1), o.y + 0.2, o.z + rnd(-1, 1), rnd(-0.4, 0.4), rnd(0.8, 1.8), rnd(-0.4, 0.4), rnd(0.8, 1.4), 0.55, 0.55, 0.58, -0.3));
+  }
+  if (st === 1 && o.gst !== 1) {                                   // início da erupção: som pressurizado, mais alto quanto mais perto do carro local
+    const me = myCar();
+    if (me) { const d = Math.hypot(me.x - o.x, me.z - o.z); if (d < 60) SFX.geyser(clamp(1 - d / 60, 0.1, 1)); }
+  }
+  o.gst = st;
+}
 function animateObstacles(dt) {
   const tc = obsClock();
+  animateFree(tc);
+  eachFreeGeyser(s => animateGeyser(s, dt, tc));
   for (const o of obstacles) {
+    if (o.type === 'geyser' && o.col) animateGeyser(o, dt, tc);
     if (o.type === 'spinner' && o.bar) o.bar.rotation.y = -(o.ph + tc * o.spd);
     if (o.type === 'mine' && o.bar) { o.pulse = Math.max(0, o.pulse - dt); o.bar.material = (o.pulse > 0 || ((tc * 2.2 + o.ph) % 1) < 0.5) ? matMineOn : matMineOff; }
     if (o.type === 'bumper' && o.bar) { o.pulse = Math.max(0, o.pulse - dt); const s = 1 + o.pulse * 0.8; o.bar.scale.set(s, 1, s); }
@@ -159,6 +197,7 @@ function spawnCarFx(dt) {
         c.isLocal ? 0.3 : 1, c.isLocal ? 0.95 : 0.6, c.isLocal ? 1 : 0.15, 0);
     }
     if (c.flyT > 0 && Math.random() < dt * 60) emit(c.x - fx * 1.2 + rnd(-0.8, 0.8), c.y + 0.6, c.z - fz * 1.2 + rnd(-0.8, 0.8), rnd(-1, 1), rnd(0, 1.5), rnd(-1, 1), 0.45, 0.5, 1, 0.7, 0);
+    if (c.stunT > 0.05 && Math.random() < dt * 70) emit(c.x + rnd(-1, 1), c.y + rnd(0.3, 1.7), c.z + rnd(-1, 1), rnd(-3, 3), rnd(1, 4), rnd(-3, 3), 0.3, 0.85, 0.65, 1, 0);        // faíscas elétricas do atordoamento
     if (c.oilT > 0 && c.grounded && Math.random() < dt * 30) emit(c.x, c.y + 0.2, c.z, rnd(-1, 1), rnd(0.5, 2), rnd(-1, 1), 0.4, 0.35, 0.25, 0.8, 3);
   }
 }
@@ -187,6 +226,11 @@ function updateCars(dt, racing) {
     if (boosting) { const s = 0.8 + Math.random() * 0.5; m.flame.scale.set(1, s * (0.8 + (c.boostPow || 0.3)), 1); m.flameCore.scale.set(1, s, 1); }
     m.mTail.color.setHex(c.braking ? 0xff2020 : 0x8a1020);
     m.glow.visible = c.alive && c.y > -2;
+    { // Escudo: cúpula pulsando; nos últimos 1 s pisca; ao bloquear, clarão e expansão
+      const fl = c.shieldFlash > 0, sh = c.shieldT > 0;
+      m.shield.visible = c.alive && (fl || (sh && (c.shieldT > 1 || Math.floor(tnow * 10) % 2 === 0)));
+      if (m.shield.visible) { m.shield.material.opacity = 0.2 + 0.07 * Math.sin(tnow * 8) + (fl ? 0.5 * clamp(c.shieldFlash / 0.45, 0, 1) : 0); m.shield.scale.setScalar(1 + (fl ? 0.3 * c.shieldFlash / 0.45 : 0) + Math.sin(tnow * 6) * 0.02); }
+    }
     if (m.marker) { m.marker.position.y = 2.4 + Math.sin(tnow * 5) * 0.15; m.marker.visible = c.alive; }
   }
 }

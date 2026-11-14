@@ -1,9 +1,9 @@
 // Lógica do host: partidas, rodadas, sorteio das cartas e posicionamento.
 import { G, HST, hooks } from './state.js';
-import { clamp, r2, rnd, TAU } from './utils.js';
+import { clamp, r2, r3, rnd, TAU } from './utils.js';
 import { ITEMS, PTS } from './config.js';
 import { themeKey } from './scene.js';
-import { applyTrack, canPlace, finishGlobal, freeExits, layoutSigs, megaIndex, pieceSigs, PRESETS, trackTypes } from './track.js';
+import { applyTrack, canPlace, finishGlobal, freeSpot, track, freeExits, layoutSigs, megaIndex, pieceSigs, PRESETS, trackTypes } from './track.js';
 import { freeSlots, obsData } from './obstacles.js';
 import { cars, playerById, plist, syncCars } from './cars.js';
 import { placeToast } from './hud.js';
@@ -18,7 +18,7 @@ export function hostEnter(ph, d) {
 }
 export function hostStartMatch() {
   for (const p of G.players) p.score = 0;
-  HST.round = 0;
+  HST.round = 0; HST.free = [];
   const P = PRESETS[G.presetKey] || PRESETS.curta;
   applyTrack(['start', 'finish'], [], false); applyTrack(P.types, P.obs, false);
   hostStartRound();
@@ -31,7 +31,7 @@ function hostStartRound() {
   if (back) syncCars();
   const order = G.players.slice().sort((a, b) => (a.score - b.score) || (Math.random() - 0.5)); // líder larga atrás
   const grid = {}; order.forEach((p, k) => grid[p.id] = k);
-  hostEnter('countdown', { round: HST.round, grid, types: trackTypes(), obs: obsData(), players: plist(), dur: 3.2 });
+  hostEnter('countdown', { round: HST.round, grid, types: trackTypes(), obs: obsData(), free: HST.free, players: plist(), dur: 3.2 });     // armadilhas escondidas são reveladas aqui
 }
 export function hostRegisterFinish(c) {
   if (c.finishOrder || !G.R) return;
@@ -40,6 +40,7 @@ export function hostRegisterFinish(c) {
   if (c.isLocal) placeToast(c);
 }
 export function hostEndRound() {
+  HST.free = HST.free.filter(f => --f.rounds > 0);                      // armadilhas livres duram exatamente 1 rodada
   const fin = cars.filter(c => c.finished && c.finishOrder).sort((a, b) => a.finishOrder - b.finishOrder);
   const rest = cars.filter(c => !(c.finished && c.finishOrder)).sort((a, b) => b.prog - a.prog);
   const res = [];
@@ -70,11 +71,13 @@ function drawDistinct(list, n) {
   while (out.length < n && pool.length) { const k = pickWeighted(pool); out.push(k); pool.splice(pool.indexOf(k), 1); }
   return out;
 }
-const DECK_PIECES = 6, DECK_OBS = 4;                  // 10 cartas por rodada
+const DECK_PIECES = 5, DECK_OBS = 3, DECK_FREE = 2;     // 10 cartas por rodada
 function hostStartPick() {
   const pieces = Object.keys(ITEMS).filter(k => ITEMS[k].kind === 'piece');
   const obs = Object.keys(ITEMS).filter(k => ITEMS[k].kind === 'obs');
-  const deck = shuffle([...drawDistinct(pieces, DECK_PIECES), ...drawDistinct(obs, DECK_OBS)])
+  const free = Object.keys(ITEMS).filter(k => ITEMS[k].kind === 'free');
+  HST.free = [];
+  const deck = shuffle([...drawDistinct(pieces, DECK_PIECES), ...drawDistinct(obs, DECK_OBS), ...drawDistinct(free, DECK_FREE)])
     .map((type, i) => ({ id: i, type, rot: Math.round(rnd(-4, 4)), by: -1 }));
   HST.botAt = {}; HST.botPlaceAt = {}; HST.placeEnd = -1;
   for (const p of G.players) if (p.bot) HST.botAt[p.id] = rnd(0.8, 4);
@@ -136,6 +139,32 @@ export function hostPlace(pid, slotKey, auto) {
   G.placed[pid] = ok ? 'ok' : 'no';
   renderBuild(); broadcastBuild();
 }
+// armadilha livre (secreta): o host valida o ponto, guarda ESCONDIDO (ninguém mais recebe nada) e avisa só o dono
+export function hostPlaceFree(pid, m, auto) {
+  if (G.state !== 'pick' || G.placed[pid]) return false;
+  const it = G.tray.find(i => i.id === G.holds[pid]); if (!it || ITEMS[it.type].kind !== 'free') return false;
+  const x = +m.x, z = +m.z, yaw = +m.yaw;
+  if (![x, z, yaw].every(Number.isFinite)) return false;
+  const spot = freeSpot(x, z, Number.isFinite(+m.y) ? +m.y : 0);
+  if (!spot || HST.free.some(f => Math.hypot(f.x - x, f.z - z) < 3.5 && Math.abs(f.y - spot.y) < 2)) {
+    if (!auto) sendTo(pid, { t: 'msg', text: 'POSIÇÃO INVÁLIDA!', color: '#ff2e55', deny: true });
+    return false;
+  }
+  const o = { id: 'f' + (++HST.fid), type: it.type, x: r2(x), y: r2(spot.y), z: r2(z), a: r3(((yaw % TAU) + TAU) % TAU), ph: r2(rnd(0, TAU)), spd: r2(rnd(1.5, 2.0)), owner: pid, rounds: 1 };
+  HST.free.push(o); G.placed[pid] = 'ok';
+  renderBuild(); broadcastBuild();                                  // só o chip "✓" muda para os outros; posição NÃO vai
+  sendTo(pid, { t: 'freeok', o });
+  return true;
+}
+function hostAutoFree(pid) {                                         // bots / tempo esgotado: ponto aleatório válido
+  const cand = track.map((p, i) => i).filter(i => !['start', 'finish'].includes(track[i].type));
+  for (let k = 0; k < 14 && cand.length; k++) {
+    const p = track[cand[Math.floor(Math.random() * cand.length)]], w = {}, q = {};
+    p.world(rnd(6, p.len - 6), rnd(-3, 3), w); p.query(w.x, w.z, q);
+    if (hostPlaceFree(pid, { x: w.x, z: w.z, y: q.h, yaw: rnd(0, TAU) }, true)) return;
+  }
+  G.placed[pid] = 'no'; renderBuild(); broadcastBuild();
+}
 // tempo acabou / bot: usa a carta que tem (ou uma sobra utilizável) e posiciona sozinho
 function hostAutoPlace(pid) {
   if (G.placed[pid]) return;
@@ -145,6 +174,7 @@ function hostAutoPlace(pid) {
   }
   const it = G.tray.find(i => i.id === G.holds[pid]);
   if (!it) { G.placed[pid] = 'no'; renderBuild(); broadcastBuild(); return; }
+  if (ITEMS[it.type].kind === 'free') { hostAutoFree(pid); return; }
   if (ITEMS[it.type].kind === 'obs') { const fs = freeSlots(); hostPlace(pid, fs[Math.floor(Math.random() * fs.length)], true); }
   else hostPlace(pid, null, true);
 }

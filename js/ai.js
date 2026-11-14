@@ -1,7 +1,7 @@
 // IA dos bots.
 import { G } from './state.js';
 import { clamp, wrapA } from './utils.js';
-import { CAR_R, MEGA, PH, PROFILES } from './config.js';
+import { CAR_R, GEY, geyserState, MEGA, PH, PROFILES } from './config.js';
 import { finishGlobal, obstacles, pieceAt, pieceStart, succIdx, track, trackPoint } from './track.js';
 import { respawn } from './physics.js';
 import { cars } from './cars.js';
@@ -9,7 +9,14 @@ import { cars } from './cars.js';
 // ------------------------------------------------------------------- IA
 const tmpA = {};
 const nxt = (i, c) => { const n = succIdx(i, 0, c.ai.exit); return n >= 0 ? track[n] : undefined; };          // próxima peça no ramo escolhido
-function obsHalf(t) { return t === 'mine' ? 1.7 : t === 'spinner' ? 3.2 : t === 'oil' ? 2.3 : t === 'bumper' ? 1.45 : t === 'kicker' ? 1.6 : 1.25; }
+const GSA = { st: 0, k: 0 };
+// gêiser só atrapalha se estiver em aviso tardio/erupção QUANDO o carro chegar lá; em repouso a IA ignora
+function geyserBlocks(o, s, c) {
+  const eta = Math.max(0, o.s - s) / Math.max(10, c.vf || 10);
+  const g = geyserState(o.ph, G.R.t + eta, GSA);
+  return g.st === 1 || (g.st === 0 && g.k > 0.7);
+}
+function obsHalf(t) { return t === 'geyser' ? GEY.radius : t === 'mine' ? 1.7 : t === 'spinner' ? 3.2 : t === 'oil' ? 2.3 : t === 'bumper' ? 1.45 : t === 'kicker' ? 1.6 : 1.25; }
 function laneFor(c, sG) {
   const i = pieceAt(sG, c.pi, c.ai.exit), p = track[i], s = sG - pieceStart[i], ai = c.ai;
   const wob = Math.sin(G.R.t * ai.wf + ai.ph) * ai.wob;
@@ -26,13 +33,13 @@ function laneFor(c, sG) {
   if (p.type === 'serpentina' || p.type === 'spiralup') return wob * 0.3;
   // desvia de obstáculos próximos (ou mira no mini boost)
   let near = null;
-  for (const o of obstacles) if (o.pi === i && Math.abs(o.s - s) < 7.5) { near = o; break; }
+  for (const o of obstacles) if (o.pi === i && Math.abs(o.s - s) < 7.5 && !(o.type === 'geyser' && !geyserBlocks(o, s, c))) { near = o; break; }
   if (near) {
     if (near.type === 'mboost' || (near.type === 'itembox' && !c.item)) return near.v;
     let best = 0, bm = -1e9;
     for (const cand of [-4.4, -3.2, 0, 3.2, 4.4]) {
       let m = 1e9;
-      for (const o of obstacles) if (o.pi === i && Math.abs(o.s - s) < 7.5 && o.type !== 'mboost' && o.type !== 'itembox') m = Math.min(m, Math.abs(cand - o.v) - obsHalf(o.type) - CAR_R);
+      for (const o of obstacles) if (o.pi === i && Math.abs(o.s - s) < 7.5 && o.type !== 'mboost' && o.type !== 'itembox' && !(o.type === 'geyser' && !geyserBlocks(o, s, c))) m = Math.min(m, Math.abs(cand - o.v) - obsHalf(o.type) - CAR_R);
       m += cand * ai.side * 0.02 - Math.max(0, Math.abs(cand) - 3.8) * 0.8;      // sem mureta: evita colar na borda
       if (m > bm) { bm = m; best = cand; }
     }
@@ -93,7 +100,9 @@ export function aiWantsItem(c, dt) {
   const want = c.item === 'frost' ? ahead : c.item === 'peel' ? behind && c.grounded
     : c.item === 'swap' ? behindMe                                  // quem tem alguém à frente troca de lugar
     : c.item === 'skip' ? c.grounded && c.prog < finishGlobal - 120   // atalho só com bastante pista pela frente
-    : c.item === 'wings' ? c.grounded : active > 0;
+    : c.item === 'wings' ? c.grounded
+    : c.item === 'shield' ? (c.threatT || 0) > 0                      // projétil teleguiado vindo: ergue o escudo
+    : c.item === 'storm' ? behindMe && active > 0 : active > 0;
   if (!want) { a.itemWait = -1; return false; }
   if (a.itemWait === undefined || a.itemWait < 0) a.itemWait = 0.5 + Math.random() * 1.8;
   a.itemWait -= dt;

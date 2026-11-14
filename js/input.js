@@ -9,12 +9,13 @@ import { respawn } from './physics.js';
 import { sendEmote, setStatus } from './net.js';
 import { BC, cycleSpectate, isSpectating, panBy, pinchInfo, PTRS, zoomBy } from './camera.js';
 import { pickCard, tryPlaceAt } from './build-ui.js';
+import { confirmFree, FP, rotateFree, setPointer } from './freeplace.js';
 import { act, pauseGame, resume } from './phases.js';
 import { useItem } from './items.js';
 
 // --------------------------------------------------------------- entrada
 export const keys = Object.create(null);
-const TOUCH = { left: false, right: false, gas: false, brake: false, drift: false };
+const TOUCH = { left: false, right: false, gas: false, brake: false, drift: false, back: false };
 let autoGas = store.get('autogas', false);
 G.menuOpen = false; let fsTouch = null;
 export function applyDevice() {
@@ -48,6 +49,7 @@ window.addEventListener('keydown', e => {
   if (G.state === 'pick') {
     const dg = /^(Digit|Numpad)([0-9])$/.exec(e.code);
     if (dg) { const n = +dg[2]; pickCard(n === 0 ? 9 : n - 1); return; }
+    if (FP.active && e.code === 'KeyR') { rotateFree(Math.PI / 2); return; }
     if (e.code === 'Escape' || e.code === 'Backspace') { act('backcards'); return; }
   }
   if (isMP() && (G.state === 'race' || G.state === 'countdown' || G.state === 'results' || G.state === 'lobby')) {
@@ -65,10 +67,13 @@ window.addEventListener('keydown', e => {
   else if (e.code === 'KeyX' || e.code === 'KeyJ') doTap('jump');
   else if (e.code === 'Enter') {
     if (G.state === 'results' && isHost()) act('continue');
-    else if (G.state === 'pick') act('placepiece');
+    else if (G.state === 'pick') { if (FP.active) confirmFree(); else act('placepiece'); }
   }
 }, { passive: false });
 window.addEventListener('keyup', e => { keys[e.code] = false; });
+// botão do meio do mouse (segurar) = olhar para trás
+window.addEventListener('mousedown', e => { if (e.button === 1 && (G.state === 'race' || G.state === 'countdown')) { keys.MouseMid = true; e.preventDefault(); } });
+window.addEventListener('mouseup', e => { if (e.button === 1) keys.MouseMid = false; });
 window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; tmap.clear(); syncTouch(); });
 
 const holdBtns = [...document.querySelectorAll('[data-btn]')];
@@ -157,7 +162,7 @@ export function refreshButtons() {
   refreshFs();
 }
 export function readPlayerInput(inp) {
-  if (G.menuOpen) { inp.steer = 0; inp.throttle = 0; inp.brake = 0; inp.drift = false; inp.gasRaw = false; inp.jump = false; return; }
+  if (G.menuOpen) { inp.steer = 0; inp.throttle = 0; inp.brake = 0; inp.drift = false; inp.gasRaw = false; inp.jump = false; G.lookBack = false; return; }
   const k = keys, mob = G.myDevice === 'mobile';
   const left = k.ArrowLeft || k.KeyA || TOUCH.left, right = k.ArrowRight || k.KeyD || TOUCH.right;
   const brake = !!(k.ArrowDown || k.KeyS || TOUCH.brake), gas = !!(k.ArrowUp || k.KeyW || TOUCH.gas);
@@ -167,6 +172,7 @@ export function readPlayerInput(inp) {
   inp.drift = !!(k.Space || k.ShiftLeft || k.ShiftRight || TOUCH.drift);
   inp.gasRaw = gas;
   inp.jump = performance.now() < (G.jumpUntil || 0);          // pedido de pulo vale por 140 ms (tecla/toque)
+  G.lookBack = !!(k.KeyC || k.KeyV || k.MouseMid || TOUCH.back);   // retrovisor: só a CÂMERA gira; a direção do carro não muda
 }
 {
   const gl = $('gl');
@@ -175,22 +181,28 @@ export function readPlayerInput(inp) {
     if (e.pointerType === 'mouse' && (e.button !== 0 || !e.isPrimary)) return;      // só botão esquerdo; direito/meio nunca chegam a tryPlaceAt
     try { gl.setPointerCapture(e.pointerId); } catch (x) { }
     PTRS.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, moved: false, pinch: false });
+    if (FP.active && e.pointerType === 'touch') setPointer(e.clientX, e.clientY);
     if (PTRS.size >= 2) { for (const q of PTRS.values()) q.pinch = true; G.pinch = pinchInfo(); }
   });
   gl.addEventListener('pointermove', e => {
     const q = PTRS.get(e.pointerId); if (!q || !BC.active) return;
     const dx = e.clientX - q.x, dy = e.clientY - q.y; q.x = e.clientX; q.y = e.clientY;
     if (!q.moved && Math.hypot(q.x - q.sx, q.y - q.sy) > 8) q.moved = true;
-    if (PTRS.size === 1) { if (q.moved) panBy(dx, dy); }
+    if (PTRS.size === 1) { if (FP.active && e.pointerType === 'touch') setPointer(e.clientX, e.clientY); else if (q.moved) panBy(dx, dy); }
     else if (G.pinch) { const n = pinchInfo(); zoomBy(G.pinch.d / Math.max(20, n.d)); panBy(n.x - G.pinch.x, n.y - G.pinch.y); G.pinch = n; }
   });
   const end = e => {
     const q = PTRS.get(e.pointerId); if (!q) return;
     PTRS.delete(e.pointerId); if (PTRS.size < 2) G.pinch = null;
-    if (e.type === 'pointerup' && !q.moved && !q.pinch) tryPlaceAt(e.clientX, e.clientY);   // tap curto = escolher zona
+    if (e.type === 'pointerup' && !q.moved && !q.pinch) tryPlaceAt(e.clientX, e.clientY, e.pointerType);   // tap curto = escolher zona
   };
   gl.addEventListener('pointerup', end); gl.addEventListener('pointercancel', end);
-  gl.addEventListener('wheel', e => { if (!BC.active) return; e.preventDefault(); zoomBy(e.deltaY > 0 ? 1.12 : 1 / 1.12); }, { passive: false });
+  gl.addEventListener('pointermove', e => { if (FP.active && e.pointerType === 'mouse') setPointer(e.clientX, e.clientY); });   // o ghost segue o cursor
+  gl.addEventListener('wheel', e => {
+    if (!BC.active) return; e.preventDefault();
+    if (FP.active && !e.shiftKey) rotateFree((e.deltaY > 0 ? 1 : -1) * Math.PI / 12);        // posicionando armadilha: a roda GIRA (15°); Shift+roda = zoom
+    else zoomBy(e.deltaY > 0 ? 1.12 : 1 / 1.12);
+  }, { passive: false });
   document.querySelectorAll('[data-cam]').forEach(b => b.addEventListener('click', () => {
     SFX.click();
     const c = b.dataset.cam;
