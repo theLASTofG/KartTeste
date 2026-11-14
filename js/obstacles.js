@@ -10,6 +10,9 @@ const matBoxGlass = new THREE.MeshBasicMaterial({ color: 0x00e5ff, transparent: 
 const matBoxEdge = new THREE.LineBasicMaterial({ color: 0xffffff });
 const matBoxCore = new THREE.MeshBasicMaterial({ color: 0xff2e88 });
 const matBoxRing = new THREE.MeshBasicMaterial({ color: 0x00e5ff });
+const geoMineBase = new THREE.CylinderGeometry(0.95, 1.1, 0.28, 14), geoMineLight = new THREE.SphereGeometry(0.3, 10, 8), geoMineSpike = new THREE.ConeGeometry(0.14, 0.5, 6);
+const matMineBase = new THREE.MeshLambertMaterial({ color: 0x2a2a38, emissive: 0x120a08 }), matMineSpike = new THREE.MeshLambertMaterial({ color: 0x6a3a2a });
+export const matMineOn = new THREE.MeshBasicMaterial({ color: 0xff2a1a }), matMineOff = new THREE.MeshBasicMaterial({ color: 0x5a0e0a });
 export const obsData = () => obstacles.map(o => ({ key: o.key, type: o.type, ph: o.ph, spd: o.spd }));
 function makeObstacle(type, k, ph, spd) {
   const [pi, si] = k.split(':').map(Number);
@@ -48,6 +51,11 @@ function makeObstacle(type, k, ph, spd) {
     cube.add(new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1.72, 1.72, 1.72)), matBoxEdge));
     cube.add(new THREE.Mesh(new THREE.OctahedronGeometry(0.55, 0), matBoxCore));
     o.bar = cube;
+  } else if (type === 'mine') {
+    const b = new THREE.Mesh(geoMineBase, matMineBase); b.position.y = 0.14; b.castShadow = true; g.add(b);
+    for (let k = 0; k < 4; k++) { const sp = new THREE.Mesh(geoMineSpike, matMineSpike); const an = k * Math.PI / 2 + Math.PI / 4; sp.position.set(Math.cos(an) * 0.62, 0.36, Math.sin(an) * 0.62); sp.rotation.set(Math.sin(an) * 0.5, 0, -Math.cos(an) * 0.5); g.add(sp); }
+    const lt = new THREE.Mesh(geoMineLight, matMineOn); lt.position.y = 0.42; g.add(lt);
+    o.bar = lt;
   } else if (type === 'piston') {
     const base = box(2.8, 0.08, 2.8, M.hazard, 0, 0.03, 0, g, false);
     const arm = new THREE.Group(); g.add(arm);

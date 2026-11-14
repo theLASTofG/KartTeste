@@ -8,10 +8,10 @@ import { CAR_R, POWER } from './config.js';
 import { SFX } from './audio.js';
 import { disposeObject3D, keepResource, scene, texGlow } from './scene.js';
 import { burst } from './fx.js';
-import { obstacles, prevIdx, succIdx, track } from './track.js';
+import { obstacles, pieceStart, prevIdx, succIdx, track } from './track.js';
 import { carById, cars, isHost, myCar, NET, playerById } from './cars.js';
-import { toast, updateBoard } from './hud.js';
-import { broadcast, toHost } from './net.js';
+import { cmpRace, toast, updateBoard } from './hud.js';
+import { broadcast, sendTo, toHost } from './net.js';
 import { aiWantsItem } from './ai.js';
 
 // box: key -> (host) s restantes | (cliente) true; objs: id -> projétil/casca; seen: eventos de uso já processados
@@ -30,6 +30,7 @@ function rollItem() {
 export function resetCarItems(c) {
   c.item = null; c.itemReadyAt = 0; c.itemRollEnd = 0; c.itemCool = 0; c.pickCool = 0;
   c.freezeT = 0; c.slowT = 0; c.stunT = 0; c.spinT = 0; c.spinDir = 1; c.immuneT = 0; c.lastHitBy = null; c.lastHitTimer = 0;
+  c.flyT = 0; c.flyOn = false; c.flyGrace = 0; c.jumpCool = 0;
 }
 // limpa TUDO (fim de rodada, nova rodada, sair da sala, host encerrando, desconexão definitiva)
 export function resetItems() {
@@ -71,8 +72,29 @@ function despawnObj(id, hit) {
 const objInfo = o => ({ id: o.id, k: o.k, owner: o.owner, x: +o.x.toFixed(2), y: +o.y.toFixed(2), z: +o.z.toFixed(2), a: o.a, sp: o.sp, ttl: +o.ttl.toFixed(2), pi: o.pi });
 
 // ------------------------------------------------------------- efeitos (todos os peers aplicam o mesmo item_effect)
+// teletransporte (Troca de Lugar / Atalho x3): só o DONO do carro muda x/y/z (todos os outros descartam o buffer e esperam o próximo pacote)
+function applyWarp(c, m) {
+  if (c.owned) {
+    const sp = Math.hypot(c.vx, c.vz);
+    c.x = m.x; c.y = m.y; c.z = m.z; c.a = m.a; c.pi = m.pi; c.prog = m.prog;
+    c.vx = Math.cos(m.a) * sp; c.vz = Math.sin(m.a) * sp; c.vy = 0; c.vf = sp; c.vl = 0; c.grounded = true; c.voidFall = false; c.airT = 0;
+    c.drifting = false; c.driftT = 0; c.driftLevel = 0; c.kick = 0; c.steer = 0; c.stuckT = 0; c.invuln = Math.max(c.invuln || 0, m.inv || 1);
+    track[c.pi].query(c.x, c.z, c.Q); c.s = c.Q.s; c.v = c.Q.v;
+    if (c.isLocal) G.camSnap = true;
+  } else { c.buf = null; c.net = null; c.x = m.x; c.y = m.y; c.z = m.z; c.a = m.a; c.pi = m.pi; c.prog = m.prog; c.cpx = m.x; c.cpz = m.z; }
+  c.immuneT = Math.max(c.immuneT || 0, m.imm || 0);
+  burst(m.x, m.y + 0.8, m.z, 26, 1, 0.55, 0.9, 10, 0.6, 3);
+  if (c.isLocal) { SFX.boost(2); toast(m.why === 'swap' ? 'TROCA DE LUGAR!' : 'ATALHO!', m.why === 'swap' ? '#ff6bd6' : '#ffa94d', 1.2); }
+}
 export function applyEffect(c, m) {
   if (!c) return;
+  if (m.fx === 'warp') { applyWarp(c, m); return; }
+  if (m.fx === 'fly') {
+    c.flyT = m.dur; c.flyOn = true; c.flyGrace = 0;
+    burst(c.x, c.y + 0.8, c.z, 20, 0.5, 1, 0.7, 8, 0.6, 2);
+    if (c.isLocal) { SFX.boost(3); toast('VOANDO!', '#7dffb0', 1.2); }
+    return;
+  }
   c.immuneT = Math.max(c.immuneT || 0, m.dur + (m.slow || 0) + (m.imm || 0));
   if (m.fx === 'freeze') { c.freezeT = m.dur; c.slowT = m.dur + m.slow; }
   else if (m.fx === 'spin') { c.spinT = m.dur; c.spinDir = m.dir < 0 ? -1 : 1; }
@@ -122,6 +144,27 @@ function execItem(c, item) {
     if (!QQ.floor) return false;                          // só solta sobre piso
     const m = { id: 'i' + (++IT.uid), k: 'peel', owner: c.pid, x, y: QQ.h + 0.05, z, a: c.a, sp: 0, ttl: P.peel.ttl, pi: c.pi };
     spawnObj(m); broadcast({ t: 'item_spawn', kind: 'obj', ...m }); return true;
+  }
+  if (item === 'wings') { hostEffect(c, { fx: 'fly', dur: P.wings.dur }); return true; }
+  if (item === 'skip') {
+    let i = c.pi, steps = 0;
+    while (steps < P.skip.steps) { const n = succIdx(i, c.v || 0); if (n < 0 || n === i) break; i = n; steps++; if (track[i].type === 'finish') break; }
+    if (!steps) { sendTo(c.pid, { t: 'msg', text: 'SEM PISTA À FRENTE!', color: '#ffa94d', deny: true }); return false; }
+    const T = track[i], s = Math.min(P.skip.s, T.len - 2), v = Math.max(-3, Math.min(3, c.v || 0)), w = {};
+    T.world(s, v, w); T.query(w.x, w.z, QQ);
+    hostEffect(c, { fx: 'warp', why: 'skip', x: +w.x.toFixed(2), y: +(QQ.h + 0.12).toFixed(2), z: +w.z.toFixed(2), a: +w.a.toFixed(3), pi: i, prog: +(pieceStart[i] + s).toFixed(2), inv: P.skip.inv, imm: 0 });
+    return true;
+  }
+  if (item === 'swap') {
+    const ahead = cars.filter(o => o !== c && eligible(o, c.pid) && cmpRace(o, c) < 0).sort((a, b) => cmpRace(a, b));
+    const t = ahead[ahead.length - 1];                    // o carro IMEDIATAMENTE à frente
+    if (!t) { sendTo(c.pid, { t: 'msg', text: 'NINGUÉM À FRENTE!', color: '#ff6bd6', deny: true }); return false; }
+    const A = carPos(c), B = carPos(t);
+    const mk = (who, X, y, a, pi, prog) => ({ fx: 'warp', why: 'swap', x: +X.x.toFixed(2), y: +(y + 0.05).toFixed(2), z: +X.z.toFixed(2), a: +a.toFixed(3), pi, prog: +prog.toFixed(2), inv: P.swap.inv, imm: P.swap.immune });
+    const toC = mk(c, B, t.y, t.a, t.pi, t.prog), toT = mk(t, A, c.y, c.a, c.pi, c.prog);
+    hostEffect(c, toC); hostEffect(t, toT);
+    const text = c.name + ' ⇄ ' + t.name; toast(text, '#ff6bd6', 1.6); broadcast({ t: 'msg', text, color: '#ff6bd6' });
+    return true;
   }
   if (item === 'pulse') {
     for (const o of cars) if (eligible(o, c.pid)) hostEffect(o, { fx: 'shock', dur: P.pulse.stun, imm: P.pulse.immune }, c.pid);
@@ -212,6 +255,7 @@ export function updateItems(dt) {
   for (const c of cars) {
     c.freezeT = Math.max(0, c.freezeT - dt); c.slowT = Math.max(0, c.slowT - dt); c.stunT = Math.max(0, c.stunT - dt);
     c.spinT = Math.max(0, c.spinT - dt); c.immuneT = Math.max(0, c.immuneT - dt); c.itemCool = Math.max(0, c.itemCool - dt);
+    c.flyT = Math.max(0, (c.flyT || 0) - dt); c.jumpCool = Math.max(0, (c.jumpCool || 0) - dt);
     c.lastHitTimer = Math.max(0, (c.lastHitTimer || 0) - dt);
     if (c.owned) c.invuln = Math.max(0, (c.invuln || 0) - dt);
   }

@@ -1,18 +1,38 @@
 // Rede P2P (PeerJS): salas, host autoritativo, sincronização e interpolação.
 import { G, HST, hooks } from './state.js';
-import { $, clamp, lerp, r2, r3, store, wrapA } from './utils.js';
+import { $, clamp, lerp, r1, r2, r3, store, wrapA } from './utils.js';
 import { GRAV, MAXP, NET_DT, PALETTE } from './config.js';
 import { SFX } from './audio.js';
+import { announceRoom, closeRoomAnnouncement } from './rooms.js';
 import { applyTheme, themeKey } from './scene.js';
 import { applyTrack, PRESETS, track, trackTypes } from './track.js';
 import { obsData } from './obstacles.js';
-import { applyBots, carById, freeColor, isHost, NET, playerById, plist, syncCars } from './cars.js';
+import { applyBots, carById, cars, freeColor, isHost, NET, playerById, plist, syncCars } from './cars.js';
 import { placeToast, toast, updateBoard, updateNetHud } from './hud.js';
 export function broadcast(msg) { if (NET.role !== 'host') return; for (const v of NET.conns.values()) if (v.conn.open) { try { v.conn.send(msg); } catch (e) { } } }
 // canal rápido (não ordenado): estado dos carros não fica preso atrás de pacote perdido
 export function broadcastFast(msg) {
   if (NET.role !== 'host') return;
   for (const v of NET.conns.values()) { const c = v.fast && v.fast.open ? v.fast : v.conn; if (c.open) { try { c.send(msg); } catch (e) { } } }
+}
+// Snapshot do host: um pacote por cliente, SEM o carro do próprio cliente (ele já sabe) e sem repetir carros parados
+// (só reenvia o que mudou; carro idêntico volta a ser enviado no máximo 1x/s). Menos bytes por segundo, mesma fluidez.
+const HLAST = new Map();
+export function broadcastSnap() {
+  if (NET.role !== 'host') return;
+  const now = performance.now(), packed = [];
+  for (const c of cars) {
+    const a = packCar(c), sig = a.slice(1, 15).join(',') + '|' + a[16], ls = HLAST.get(c.pid);
+    if (ls && ls.sig === sig && now - ls.t < 1000) continue;
+    HLAST.set(c.pid, { sig, t: now }); packed.push(a);
+  }
+  if (!packed.length) return;
+  for (const v of NET.conns.values()) {
+    const ch = v.fast && v.fast.open ? v.fast : v.conn;
+    if (!ch.open) continue;
+    const mine = carById.get(v.pid);
+    try { ch.send({ t: 'snap', c: packed.filter(a => a[0] !== v.pid), fo: mine ? mine.finishOrder || 0 : 0 }); } catch (e) { }
+  }
 }
 export function toHostFast(msg) {
   if (NET.role !== 'client') return;
@@ -75,7 +95,7 @@ export function createRoom() {
     NET.role = 'host'; NET.code = code; G.myId = 0; G.nextId = 1; G.botCount = 0;
     G.players = [{ id: 0, name: G.myName, color: PALETTE[0], device: G.myDevice, bot: false, score: 0, connected: true }];
     syncCars(); setStatus('');
-    hooks.enterPhase('lobby', {});
+    hooks.enterPhase('lobby', {}); announceSoon();
   });
   peer.on('connection', onHostConn);
   peer.on('error', err => {
@@ -166,7 +186,17 @@ export function hostKick(pid) {
   playerLeft(pid);
   toast(p.name + ' removido', '#ff9a1f', 1.2);
 }
+// anuncia a sala na lista publica (codigo, nome do host, vagas, estado e pista): ao mudar algo e a cada 15 s
+export function announceNow() {
+  if (NET.role !== 'host') return;
+  announceRoom({ code: NET.code, name: G.myName, n: G.players.filter(p => !p.bot).length, max: MAXP, state: G.state === 'lobby' ? 'lobby' : 'race', preset: (PRESETS[G.presetKey] || {}).name || '' });
+}
+let annT = 0;
+export function announceSoon() { clearTimeout(annT); annT = setTimeout(announceNow, 700); }
+setInterval(announceNow, 15000);
+document.addEventListener('joinroom', e => { if (G.state === 'title') { $('codeInp').value = e.detail; joinRoom(e.detail); } });
 export function hostLobbyChanged() {
+  announceSoon();
   syncCars();
   if (G.state === 'lobby') hooks.renderLobby();
   updateBoard();
@@ -219,6 +249,7 @@ export function joinRoom(codeArg, retry) {
 }
 export function leaveRoom(msg) {
   const role = NET.role;
+  if (role === 'host') closeRoomAnnouncement(NET.code);
   NET.leaving = true; NET.retries = 0;
   clearTimeout(NET.joinTimer);
   NET.role = 'none';
@@ -255,10 +286,10 @@ function onClientMsg(msg) {
     case 'phase': hooks.enterPhase(msg.ph, msg.d); break;
     case 'snap':
       if (isHost()) break;
+      { const me = carById.get(G.myId); if (me && msg.fo && !me.finishOrder) { me.finishOrder = msg.fo; placeToast(me); } }      // o próprio carro não vem no pacote: só a ordem de chegada
       for (const arr of msg.c) {
-        const c = carById.get(arr[0]); if (!c) continue;
-        if (c.isLocal) { if (arr[12] && !c.finishOrder) { c.finishOrder = arr[12]; placeToast(c); } }
-        else applyNet(c, arr, true);
+        const c = carById.get(arr[0]); if (!c || c.isLocal) continue;
+        applyNet(c, arr, true);
       }
       break;
     case 'item_granted': case 'item_state': case 'item_spawn': case 'item_despawn': case 'item_effect': hooks.itemClientMsg(msg); break;
@@ -294,7 +325,7 @@ export function packCar(c) {
   const f = (c.alive ? 1 : 0) | (c.finished ? 2 : 0) | (c.grounded ? 4 : 0) | (c.drifting ? 8 : 0) | (c.boostT > 0 ? 16 : 0) | (c.braking ? 32 : 0) | (c.voidFall ? 64 : 0) | (c.invuln > 0 ? 128 : 0);
   // ts = relógio de quem SIMULA o carro (host repassa sem mudar) -> interpolação por tempo de origem
   const ts = c.owned ? Math.round(performance.now()) : (c.netTs || 0);
-  return [c.pid, r2(c.x), r2(c.y), r2(c.z), r3(c.a), r2(c.vx), r2(c.vy), r2(c.vz), r2(c.steer || 0), f, c.driftLevel || 0, r2(c.prog), c.finishOrder || 0, c.pi, r2(c.boostPow || 0), ts, c.deaths || 0];
+  return [c.pid, r2(c.x), r2(c.y), r2(c.z), r3(c.a), r1(c.vx), r1(c.vy), r1(c.vz), r1(c.steer || 0), f, c.driftLevel || 0, r1(c.prog), c.finishOrder || 0, c.pi, r1(c.boostPow || 0), ts, c.deaths || 0];
 }
 function applyNet(c, a, fromHost) {
   const off = fromHost ? 0 : -1;  // o cliente manda o pacote sem o pid

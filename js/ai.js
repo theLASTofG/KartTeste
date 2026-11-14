@@ -2,14 +2,14 @@
 import { G } from './state.js';
 import { clamp, wrapA } from './utils.js';
 import { CAR_R, MEGA, PH, PROFILES } from './config.js';
-import { obstacles, pieceAt, pieceStart, succIdx, track, trackPoint } from './track.js';
+import { finishGlobal, obstacles, pieceAt, pieceStart, succIdx, track, trackPoint } from './track.js';
 import { respawn } from './physics.js';
 import { cars } from './cars.js';
 
 // ------------------------------------------------------------------- IA
 const tmpA = {};
 const nxt = (i, c) => { const n = succIdx(i, 0, c.ai.exit); return n >= 0 ? track[n] : undefined; };          // próxima peça no ramo escolhido
-function obsHalf(t) { return t === 'spinner' ? 3.2 : t === 'oil' ? 2.3 : t === 'bumper' ? 1.45 : t === 'kicker' ? 1.6 : 1.25; }
+function obsHalf(t) { return t === 'mine' ? 1.7 : t === 'spinner' ? 3.2 : t === 'oil' ? 2.3 : t === 'bumper' ? 1.45 : t === 'kicker' ? 1.6 : 1.25; }
 function laneFor(c, sG) {
   const i = pieceAt(sG, c.pi, c.ai.exit), p = track[i], s = sG - pieceStart[i], ai = c.ai;
   const wob = Math.sin(G.R.t * ai.wf + ai.ph) * ai.wob;
@@ -30,10 +30,10 @@ function laneFor(c, sG) {
   if (near) {
     if (near.type === 'mboost' || (near.type === 'itembox' && !c.item)) return near.v;
     let best = 0, bm = -1e9;
-    for (const cand of [-3.7, -2.7, 0, 2.7, 3.7]) {
+    for (const cand of [-4.4, -3.2, 0, 3.2, 4.4]) {
       let m = 1e9;
       for (const o of obstacles) if (o.pi === i && Math.abs(o.s - s) < 7.5 && o.type !== 'mboost' && o.type !== 'itembox') m = Math.min(m, Math.abs(cand - o.v) - obsHalf(o.type) - CAR_R);
-      m += cand * ai.side * 0.02 - Math.max(0, Math.abs(cand) - 3.0) * 0.8;      // sem mureta: evita colar na borda
+      m += cand * ai.side * 0.02 - Math.max(0, Math.abs(cand) - 3.8) * 0.8;      // sem mureta: evita colar na borda
       if (m > bm) { bm = m; best = cand; }
     }
     return best;
@@ -65,6 +65,7 @@ function speedLimitAt(c, sG) {
   else if (p.type === 'holes') lim = 16 + c.ai.skill * 2;
   else if (p.type === 'wind') lim = 20 + c.ai.skill * 2;
   else if (p.type === 'bumps') lim = 22;
+  else if (p.type === 'minefield') lim = 13 + c.ai.skill * 2.5;
   else if (p.type === 'chicane') lim = 14 + c.ai.skill * 2;
   else if (p.type === 'serpentina') lim = 15.5 + c.ai.skill * 2;
   else if (p.type === 'spiralup') lim = 14.5 + c.ai.skill * 2;
@@ -88,13 +89,18 @@ export function aiWantsItem(c, dt) {
     if (along > 4 && along < 55 && Math.abs(lat) < 3.2) ahead = true;
     if (along < -3 && along > -22 && Math.abs(lat) < 4) behind = true;
   }
-  const want = c.item === 'frost' ? ahead : c.item === 'peel' ? behind && c.grounded : active > 0;
+  const behindMe = cars.some(o => o !== c && o.alive && !o.finished && !o.voidFall && o.prog > c.prog + 3);
+  const want = c.item === 'frost' ? ahead : c.item === 'peel' ? behind && c.grounded
+    : c.item === 'swap' ? behindMe                                  // quem tem alguém à frente troca de lugar
+    : c.item === 'skip' ? c.grounded && c.prog < finishGlobal - 120   // atalho só com bastante pista pela frente
+    : c.item === 'wings' ? c.grounded : active > 0;
   if (!want) { a.itemWait = -1; return false; }
   if (a.itemWait === undefined || a.itemWait < 0) a.itemWait = 0.5 + Math.random() * 1.8;
   a.itemWait -= dt;
   return a.itemWait <= 0;
 }
 export function aiDrive(c, dt, inp) {
+  inp.jump = false;
   if (!c.alive || c.voidFall) { inp.throttle = 0; inp.brake = 0; inp.steer = 0; inp.drift = false; return; }
   const v = Math.max(0, c.vf), sG = c.prog;
   let look = 5 + v * 0.3;

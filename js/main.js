@@ -6,17 +6,18 @@ import { SFX } from './audio.js';
 import { applyTheme, camera, H, M, renderer, scene, sun, texChevron, texChevron1, texWind, W } from './scene.js';
 import { burst, emit, updateParticles } from './fx.js';
 import { applyTrack, canPlace, dropAnims, INITIAL_TYPES, obstacles, slotGroup, tmpW, track } from './track.js';
-import { beamMat, freeSlots, rebuildSlots, syncObstacles } from './obstacles.js';
+import { beamMat, freeSlots, matMineOff, matMineOn, rebuildSlots, syncObstacles } from './obstacles.js';
 import { cars, isHost, isMP, myCar, NET } from './cars.js';
 import { centerText, showScreen, toast, updateHud } from './hud.js';
 import { carCollisions, giveBoost, obsClock, pistonLift, stepCar, trackContact } from './physics.js';
 import { aiDrive } from './ai.js';
-import { broadcast, broadcastFast, packCar, setStatus, toHost, toHostFast, updateRemote } from './net.js';
+import { broadcast, broadcastSnap, packCar, setStatus, toHost, toHostFast, updateRemote } from './net.js';
 import { BC, drawFx, isSpectating, specTarget, followCamera, overviewCamera, panBy, PTRS, zoomBy } from './camera.js';
 import { applyEffect, takedown, resetItems, hostPickup, hostUse, itemClientMsg, itemHostMsg, itemSnapshot, IT, updateItems, useItem } from './items.js';
 import { applyTray, buildMode, itemEnabled, pickCard, renderBuild, tryPlaceAt } from './build-ui.js';
 import { hostEndRound, hostPick, hostPlace, hostRegisterFinish, hostUnpick, hostUpdateBuild } from './host.js';
 import { act, enterPhase, goTitle, renderLobby, setState } from './phases.js';
+import './rooms.js';
 import { applyDevice, keys, readPlayerInput, refreshButtons, syncTouch, tmap, uiActive } from './input.js';
 
 // funções chamadas "de baixo para cima" (ver state.js)
@@ -103,8 +104,11 @@ function updateRace(dt) {
   G.R.netAcc += dt;
   if (G.R.netAcc >= NET_DT && isMP()) {
     G.R.netAcc = 0;
-    if (NET.role === 'host') broadcastFast({ t: 'snap', c: cars.map(packCar) });
-    else if (me) toHostFast({ t: 'st', s: packCar(me).slice(1) });
+    if (NET.role === 'host') broadcastSnap();
+    else if (me) {                                                              // cliente terminou/caiu e está parado: avisa só a cada 3º tick
+      const idle = me.finished || !me.alive;
+      if (!idle || (G.R.idleTick = (G.R.idleTick || 0) + 1) % 3 === 0) toHostFast({ t: 'st', s: packCar(me).slice(1) });
+    }
   }
   updateCars(dt, true);
   followCamera(dt);
@@ -128,6 +132,7 @@ function animateObstacles(dt) {
   const tc = obsClock();
   for (const o of obstacles) {
     if (o.type === 'spinner' && o.bar) o.bar.rotation.y = -(o.ph + tc * o.spd);
+    if (o.type === 'mine' && o.bar) { o.pulse = Math.max(0, o.pulse - dt); o.bar.material = (o.pulse > 0 || ((tc * 2.2 + o.ph) % 1) < 0.5) ? matMineOn : matMineOff; }
     if (o.type === 'bumper' && o.bar) { o.pulse = Math.max(0, o.pulse - dt); const s = 1 + o.pulse * 0.8; o.bar.scale.set(s, 1, s); }
     if (o.type === 'piston' && o.bar) { o.lift = pistonLift(o, tc); o.bar.position.y = -2.4 * (1 - o.lift); }
   }
@@ -153,6 +158,7 @@ function spawnCarFx(dt) {
       emit(c.x - fx * 1.9, c.y + 0.45, c.z - fz * 1.9, -fx * rnd(4, 9) + c.vx * 0.6, rnd(-0.5, 1), -fz * rnd(4, 9) + c.vz * 0.6, rnd(0.12, 0.25),
         c.isLocal ? 0.3 : 1, c.isLocal ? 0.95 : 0.6, c.isLocal ? 1 : 0.15, 0);
     }
+    if (c.flyT > 0 && Math.random() < dt * 60) emit(c.x - fx * 1.2 + rnd(-0.8, 0.8), c.y + 0.6, c.z - fz * 1.2 + rnd(-0.8, 0.8), rnd(-1, 1), rnd(0, 1.5), rnd(-1, 1), 0.45, 0.5, 1, 0.7, 0);
     if (c.oilT > 0 && c.grounded && Math.random() < dt * 30) emit(c.x, c.y + 0.2, c.z, rnd(-1, 1), rnd(0.5, 2), rnd(-1, 1), 0.4, 0.35, 0.25, 0.8, 3);
   }
 }
@@ -195,7 +201,7 @@ function frame(now) {
   fpsEMA += (1 / dt - fpsEMA) * 0.05;
   // desempenho adaptativo: 1º desliga sombras, depois reduz a resolução interna
   if (G.state === 'race' && fpsEMA < 42 && (sun.castShadow || G.PR > 0.75)) {
-    if (++slow > 90) { if (sun.castShadow) sun.castShadow = false; else { G.PR = Math.max(0.75, G.PR - 0.25); renderer.setPixelRatio(G.PR); renderer.setSize(W, H); } slow = 0; }
+    if (++slow > 90) { G.fxLow = true; if (sun.castShadow) sun.castShadow = false; else { G.PR = Math.max(0.75, G.PR - 0.25); renderer.setPixelRatio(G.PR); renderer.setSize(W, H); } slow = 0; }
   } else slow = 0;
   if (NET.role === 'solo' && G.state === 'race' && isSpectating()) dt *= 2.5;      // solo: já terminou/eliminado -> acelera 2,5x
   if (G.state !== 'paused') { update(dt); updateParticles(dt); }
@@ -218,7 +224,7 @@ try {
 document.addEventListener('visibilitychange', () => { if (bgWorker) bgWorker.postMessage(document.hidden && NET.role === 'host'); });
 
 // ------------------------------------------------------------------ boot
-if (G.myDevice === 'mobile') { G.PR = Math.min(G.PR, 1.5); renderer.setPixelRatio(G.PR); }
+if (G.myDevice === 'mobile') { G.PR = Math.min(G.PR, 1.5); renderer.setPixelRatio(G.PR); G.fxLow = true; }     // celular: metade das partículas desde o início
 { const t = store.get('target', 10000); if (TARGET_OPTS.includes(t)) G.TARGET = t; }
 applyTheme(store.get('theme', 'neon'));
 $('nameInp').value = G.myName;

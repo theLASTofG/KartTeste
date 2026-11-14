@@ -3,6 +3,8 @@
 // obs: obstáculos { key: 'índiceDaPeça:índiceDoSlot', type, ph, spd }; diff: 1 fácil · 2 médio · 3 difícil
 // cross: a pista usa dois andares que se cruzam (liga "CRUZAR PISTA" sozinha ao escolher)
 const O = (key, type, ph = 0, spd = 1.7) => ({ key, type, ph, spd });
+// enche TODOS os 21 espacos de uma peca 'minefield' com minas
+const mines = pi => Array.from({ length: 21 }, (_, si) => O(pi + ':' + si, 'mine'));
 
 export const INITIAL_TYPES = ['start', 'straight', 'straight', 'finish'];
 
@@ -33,6 +35,13 @@ export const PRESETS = {
   vento: { name: 'TEMPESTADE', diff: 2, desc: 'Rajadas laterais e lombadas.',
     types: ['start', 'wind', 'curveR', 'wind', 'curveR', 'wind', 'curveL', 'bumps', 'finish'],
     obs: [O('3:0', 'oil'), O('5:0', 'spinner', 0.4, 1.4)] },
+  ventogelo: { name: 'TUNDRA VENTOSA', diff: 3, desc: 'Vento lateral em cima de gelo, com curvas de gelo no meio. Segure o carro!',
+    types: ['start', 'wind', 'ice', 'curveIceR', 'wind', 'ice', 'curveIceR', 'wind', 'ice', 'curveIceL', 'ice', 'wind', 'curveIceR', 'ice', 'wind', 'boost', 'finish'],
+    obs: [O('1:0', 'itembox'), O('2:2', 'block'), O('5:0', 'oil'), O('5:1', 'bumper'), O('8:2', 'oil'), O('10:0', 'itembox'), O('10:1', 'block'), O('13:2', 'bumper'), O('14:0', 'spinner', 0.5, 1.4)] },
+  minado: { name: 'CAMPO MINADO', diff: 3, desc: 'Pista bem longa, 6 campos com 21 minas cada. Pule por cima (X) ou abra as Asas!',
+    types: ['start', 'boost', 'minefield', 'straight', 'curveR', 'minefield', 'curveR', 'minefield', 'straight', 'curveL', 'minefield', 'curveL', 'minefield', 'boost', 'curveR', 'minefield', 'straight', 'finish'],
+    obs: [O('1:0', 'itembox'), O('1:1', 'itembox'), O('3:2', 'itembox'), O('8:2', 'itembox'), O('13:0', 'itembox'), O('13:1', 'itembox'), O('16:2', 'itembox'),
+      ...[2, 5, 7, 10, 12, 15].flatMap(mines)] },
   saltos: { name: 'FESTIVAL DE SALTOS', diff: 3, desc: 'Salto curto, triplo, duplo e mega salto.',
     types: ['start', 'straight', 'minijump', 'straight', 'tripjump', 'curveR', 'doublejump', 'curveR', 'bigjump', 'finish'],
     obs: [O('1:2', 'itembox'), O('4:0', 'mboost'), O('4:2', 'itembox')] },

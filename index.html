@@ -40,6 +40,7 @@
   <button class="tb arrow" id="tRight" data-btn="right">►</button>
   <button class="tb" id="tBrake" data-btn="brake">FREIO<br>RÉ</button>
   <button class="tb" id="tDrift" data-btn="drift">DRIFT<br>TURBO</button>
+  <button class="tb" id="tJump" data-tap="jump">PULO</button>
   <button class="tb" id="tGas" data-btn="gas">ACELERAR</button>
   <button id="tAuto" data-tap="auto">AUTO-GAS</button>
 </div>
@@ -77,13 +78,15 @@
       <button class="big alt2" data-act="join">ENTRAR NA SALA</button>
     </div>
     <div id="status"></div>
+    <div class="lbl" style="margin-top:12px">SALAS ABERTAS <button class="mini" id="roomRefresh" title="Atualizar">↻</button></div>
+    <div id="roomList"><div class="note">Procurando salas...</div></div>
     <div class="row" style="margin-top:8px">
       <button class="opt" id="optAuto">AUTO-GAS (celular): <span>OFF</span></button>
       <button class="opt" data-tap="fs">⛶ TELA CHEIA</button>
     </div>
     <div class="help">
       <div><b>PC</b><br><kbd>W</kbd>/<kbd>↑</kbd> acelerar · <kbd>S</kbd>/<kbd>↓</kbd> freio/ré · <kbd>A</kbd><kbd>D</kbd>/<kbd>←</kbd><kbd>→</kbd> virar<br>
-        <kbd>Espaço</kbd>/<kbd>Shift</kbd> drift (solte = TURBO) · <kbd>R</kbd> reposicionar · <kbd>M</kbd> som · <kbd>F</kbd> tela cheia<br>
+        <kbd>Espaço</kbd>/<kbd>Shift</kbd> drift (solte = TURBO) · <kbd>X</kbd>/<kbd>J</kbd> pular (+ drift e direção = hop-drift) · <kbd>Q</kbd> usar item · <kbd>R</kbd> reposicionar · <kbd>M</kbd> som · <kbd>F</kbd> tela cheia<br>
         <kbd>1</kbd>–<kbd>4</kbd> reações rápidas pro multiplayer (👍 😂 😡 🏁)</div>
       <div><b>Montagem caótica</b><br>No fim de cada rodada aparecem peças e obstáculos espalhados na tela. <b>Seja rápido</b>: cada um pega o seu!
         Peças de pista encaixam no fim (quem encaixa primeiro escolhe a ordem). Obstáculos só vão nos <b>espaços brilhantes</b> da pista.</div>
@@ -105,7 +108,7 @@
         <span class="cnt" style="margin-left:14px">META: <button data-act="targetminus">−</button><span id="targetN">10.000</span> PTS<button data-act="targetplus">+</button></span></div>
       <div class="row"><span class="cnt">PISTA: <button data-act="presetprev">◄</button><span id="presetN" class="pn">CURTA</span><button data-act="presetnext">►</button></span>
         <button class="opt" data-act="presetrand" id="presetRand">🎲 ALEATÓRIA</button></div>
-      <div class="row"><button class="opt" data-act="theme" id="themeBtn">TEMA: NEON</button></div>
+      <div class="row"><button class="opt" data-act="theme" id="themeBtn">TEMA: NEON</button><button class="opt" data-act="public" id="publicBtn">SALA: PÚBLICA</button></div>
       <div class="row"><button class="opt" data-act="cross" id="crossBtn">CRUZAR PISTA: NÃO</button></div>
       <div class="row"><button class="big lime" data-act="start">COMEÇAR PARTIDA</button></div>
     </div>

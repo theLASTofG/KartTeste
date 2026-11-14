@@ -62,6 +62,7 @@ window.addEventListener('keydown', e => {
   else if (e.code === 'KeyG') doTap('auto');
   else if (e.code === 'KeyQ') { const t = e.target; if (!(t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable))) doTap('item'); }
   else if (e.code === 'KeyF') doTap('fs');
+  else if (e.code === 'KeyX' || e.code === 'KeyJ') doTap('jump');
   else if (e.code === 'Enter') {
     if (G.state === 'results' && isHost()) act('continue');
     else if (G.state === 'pick') act('placepiece');
@@ -140,6 +141,7 @@ $('optAuto').addEventListener('click', () => doTap('auto'));
 function doTap(what) {
   SFX.init();
   if (what === 'item') { if (G.state === 'race') useItem(); return; }
+  if (what === 'jump') { G.jumpUntil = performance.now() + 140; return; }
   if (what === 'spec') { if (isSpectating()) cycleSpectate(1); return; }
   if (what === 'pause') { if (G.state === 'paused' || G.menuOpen) resume(); else if (uiActive()) pauseGame(); }
   else if (what === 'reset') { const p = myCar(); if (p && G.state === 'race' && p.alive && p.grounded && !p.voidFall && !p.finished) respawn(p); }
@@ -155,7 +157,7 @@ export function refreshButtons() {
   refreshFs();
 }
 export function readPlayerInput(inp) {
-  if (G.menuOpen) { inp.steer = 0; inp.throttle = 0; inp.brake = 0; inp.drift = false; inp.gasRaw = false; return; }
+  if (G.menuOpen) { inp.steer = 0; inp.throttle = 0; inp.brake = 0; inp.drift = false; inp.gasRaw = false; inp.jump = false; return; }
   const k = keys, mob = G.myDevice === 'mobile';
   const left = k.ArrowLeft || k.KeyA || TOUCH.left, right = k.ArrowRight || k.KeyD || TOUCH.right;
   const brake = !!(k.ArrowDown || k.KeyS || TOUCH.brake), gas = !!(k.ArrowUp || k.KeyW || TOUCH.gas);
@@ -164,6 +166,7 @@ export function readPlayerInput(inp) {
   inp.brake = brake ? 1 : 0;
   inp.drift = !!(k.Space || k.ShiftLeft || k.ShiftRight || TOUCH.drift);
   inp.gasRaw = gas;
+  inp.jump = performance.now() < (G.jumpUntil || 0);          // pedido de pulo vale por 140 ms (tecla/toque)
 }
 {
   const gl = $('gl');

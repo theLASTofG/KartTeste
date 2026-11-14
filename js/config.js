@@ -3,7 +3,7 @@ import { G } from './state.js';
 import { clamp, lerp } from './utils.js';
 
 // ------------------------------------------------------------ constantes
-export const CELL = 26, HW = 5.5, RC = CELL / 2;
+export const CELL = 26, HW = 6.5, RC = CELL / 2;         // HW = meia-largura da pista (m)
 export const WALL_H = 0.9, CAR_R = 1.05, GRAV = 26, FINISH_S = 7, MAXP = 8;
 // muretas laterais das pistas comuns (visual E física). Chicane, obstáculos, largada e chegada têm barreiras próprias.
 export const SIDE_WALLS = false;
@@ -11,19 +11,22 @@ export const MAX_DEATHS = 3;          // vidas por rodada: quedas no abismo ante
 export const TARGET_OPTS = [1000, 2500, 5000, 10000];
 G.TARGET = 10000;                       // meta de pontos (o host escolhe no lobby)
 export const fmtPts = n => n.toLocaleString('pt-BR');
-export const SUBSTEP = 1 / 120, NET_DT = 1 / 30;      // 30 envios/s de estado
+export const SUBSTEP = 1 / 120, NET_DT = 1 / 20;      // 20 envios/s de estado (a interpolação cobre o resto)
 const INTERP_MS = 90;                          // atraso de interpolação dos carros remotos (buffer anti-tranco)
 export const DIRS = [[1, 0], [0, 1], [-1, 0], [0, -1]];
 export const PH = {
-  maxSpeed: 27, maxRev: 8, accel: 30, brake: 44, revAccel: 16, coast: 3.5, coastK: 0.25,
-  turn: 2.7, grip: 12, gripDrift: 3.8, gripOil: 1.4, overDecay: 2.2, boostAccel: 70, airTurn: 0.35
+  maxSpeed: 27, maxRev: 8, accel: 30, brake: 44, revAccel: 16, coast: 2.4, coastK: 0.17,        // solta o acelerador: perde velocidade mais suave
+  turn: 2.7, grip: 12, gripDrift: 3.8, gripOil: 1.4, overDecay: 2.2, boostAccel: 70, airTurn: 0.5
 };
+export const JUMP = { vy: 9.5, cool: 1.0 };                     // pulo: ~1,7 m de altura, ~0,7 s no ar, recarga de 1 s
+// ajuda de borda (pistas sem mureta): perto da borda, a velocidade PARA FORA é amortecida; batida forte/arremesso ainda derruba
+export const EDGE = { band: 1.4, k: 9, maxOut: 10 };
 export const DRIFT = {
   minSpeed: 10.5, stopSpeed: 6.5, T: [0.55, 1.2, 2.0], pow: [0.25, 0.38, 0.52], dur: [0.7, 1.0, 1.4], kick: [3, 5, 7.5],
   col: [[0.23, 0.63, 1], [1, 0.6, 0.12], [0.82, 0.3, 1]], css: ['#3aa0ff', '#ff9a1f', '#d24bff'],
   name: ['MINI TURBO', 'SUPER TURBO', 'ULTRA TURBO!']
 };
-export const PAD = { pow: 0.42, dur: 1.0, kick: 4, s0: 8, s1: 18, hv: 3.6 };
+export const PAD = { pow: 0.42, dur: 1.0, kick: 4, s0: 8, s1: 18, hv: HW * 0.65 };
 // perfis de rampa/buraco por peça: [s0, s1, tipo, h0, h1] (data-driven: rampa, buraco e trecho plano)
 export const PROFILES = {
   jump: [[0, 18, 'ramp', 0, 3], [18, 29, 'gap'], [29, 52, 'flat']],
@@ -37,20 +40,21 @@ export const RAMP_PADS = { bigjump: [2, 12] };                // Mega Salto tem 
 export const profileSeg = (t, s) => { const p = PROFILES[t]; if (!p) return null; for (const g of p) if (s < g[1]) return g; return p[p.length - 1]; };
 // chicane: barreiras alternadas (s, faixa lateral v0..v1) que obrigam o zigue-zague
 export const BARRIERS = [{ s: 12, v0: -HW, v1: -1.2 }, { s: 26, v0: 1.2, v1: HW }, { s: 40, v0: -HW, v1: -1.2 }];
-export const HOLES = [{ s0: 10, s1: 16, v0: -5.6, v1: -0.8 }, { s0: 24, s1: 30, v0: 0.8, v1: 5.6 }, { s0: 38, s1: 44, v0: -2.2, v1: 2.2 }];
+export const HOLES = [{ s0: 10, s1: 16, v0: -HW - 0.1, v1: -0.8 }, { s0: 24, s1: 30, v0: 0.8, v1: HW + 0.1 }, { s0: 38, s1: 44, v0: -2.2, v1: 2.2 }];
 export const WIND_ACC = 8;                       // empurrão lateral do vento (m/s²)
 export const bumpH = s => (s > 2 && s < 24) ? 0.55 * Math.pow(Math.sin(Math.PI * (s - 2) / 5.5), 2) : 0;
 export const bumpSlope = s => (s > 2 && s < 24) ? 0.55 * Math.PI / 5.5 * Math.sin(2 * Math.PI * (s - 2) / 5.5) : 0;
 export const PTS = [300, 220, 150, 110, 80, 60, 45, 30];
 export const PALETTE = ['#00e5ff', '#ff3b5c', '#ffd23f', '#7dff6b', '#c471ff', '#ff8a1f', '#ff6bd6', '#e8ecff'];
 export const BOT_NAMES = ['Rex', 'Nova', 'Blaze', 'Viper', 'Turbo', 'Faísca', 'Bolt', 'Zíper'];
-export const GRID_SLOTS = [[20, -3.4], [20, 0], [20, 3.4], [15, -3.4], [15, 0], [15, 3.4], [10, -3.4], [10, 0], [10, 3.4]];
+export const GRID_SLOTS = [[20, -4], [20, 0], [20, 4], [15, -4], [15, 0], [15, 4], [10, -4], [10, 0], [10, 3.9]];
 export const PT = {
   start: { cells: 1 }, straight: { cells: 1 }, finish: { cells: 1 }, boost: { cells: 1 },
   curveL: { cells: 1, curve: -1 }, curveR: { cells: 1, curve: 1 }, jump: { cells: 2 }, bridge: { cells: 2 },
   bumps: { cells: 1 }, ice: { cells: 1 }, wind: { cells: 1 }, holes: { cells: 2 }, bigjump: { cells: 3 },
   chicane: { cells: 2 }, doublejump: { cells: 3 },
   minijump: { cells: 1 }, tripjump: { cells: 3 },
+  minefield: { cells: 2 },                                   // 2 células com 21 espaços de mina (só em pistas prontas, não vira carta)
   curveIceL: { cells: 1, curve: -1, ice: true }, curveIceR: { cells: 1, curve: 1, ice: true },     // curvas de gelo: pouco atrito, freie antes
   serpentina: { cells: 4, special: 'serp' },        // ocupa 2x2 células: sobe em S, retorna 180° e desce (sai ao lado, no sentido oposto)
   megafunnel: { cells: 8, special: 'funnel' },        // automática: junta as 4 faixas da Mega Pista numa pista só (nunca vira carta)
@@ -58,10 +62,15 @@ export const PT = {
   megablock: { cells: 12, special: 'mega' }         // 3 células de comprimento x 4 de largura, com 4 saídas frontais
 };
 // espaços delimitados onde obstáculos podem ser posicionados (s ao longo, v lateral)
+// Campo Minado: 7 fileiras de 2 minas deixando um corredor de ~3,3 m que serpenteia + 7 minas-isca nas laterais entre as fileiras
+const MINE_ROWS = [[5, 0], [12, 2.4], [19, 3.6], [26, 1.2], [33, -2], [40, -3.6], [47, -1]];         // [s, centro do corredor]
+const MINE_SLOTS = MINE_ROWS.flatMap(([s, g]) => [[s, clamp(g - 4.3, -5.8, 5.8)], [s, clamp(g + 4.3, -5.8, 5.8)]])
+  .concat(MINE_ROWS.map(([s, g]) => [s + 3.5, g >= 0 ? -4.6 : 4.6]));
 export const SLOTS = {
-  straight: [[8, -2.6], [8, 2.6], [18, 0]], boost: [[22.5, -2.6], [22.5, 2.6]],
-  curveL: [[RC * Math.PI / 4, 0]], curveR: [[RC * Math.PI / 4, 0]], jump: [[40, -2.4], [40, 2.4]],
-  ice: [[8, -2.6], [8, 2.6], [18, 0]], wind: [[13, 0]], bigjump: [[66, -2.4], [66, 2.4]], doublejump: [[30, -2.4], [30, 2.4], [70, 0]],
+  minefield: MINE_SLOTS,
+  straight: [[8, -3.1], [8, 3.1], [18, 0]], boost: [[22.5, -3.1], [22.5, 3.1]],
+  curveL: [[RC * Math.PI / 4, 0]], curveR: [[RC * Math.PI / 4, 0]], jump: [[40, -2.9], [40, 2.9]],
+  ice: [[8, -3.1], [8, 3.1], [18, 0]], wind: [[13, 0]], bigjump: [[66, -2.9], [66, 2.9]], doublejump: [[30, -2.9], [30, 2.9], [70, 0]],
   minijump: [[20, 0]], tripjump: [[19, 0], [45, 0], [71, 0]], curveIceL: [[RC * Math.PI / 4, 0]], curveIceR: [[RC * Math.PI / 4, 0]],
   start: [], finish: [], bridge: [], bumps: [], holes: [], chicane: [],
   serpentina: [[22, 0], [58, 0], [100, 0]], spiralup: [[8, 0], [34, 0], [58, 0]],
@@ -73,17 +82,19 @@ export const SERP = { L1: 39, R: 13, L3: 39, H: 5, A: 4, N1: 26, N2: 28, N3: 18 
 // ---- Espiral de Andar: sobe H m (novo andar) em reta + meia-volta + reta; ocupa 2 células (sai ao lado, no sentido oposto)
 export const SPIRAL = { S: 13, R: 13, H: 6, N1: 8, N2: 28, N3: 8 };
 // ---- Mega Pista: plataforma 3x4 células; entrada na coluna 1 (lv=0) e 4 saídas em lv = -26, 0, 26, 52
+// tudo derivado de HW: cada saída tem a largura da pista e 1 m de folga até a barreira
+const MG = 1, MX = [-26, 0, 26, 52];
 export const MEGA = {
-  len: 78, shift: 13, hw: 45, taper: 20, lvMin: -32.5, lvMax: 58.5,
+  len: 78, shift: 13, hw: 45, taper: 20, lvMin: MX[0] - HW - MG, lvMax: MX[3] + HW + MG,
   exitLv: [-26, 0, 26, 52], exitV: [-39, -13, 13, 39],            // v centrado (v = lv - shift)
-  gaps: [[-19.5, -6.5], [6.5, 19.5], [32.5, 45.5]], gapS: [73, 78],  // barreiras fixas entre as saídas
-  ice: [{ s0: 30, s1: 76, l0: -32.5, l1: -19.5 }, { s0: 30, s1: 76, l0: 45.5, l1: 58.5 }],
-  pads: [{ s0: 24, s1: 32, l0: -5.5, l1: 5.5 }, { s0: 58, s1: 64, l0: -5.5, l1: 5.5 }, { s0: 58, s1: 64, l0: 20.5, l1: 31.5 }],
+  gaps: [[MX[0] + HW + MG, MX[1] - HW - MG], [MX[1] + HW + MG, MX[2] - HW - MG], [MX[2] + HW + MG, MX[3] - HW - MG]], gapS: [73, 78],  // barreiras fixas entre as saídas
+  ice: [{ s0: 30, s1: 76, l0: MX[0] - HW - MG, l1: MX[0] + HW + MG }, { s0: 30, s1: 76, l0: MX[3] - HW - MG, l1: MX[3] + HW + MG }],
+  pads: [{ s0: 24, s1: 32, l0: -HW, l1: HW }, { s0: 58, s1: 64, l0: -HW, l1: HW }, { s0: 58, s1: 64, l0: 26 - HW, l1: 26 + HW }],
   bumps: [38, 52], bumpHalf: 2, bumpH: 0.5,                         // lombadas na largura toda
   bumpers: [{ s: 46, l: 13, r: 1.4 }, { s: 46, l: 39, r: 1.4 }],   // bumpers de mola fixos
   colors: [0x00e5ff, 0xff2e88, 0xa6ff3b, 0xffd23f],
   branchCells: 2,                                                    // as 4 faixas paralelas têm o mesmo comprimento (2 células = 52 m)
-  funnelLen: 52, funnelPad: { s0: 34, s1: 46, l0: -5.5, l1: 5.5 }   // funil: 4 faixas -> 1 pista central, piso turbo na saída
+  funnelLen: 52, funnelPad: { s0: 34, s1: 46, l0: -HW, l1: HW }   // funil: 4 faixas -> 1 pista central, piso turbo na saída
 };
 // cartas aceitas nas 4 saídas (retas, sem curva, até 2 células; as de 1 célula ganham um trecho reto automático)
 export const EXIT_TYPES = ['straight', 'boost', 'bumps', 'ice', 'wind', 'bridge', 'holes', 'chicane', 'jump', 'minijump'];
@@ -108,6 +119,7 @@ export const ITEMS = {
   tripjump: { kind: 'piece', name: 'Salto Triplo', w: 0.6, svg: '<path d="M0 52 L8 46 L8 56 L0 56Z M22 52 L30 46 L30 56 L22 56Z M44 52 L52 46 L52 56 L44 56Z" fill="#ff9a1f"/><rect x="12" y="52" width="8" height="4" fill="#2b3048"/><rect x="34" y="52" width="8" height="4" fill="#2b3048"/><rect x="56" y="52" width="8" height="4" fill="#2b3048"/><path d="M8 44 Q14 30 20 50 M30 44 Q36 30 42 50 M52 44 Q58 30 64 50" stroke="#fff" stroke-width="2" stroke-dasharray="3 3" fill="none"/>' },
   curveIceL: { kind: 'piece', name: 'Curva de Gelo Esq.', w: 0.7, svg: '<path d="M32 64 L32 44 A14 14 0 0 0 18 30 L0 30" stroke="#9be8ff" stroke-width="24" fill="none"/><path d="M32 64 L32 44 A14 14 0 0 0 18 30 L0 30" stroke="#fff" stroke-width="2" stroke-dasharray="5 5" fill="none"/><path d="M44 14 V30 M36 22 H52" stroke="#fff" stroke-width="3"/>' },
   curveIceR: { kind: 'piece', name: 'Curva de Gelo Dir.', w: 0.7, svg: '<path d="M32 64 L32 44 A14 14 0 0 1 46 30 L64 30" stroke="#9be8ff" stroke-width="24" fill="none"/><path d="M32 64 L32 44 A14 14 0 0 1 46 30 L64 30" stroke="#fff" stroke-width="2" stroke-dasharray="5 5" fill="none"/><path d="M20 14 V30 M12 22 H28" stroke="#fff" stroke-width="3"/>' },
+  mine: { kind: 'obs', name: 'Mina', w: 0.9, svg: '<circle cx="32" cy="34" r="17" fill="#2a2a38" stroke="#ff5a2a" stroke-width="3"/><circle cx="32" cy="34" r="6" fill="#ff2020"/><path d="M32 12V20M32 48V56M10 34H18M46 34H54M16 18L22 24M42 44L48 50M48 18L42 24M22 44L16 50" stroke="#ff5a2a" stroke-width="3" stroke-linecap="round"/>' },
   kicker: { kind: 'obs', name: 'Rampinha', w: 0.9, svg: '<path d="M8 50 L56 50 L56 24 Z" fill="#ff9a1f"/><path d="M14 46 L50 46" stroke="#fff" stroke-width="3"/><path d="M50 18 Q56 6 62 14" stroke="#fff" stroke-width="2.5" fill="none"/>' },
   piston: { kind: 'obs', name: 'Pistão', w: 0.8, svg: '<rect x="20" y="10" width="24" height="30" fill="#ff2020"/><rect x="16" y="44" width="32" height="10" fill="#e8ecff"/><path d="M32 4 V10 M24 2 L32 8 L40 2" stroke="#fff" stroke-width="2.5" fill="none"/>' },
   block: { kind: 'obs', name: 'Bloco', w: 1.1, svg: '<rect x="14" y="14" width="36" height="36" rx="3" fill="#ff2020"/><rect x="14" y="25" width="36" height="6" fill="#fff"/>' },
@@ -119,9 +131,9 @@ export const ITEMS = {
 };
 export function bridgeHW(s) {
   const L = 2 * CELL;
-  if (s < 8) return lerp(HW, 2.5, clamp(s / 8, 0, 1));
-  if (s > L - 8) return lerp(2.5, HW, clamp((s - (L - 8)) / 8, 0, 1));
-  return 2.5;
+  if (s < 8) return lerp(HW, 2.8, clamp(s / 8, 0, 1));
+  if (s > L - 8) return lerp(2.8, HW, clamp((s - (L - 8)) / 8, 0, 1));
+  return 2.8;
 }
 
 // ---------------------------------------------------------- itens de corrida (js/items.js) — tudo centralizado aqui
@@ -137,9 +149,19 @@ export const POWER = {
     peel: { name: 'Casca Derrapante', w: 40, color: '#ffd23f',
       svg: '<path d="M10 40C14 18 40 10 54 28C46 24 40 30 38 38C32 34 20 36 10 40Z" fill="#ffd23f" stroke="#b07a00" stroke-width="3"/><circle cx="46" cy="48" r="5" fill="#ff2e88"/>' },
     pulse: { name: 'Pulso Elétrico', w: 15, color: '#c084ff',
-      svg: '<path d="M36 6L16 36H30L26 58L48 26H34Z" fill="#ffe14d" stroke="#8a4dff" stroke-width="3" stroke-linejoin="round"/>' }
+      svg: '<path d="M36 6L16 36H30L26 58L48 26H34Z" fill="#ffe14d" stroke="#8a4dff" stroke-width="3" stroke-linejoin="round"/>' },
+    // poderes raros: mudam a POSIÇÃO do carro (o dono aplica; o host decide e avisa todos)
+    wings: { name: 'Asas', w: 12, color: '#7dffb0',
+      svg: '<path d="M6 40C14 18 30 14 34 30C26 28 18 32 6 40Z M58 40C50 18 34 14 30 30C38 28 46 32 58 40Z" fill="#e8fff2" stroke="#2dd67a" stroke-width="3" stroke-linejoin="round"/><circle cx="32" cy="38" r="6" fill="#2dd67a"/>' },
+    skip: { name: 'Atalho x3', w: 8, color: '#ffa94d',
+      svg: '<path d="M8 14L24 32L8 50Z M26 14L42 32L26 50Z M44 14L60 32L44 50Z" fill="#ffa94d" stroke="#b25a00" stroke-width="2.5" stroke-linejoin="round"/>' },
+    swap: { name: 'Troca de Lugar', w: 6, color: '#ff6bd6',
+      svg: '<path d="M10 22H44M34 12L46 22L34 32" stroke="#ff6bd6" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M54 42H20M30 32L18 42L30 52" stroke="#4df3ff" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>' }
   },
   frost: { speed: 46, ttl: 2.4, radius: 1.7, freeze: 0.7, slow: 1.5, slowMul: 0.6, steerMul: 0.55, immune: 1.2 },
   peel: { ttl: 14, radius: 1.5, back: 3.0, spin: 1.0, kick: 4.5, spinRate: 9, immune: 0.8 },
-  pulse: { stun: 0.8, immune: 2.0 }
+  pulse: { stun: 0.8, immune: 2.0 },
+  wings: { dur: 4.5, lift: 3.2, speedMul: 1.12, grace: 2.0 },        // voa por cima de buracos/obstáculos; se acabar sobre o vazio, ganha até 2 s para achar chão
+  skip: { steps: 3, s: 4, inv: 1.5 },                                // teleporta 3 peças à frente (para na chegada), invulnerável 1,5 s
+  swap: { inv: 1.3, immune: 2.0 }                                    // troca de posição com o carro logo à frente
 };

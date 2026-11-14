@@ -249,3 +249,18 @@ body.spectating #info{pointer-events:auto;cursor:pointer}
 .cnt .pn{min-width:130px;text-align:center;font-size:14px}
 .pl .kick{margin-left:6px;width:26px;height:26px;border-radius:8px;border:2px solid rgba(255,46,85,.6);background:rgba(255,46,85,.15);color:#ff6b86;font-weight:900;line-height:1;cursor:pointer}
 .pl .kick:hover{background:rgba(255,46,85,.4)}
+
+/* botão de pulo (celular) */
+#tJump{width:calc(var(--u)*1.2);height:calc(var(--u)*1.2);right:calc(2.5vw + var(--safeR) + var(--u)*.48 + var(--u)*1.45 + 12px);
+  bottom:calc(3.5vh + var(--safeB) + var(--u)*1.95 + 12px);font-size:calc(var(--u)*.2);border-color:rgba(255,210,63,.8);background:rgba(255,210,63,.14)}
+#tJump.cool{opacity:.4}
+
+/* lista de salas abertas (título) */
+.mini{margin-left:6px;width:26px;height:26px;border-radius:8px;border:2px solid rgba(255,255,255,.25);background:rgba(255,255,255,.08);color:#fff;font-weight:900;cursor:pointer}
+#roomList{max-width:460px;margin:6px auto 0;max-height:168px;overflow-y:auto;text-align:left}
+.rm{display:flex;align-items:center;gap:10px;padding:7px 10px;background:rgba(255,255,255,.06);border-radius:10px;margin:5px 0;font-weight:800;font-size:14px}
+.rm .rn{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rm .rp{font-size:11px;opacity:.7;white-space:nowrap}
+.rm .rc{font-size:12px;opacity:.85;white-space:nowrap}
+.rm .rj{border:0;border-radius:8px;padding:6px 10px;font-weight:900;background:var(--lime,#a6ff3b);color:#111;cursor:pointer;white-space:nowrap}
+.rm .rj:disabled{background:rgba(255,255,255,.14);color:#fff;opacity:.6;cursor:default}

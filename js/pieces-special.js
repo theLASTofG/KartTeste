@@ -149,7 +149,7 @@ export function megaWorld(p, s, v, o) {
   const lv = lvOf(v);
   o.x = p.ex + p.fx * s + p.rx * lv; o.z = p.ez + p.fz * s + p.rz * lv; o.a = p.a; return o;
 }
-export function megaBounds(s) { const t = clamp(s / MEGA.taper, 0, 1); return [-5.5 + (MEGA.lvMin + 5.5) * t, 5.5 + (MEGA.lvMax - 5.5) * t]; }
+export function megaBounds(s) { const t = clamp(s / MEGA.taper, 0, 1); return [-HW + (MEGA.lvMin + HW) * t, HW + (MEGA.lvMax - HW) * t]; }
 export function megaBumpH(s) {
   let h = 0, sl = 0;
   for (const c of MEGA.bumps) {
@@ -181,7 +181,7 @@ function prism(poly, y0, y1, mat, g) {
 export function megaBuild(p) {
   const g = new THREE.Group(); g.position.set(p.ex, 0, p.ez); g.rotation.y = -p.a;
   const L = MEGA.len, T = MEGA.taper;
-  prism([[0, -5.5], [T, MEGA.lvMin], [L, MEGA.lvMin], [L, MEGA.lvMax], [T, MEGA.lvMax], [0, 5.5]], -1, 0, matFloor, g);
+  prism([[0, -HW], [T, MEGA.lvMin], [L, MEGA.lvMin], [L, MEGA.lvMax], [T, MEGA.lvMax], [0, HW]], -1, 0, matFloor, g);
   for (const z of MEGA.ice) {                                                 // gelo nas saídas 0 e 3
     const pl = new THREE.Mesh(new THREE.PlaneGeometry(z.s1 - z.s0, z.l1 - z.l0), M.ice); pl.rotation.x = -Math.PI / 2;
     pl.position.set((z.s0 + z.s1) / 2, 0.025, (z.l0 + z.l1) / 2); g.add(pl);
@@ -207,14 +207,14 @@ export function megaBuild(p) {
     box(sl, 1.4, w, M.wall, sc, 0.7, c, g); box(sl + 0.04, 0.1, w + 0.04, M.wallCap, sc, 1.45, c, g, false);
   }
   for (let k = 0; k < 4; k++) {                                               // arcos coloridos nas saídas
-    const lv = MEGA.exitLv[k], hs = 6.5;
+    const lv = MEGA.exitLv[k], hs = HW + 1;
     for (const sd of [-1, 1]) box(0.5, 4.4, 0.5, arcMats[k], L - 0.5, 2.2, lv + sd * hs, g, false);
     box(0.5, 0.5, 2 * hs + 0.5, arcMats[k], L - 0.5, 4.4, lv, g, false);
     const gl = new THREE.Mesh(new THREE.PlaneGeometry(8, 2 * hs), glowMats[k]); gl.rotation.x = -Math.PI / 2; gl.position.set(L - 4.5, 0.05, lv); g.add(gl);
   }
   box(L - T, 0.06, 0.3, M.edge, (L + T) / 2, 0.03, MEGA.lvMin + 0.15, g, false);
   box(L - T, 0.06, 0.3, M.edge, (L + T) / 2, 0.03, MEGA.lvMax - 0.15, g, false);
-  for (const [s, lv] of [[0, 5.5], [0, -5.5], [L, MEGA.lvMin], [L, MEGA.lvMax], [T + 20, MEGA.lvMin], [T + 20, MEGA.lvMax]]) box(1.4, 30, 1.4, M.post, s, -16, lv, g);
+  for (const [s, lv] of [[0, HW], [0, -HW], [L, MEGA.lvMin], [L, MEGA.lvMax], [T + 20, MEGA.lvMin], [T + 20, MEGA.lvMax]]) box(1.4, 30, 1.4, M.post, s, -16, lv, g);
   return g;
 }
 
@@ -222,7 +222,7 @@ export function megaBuild(p) {
 export const FUNNEL_LEN = MEGA.funnelLen;
 export function funnelBounds(s) {
   const t = smooth(clamp(s / FUNNEL_LEN, 0, 1));
-  return [MEGA.lvMin + (-5.5 - MEGA.lvMin) * t, MEGA.lvMax + (5.5 - MEGA.lvMax) * t];
+  return [MEGA.lvMin + (-HW - MEGA.lvMin) * t, MEGA.lvMax + (HW - MEGA.lvMax) * t];
 }
 export const funnelWorld = (p, s, v, o) => megaWorld(p, s, v, o);
 export function funnelQuery(p, x, z, o) {
@@ -261,7 +261,7 @@ export function funnelBuild(p) {
     const t0 = smooth(s / FUNNEL_LEN), t1 = smooth((s + 1) / FUNNEL_LEN), lv0 = MEGA.exitLv[k] * (1 - t0), lv1 = MEGA.exitLv[k] * (1 - t1);
     const m = box(2.6, 0.05, 0.55, M.edgeY, s, 0.05, lv0, g, false); m.rotation.y = -Math.atan2(lv1 - lv0, 1);
   }
-  for (const [s, lv] of [[0, MEGA.lvMin], [0, MEGA.lvMax], [FUNNEL_LEN, -5.5], [FUNNEL_LEN, 5.5]]) box(1.4, 30, 1.4, M.post, s, -16, lv, g);
+  for (const [s, lv] of [[0, MEGA.lvMin], [0, MEGA.lvMax], [FUNNEL_LEN, -HW], [FUNNEL_LEN, HW]]) box(1.4, 30, 1.4, M.post, s, -16, lv, g);
   return g;
 }
 export const CELL_SZ = CELL;

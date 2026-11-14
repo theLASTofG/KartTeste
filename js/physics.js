@@ -1,7 +1,7 @@
 // Física arcade dos carros: passo, contato com pista/mureta, obstáculos e colisões.
 import { G, hooks } from './state.js';
 import { clamp, lerp, rnd, wrapA } from './utils.js';
-import { BARRIERS, CAR_R, CELL, DRIFT, MAX_DEATHS, MEGA, FINISH_S, GRAV, PAD, PH, POWER, profileSeg, RAMP_PADS, WALL_H, WIND_ACC } from './config.js';
+import { BARRIERS, CAR_R, CELL, DRIFT, EDGE, JUMP, MAX_DEATHS, MEGA, FINISH_S, GRAV, PAD, PH, POWER, profileSeg, RAMP_PADS, WALL_H, WIND_ACC } from './config.js';
 import { SFX } from './audio.js';
 import { burst } from './fx.js';
 import { obstacles, pieceStart, prevIdx, succIdx, tmpW, track } from './track.js';
@@ -131,16 +131,27 @@ function freeFall(c, dt) {
 const baseOf = c => (track[c.pi] && track[c.pi].baseH) || 0;
 const NO_INP = { steer: 0, throttle: 0, brake: 0, drift: false, gasRaw: false };
 const SCR = { steer: 0, throttle: 0, brake: 0, drift: false, gasRaw: false };
+// pulo: só no chão, com recarga. Segurando drift + direção vira "hop-drift" (já entra derrapando, como o hop do drift)
+function doJump(c, inp) {
+  const fx = Math.cos(c.a), fz = Math.sin(c.a), vf = c.vx * fx + c.vz * fz;
+  c.grounded = false; c.airT = 0; c.vy = Math.max(c.vy, JUMP.vy); c.jumpCool = JUMP.cool;
+  if (inp.drift && !c.drifting && vf > DRIFT.minSpeed && Math.abs(inp.steer) > 0.2) {
+    c.drifting = true; c.driftDir = Math.sign(inp.steer); c.driftT = 0; c.driftLevel = 0; c.kick = c.driftDir * 3.0;
+  }
+  burst(c.x, c.y + 0.2, c.z, 10, 0.8, 0.9, 1, 5, 0.35, 8);
+  if (c.isLocal) SFX.jump();
+}
 export function stepCar(c, inp, dt) {
   if (c.voidFall) { freeFall(c, dt); return; }
   if (!c.alive) { c.vy -= GRAV * dt; c.x += c.vx * dt; c.y += c.vy * dt; c.z += c.vz * dt; c.tumbleX += dt * 3.1; c.tumbleZ += dt * 2.3; return; }
   // efeitos de item: congelado/atordoado ignoram o controle; casca bloqueia o drift; congelamento deixa lento e com pouca direção
   if (c.freezeT > 0 || c.stunT > 0) inp = NO_INP;
   else if (c.spinT > 0 && inp.drift) { SCR.steer = inp.steer; SCR.throttle = inp.throttle; SCR.brake = inp.brake; SCR.drift = false; inp = SCR; }
+  if (inp.jump && c.grounded && c.alive && !(c.flyT > 0) && (c.jumpCool || 0) <= 0) doJump(c, inp);
   const slowed = c.slowT > 0;
   const air = !c.grounded;
   const tgt = inp.steer * (slowed ? POWER.frost.steerMul : 1);
-  const rate = (tgt === 0 || (c.steer !== 0 && Math.sign(tgt) !== Math.sign(c.steer))) ? 14 : 9;
+  const rate = (tgt === 0 || (c.steer !== 0 && Math.sign(tgt) !== Math.sign(c.steer))) ? 16 : 11;      // direção responde mais rápido
   c.steer += clamp(tgt - c.steer, -rate * dt, rate * dt);
   let fx = Math.cos(c.a), fz = Math.sin(c.a);
   let vf = c.vx * fx + c.vz * fz;
@@ -160,7 +171,7 @@ export function stepCar(c, inp, dt) {
   let st = c.steer;
   if (c.drifting) st = clamp(c.driftDir * 0.75 + c.steer * 0.45, -1.1, 1.1);
   const av = Math.abs(vf);
-  const sf = clamp(av / 5, 0, 1) * (1 - 0.3 * clamp((av - 14) / 18, 0, 1));
+  const sf = clamp(av / 4, 0, 1) * (1 - 0.38 * clamp((av - 13) / 18, 0, 1));              // volta cedo em baixa velocidade, mais estável em alta
   const turn = PH.turn * sf * (c.drifting ? 1.32 : 1) * (air ? PH.airTurn : 1);
   c.a += (st * turn * (vf >= -0.3 ? 1 : -1) + c.kick) * dt;
   if (c.spinT > 0) {
@@ -173,7 +184,7 @@ export function stepCar(c, inp, dt) {
   vf = c.vx * fx + c.vz * fz;
   let vl = -c.vx * fz + c.vz * fx;
   const boosting = c.boostT > 0;
-  const vmax = PH.maxSpeed * (1 + (boosting ? c.boostPow : 0)) * (c.maxMul || 1) * (slowed ? POWER.frost.slowMul : 1);
+  const vmax = PH.maxSpeed * (1 + (boosting ? c.boostPow : 0)) * (c.maxMul || 1) * (slowed ? POWER.frost.slowMul : 1) * (c.flyT > 0 ? POWER.wings.speedMul : 1);
   c.braking = false;
   c.oilT = Math.max(0, (c.oilT || 0) - dt);
   if (!air) {
@@ -213,6 +224,7 @@ export function obsClock() { return G.R && G.state === 'race' ? G.R.t : G.clockT
 // pistão: sobe e desce em ciclo (determinístico pelo relógio da corrida)
 export function pistonLift(o, tc) { return clamp((Math.sin(tc * Math.abs(o.spd) * 1.2 + o.ph) + 0.15) * 2.2, 0, 1); }
 function obstacleContact(c, dt) {
+  c.mineCool = Math.max(0, (c.mineCool || 0) - dt);
   if (c.invuln > 0) return;                                 // renascendo: atravessa obstáculos por 2 s (não é lançado de novo)
   const tc = obsClock();
   for (const o of obstacles) {
@@ -254,6 +266,14 @@ function obstacleContact(c, dt) {
         if (c.oilT <= 0.05) { c.kick += (Math.random() < 0.5 ? -1 : 1) * rnd(1.5, 2.8); if (c.drifting) endDrift(c, false); if (c.isLocal) { SFX.splat(); toast('ÓLEO!', '#9a7cff', 0.7); } }
         c.oilT = 0.9;
       }
+    } else if (o.type === 'mine') {
+      if (c.y > o.y + 1.1 || (c.mineCool || 0) > 0 || dx * dx + dz * dz > 1.6 * 1.6) continue;       // pulando/voando por cima passa; recarga de 0,8 s por carro
+      c.mineCool = 0.8; o.pulse = 0.45;
+      c.grounded = false; c.vy = Math.max(c.vy, 8.5); c.airT = 0; c.vx *= 0.6; c.vz *= 0.6; c.stunT = Math.max(c.stunT || 0, 0.45);
+      c.kick += (Math.random() < 0.5 ? -1 : 1) * rnd(3, 6);
+      if (c.drifting) endDrift(c, false);
+      burst(o.x, o.y + 0.5, o.z, 40, 1, 0.55, 0.15, 12, 0.7, 8); burst(o.x, o.y + 0.3, o.z, 14, 0.4, 0.4, 0.4, 5, 0.9, -1);
+      if (c.isLocal) { SFX.thump(22); G.shake = Math.max(G.shake, 0.6); toast('BOOM!', '#ff6a2a', 0.8); }
     } else if (o.type === 'mboost') {
       const u = dx * ca + dz * sa, w = -dx * sa + dz * ca;
       if (c.grounded && Math.abs(u) < 1.7 && Math.abs(w) < 1.7 && c.padCool <= 0) {
@@ -317,6 +337,16 @@ function megaContact(c, Q, dt) {
     break;
   }
 }
+// ajuda de borda: encostou na borda indo para fora (devagar) -> amortece o movimento lateral para fora. Não vale em ponte/buracos/Mega Pista.
+function edgeAssist(c, Q, Pc, dt) {
+  if (Pc.type === 'bridge' || Pc.type === 'holes' || Pc.special === 'mega' || Pc.special === 'funnel') return;
+  const sgn = Math.sign(Q.v), over = Math.abs(Q.v) - (Q.hw - EDGE.band);
+  if (over <= 0) return;
+  const out = (c.vx * Q.rx + c.vz * Q.rz) * sgn;
+  if (out <= 0 || out > EDGE.maxOut) return;
+  const cut = out * (1 - Math.exp(-EDGE.k * clamp(over / EDGE.band, 0, 1) * dt));
+  c.vx -= Q.rx * sgn * cut; c.vz -= Q.rz * sgn * cut;
+}
 export function trackContact(c, dt) {
   let Pc = track[c.pi], Q = c.Q;
   Pc.query(c.x, c.z, Q);
@@ -327,8 +357,15 @@ export function trackContact(c, dt) {
     if (n >= 0 && n !== c.pi) { c.pi = n; Pc = track[n]; Pc.query(c.x, c.z, Q); } else break;
   }
   if (c.grounded && c.alive && !c.voidFall && c.pi > (c.checkpointIdx || 0) && !NO_CHECKPOINT.has(Pc.type)) { c.checkpointIdx = c.pi; c.checkpointS = 3; }
-  if (c.grounded) {
+  // Asas: o carro paira acima da pista (ignora buracos, obstáculos e colisões baixas). Terminou sobre o vazio? ganha até `grace` s para achar chão.
+  let flying = c.flyT > 0;
+  if (!flying && c.flyOn) { if (!Q.floor && c.alive && (c.flyGrace = (c.flyGrace || 0) + dt) < POWER.wings.grace) flying = true; else c.flyOn = false; }
+  if (flying && c.alive && !c.voidFall) {
+    c.flyOn = true; if (c.flyT > 0) c.flyGrace = 0;
+    c.grounded = true; c.vy = 0; c.y += ((Q.h + POWER.wings.lift) - c.y) * Math.min(1, dt * 5);
+  } else if (c.grounded) {
     if (Q.floor && Math.abs(c.y - Q.h) < 1.15) {
+      edgeAssist(c, Q, Pc, dt);
       const along = c.vx * Q.fx + c.vz * Q.fz, vg = along * Q.slope;
       const dSlope = (c.prevSlope ?? Q.slope) - Q.slope;
       c.prevSlope = Q.slope;

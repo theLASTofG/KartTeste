@@ -7,14 +7,14 @@ import { applyTrack, canPlace, finishGlobal, freeExits, layoutSigs, megaIndex, p
 import { freeSlots, obsData } from './obstacles.js';
 import { cars, playerById, plist, syncCars } from './cars.js';
 import { placeToast } from './hud.js';
-import { broadcast, sendTo } from './net.js';
+import { announceSoon, broadcast, sendTo } from './net.js';
 import { applyTray, itemEnabled, renderBuild } from './build-ui.js';
 
 // ---------------------------------------------------- lógica do HOST
 export function hostEnter(ph, d) {
   d = Object.assign({ target: G.TARGET, theme: themeKey, cross: G.allowCross }, d);
   HST.last = { ph, d };                       // guardado para quem reconectar no meio da partida
-  hooks.enterPhase(ph, d); broadcast({ t: 'phase', ph, d });
+  hooks.enterPhase(ph, d); broadcast({ t: 'phase', ph, d }); announceSoon();
 }
 export function hostStartMatch() {
   for (const p of G.players) p.score = 0;

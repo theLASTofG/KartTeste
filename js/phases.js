@@ -7,7 +7,8 @@ import { applyTheme, themeKey, THEMES } from './scene.js';
 import { activeExits, applyTrack, finishGlobal, INITIAL_TYPES, obstacles, PRESETS, presetPreview, tmpW, track, trackTypes } from './track.js';
 import { applyBots, cars, isHost, isMP, NET, plist, syncCars } from './cars.js';
 import { centerText, showScreen, toast, updateBoard } from './hud.js';
-import { createRoom, hostKick, hostLobbyChanged, joinRoom, leaveRoom, startSolo, toHost } from './net.js';
+import { announceNow, createRoom, hostKick, hostLobbyChanged, joinRoom, leaveRoom, startSolo, toHost } from './net.js';
+import { closeRoomAnnouncement } from './rooms.js';
 import { setSlotMode } from './camera.js';
 import { applyTray, buildMode, showChampion, showResults } from './build-ui.js';
 import { hostAfterResults, hostEnter, hostStartMatch } from './host.js';
@@ -136,6 +137,11 @@ export function act(a) {
       if (PRESETS[k].cross && !G.allowCross) { G.allowCross = true; store.set('cross', true); toast('CRUZAR PISTA ligado (a pista usa 2 andares)', '#ffd23f', 1.6); }
       hostLobbyChanged();
     } break;
+    case 'public': if (NET.role === 'host' && G.state === 'lobby') {
+      G.publicRoom = !G.publicRoom; store.set('public', G.publicRoom);
+      if (G.publicRoom) announceNow(); else closeRoomAnnouncement(NET.code);
+      renderLobby(); toast(G.publicRoom ? 'SALA PÚBLICA: aparece na lista' : 'SALA PRIVADA: só por código', '#ffd23f', 1.4);
+    } break;
     case 'theme': if (isHost() && G.state === 'lobby') {
       const ks = Object.keys(THEMES); applyTheme(ks[(ks.indexOf(themeKey) + 1) % ks.length]); store.set('theme', themeKey); hostLobbyChanged();
     } break;
@@ -171,6 +177,8 @@ export function renderLobby() {
   $('trackDesc').textContent = (PR.desc || '') + ' · ' + PR.types.filter(t => t !== 'start' && t !== 'finish').length + ' peças';
   $('trackPrev').innerHTML = presetPreview(G.presetKey);
   $('themeBtn').textContent = 'TEMA: ' + THEMES[themeKey].name;
+  $('publicBtn').textContent = 'SALA: ' + (G.publicRoom ? 'PÚBLICA' : 'PRIVADA');
+  $('publicBtn').style.display = NET.role === 'host' ? '' : 'none';
   $('crossBtn').textContent = 'CRUZAR PISTA: ' + (G.allowCross ? 'SIM' : 'NÃO');
   if (!$('lobbyWait').dataset.rejoin) $('lobbyWait').textContent = 'Aguardando o host começar... Meta: ' + fmtPts(G.TARGET) + ' pts · Pista: ' + PRESETS[G.presetKey].name + ' · Tema: ' + THEMES[themeKey].name;
   $('lobbyList').innerHTML = G.players.map(p => `<div class="pl"><span class="sw" style="background:${p.color}"></span><span>${esc(p.name)}${p.id === G.myId ? ' <span style="opacity:.6">(você)</span>' : ''}</span>

@@ -1,5 +1,6 @@
 // Partículas (faíscas, fumaça, confete).
 import * as THREE from 'three';
+import { G } from './state.js';
 import { rnd } from './utils.js';
 import { scene, texDot } from './scene.js';
 
@@ -18,6 +19,7 @@ const ptsMesh = new THREE.Points(pGeo, new THREE.PointsMaterial({ size: 0.55, ve
   blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true }));
 ptsMesh.frustumCulled = false; scene.add(ptsMesh);
 export function emit(x, y, z, vx, vy, vz, life, r, g, b, grav = 0) {
+  if (G.fxLow && Math.random() < 0.5) return;                  // modo leve: corta metade das partículas
   const i = pHead; pHead = (pHead + 1) % PMAX;
   P.x[i] = x; P.y[i] = y; P.z[i] = z; P.vx[i] = vx; P.vy[i] = vy; P.vz[i] = vz; P.l[i] = life; P.m[i] = life;
   P.r[i] = r; P.g[i] = g; P.b[i] = b; P.gr[i] = grav;
